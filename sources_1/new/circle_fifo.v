@@ -38,7 +38,7 @@ module circle_fifo#(
     reg [$clog2(DEPTH)-1:0] wr_ptr, rd_ptr;
     assign full  = ( (wr_ptr + 1) % DEPTH ) == rd_ptr;
     assign empty = (wr_ptr == rd_ptr);
-    assign dout = mem[rd_ptr];
+    assign dout = empty ? {WIDTH{1'b0}} : mem[rd_ptr];
     always @(posedge clk) begin
         if (!rst_n || clr) begin
             wr_ptr <= 0;

@@ -32,6 +32,7 @@ input fltc_fltbuf_vld_i,
 input [WIDTH-1:0] fltc_fltbuf_data_i,
 output fltc_fltbuf_rdy_o,
 
+input fltc_ifc_end_layer_i,
 input [3:0] fltc_ins_hf_i,
 input fltc_fltbuf_done_pass_i,
 input fltc_pe_rdy_i,

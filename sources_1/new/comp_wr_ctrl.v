@@ -49,6 +49,7 @@ module comp_wr_ctrl#(
     output [WIDTH-1:0] cwc_ofbuf_data_o,
     output cwc_pu_done_compute_o
     );
+    
     reg [1:0] count_p;
     wire [1:0] count_p_nxt;
     reg [1:0] cwc_ins_stride_i_count;
@@ -66,7 +67,7 @@ module comp_wr_ctrl#(
     wire vld_id_nxt;
     wire end_data_id;
     assign cwc_pu_done_compute_o = cwc_pu_end_layer_i && !(|cwc_pp_vld_i);
-    assign cwc_pp_rdy_o = (en && cwc_ofbuf_rdy_i) ? (1 << id) : {PE_PER_PU{1'b0}} ;
+    assign cwc_pp_rdy_o = (en && cwc_ofbuf_rdy_i && (id < PE_PER_PU)) ? (1 << id) : {PE_PER_PU{1'b0}} ;
     // assign end_data_id = (id < PE_PER_PU) ? cwc_pp_end_data_i[id] : 1'b0;
     assign end_data_id = |cwc_pp_end_data_i;
     assign vld_id = (id < PE_PER_PU) ? cwc_pp_vld_i[id] : 1'b0;
@@ -75,35 +76,37 @@ module comp_wr_ctrl#(
     assign vld_id_nxt = (next_id_sum < PE_PER_PU) ? cwc_pp_vld_i[next_id_sum] : 1'b0;
     assign cwc_ofbuf_data_o = (id < PE_PER_PU) ? cwc_pp_data_i[id*WIDTH +: WIDTH] : {WIDTH{1'b0}};
     assign is_id_nxt_vld = vld_id_nxt;
-    assign is_add_cwc_ins_padding_i_data = (cwc_pu_end_height_i & cwc_ins_dw_i) | cwc_pu_end_layer_i;
+    // assign is_add_cwc_ins_padding_i_data = (cwc_pu_end_height_i & cwc_ins_dw_i) || cwc_pu_end_layer_i;
+    assign is_add_cwc_ins_padding_i_data = cwc_pu_end_layer_i;
     // assign id_mod_cwc_ins_hf_i_nxt = id % cwc_ins_hf_i;
     // assign id_mod_cwc_ins_hf_i_nxt = is_id_nxt_vld ? id_mod_cwc_ins_hf_i : (is_add_cwc_ins_padding_i_data ? (id_mod_cwc_ins_hf_i - (cwc_ins_stride_i - cwc_ins_stride_i_count)) : (cwc_ins_hf_i - 1));
     assign id_nxt = is_id_nxt_vld ? (id + cwc_ins_hf_i) : (is_add_cwc_ins_padding_i_data ? (id % cwc_ins_hf_i - (cwc_ins_stride_i - cwc_ins_stride_i_count)) : (cwc_ins_hf_i - 1));
-    assign count_p_nxt = cwc_ins_dw_i & cwc_pu_end_height_i ? 1 : count_p + 1;
+    // assign count_p_nxt = cwc_ins_dw_i & cwc_pu_end_height_i ? 1 : count_p + 1;
+    assign count_p_nxt = count_p + 1;
     assign cwc_ins_stride_i_count_nxt = (cwc_ins_stride_i_count == cwc_ins_stride_i - 1) ? 0 : cwc_ins_stride_i_count + 1;
     always @(posedge clk) begin
-        if(!rst_n | cwc_pu_swap_en_i) begin
+        if(!rst_n || cwc_pu_swap_en_i) begin
           id <= cwc_ins_hf_i - 1;
         //   id_mod_cwc_ins_hf_i <= cwc_ins_hf_i - 1;
         end
-        else if(!vld_id | end_data_id & vld_id & cwc_ofbuf_rdy_i) begin
+        else if(!vld_id || end_data_id && vld_id && cwc_ofbuf_rdy_i) begin
           id <= id_nxt;
         //   id_mod_cwc_ins_hf_i <= id_mod_cwc_ins_hf_i_nxt;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(!rst_n || is_add_cwc_ins_padding_i_data) begin
           count_p <= 0;
         end
-       else if(is_add_cwc_ins_padding_i_data | (cwc_pu_swap_en_i & ((count_p + cwc_ins_padding_i) != cwc_ins_hf_i))) begin
+       else if((cwc_pu_swap_en_i && ((count_p + cwc_ins_padding_i) != cwc_ins_hf_i))) begin
           count_p <= count_p_nxt;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n | is_add_cwc_ins_padding_i_data) begin
+        if(!rst_n || is_add_cwc_ins_padding_i_data) begin
           cwc_ins_stride_i_count <= 0;
         end
-        else if(cwc_pu_swap_en_i & (count_p + cwc_ins_padding_i) == cwc_ins_hf_i) begin
+        else if(cwc_pu_swap_en_i && (count_p + cwc_ins_padding_i) == cwc_ins_hf_i) begin
           cwc_ins_stride_i_count <= cwc_ins_stride_i_count_nxt;
         end
     end
@@ -151,7 +154,8 @@ module comp_wr_ctrl#(
             assign is_cwc_ins_hf_i_edge = (i_mod_cwc_ins_hf_i == cwc_ins_hf_i - 1);
 
             assign pp_clear_nxt[i] = is_cwc_ins_hf_i_edge ? (cwc_ins_stride_i_term_cond ? 0 : 1) 
-                                     : ((cwc_pu_end_height_nxt_i & cwc_ins_dw_i | cwc_pu_end_layer_nxt_i) & !complex_cond_met) ? 1 : 0;
+                                    //  : ((cwc_pu_end_height_nxt_i & cwc_ins_dw_i | cwc_pu_end_layer_nxt_i) & !complex_cond_met) ? 1 : 0;
+                                    : (cwc_pu_end_layer_nxt_i & !complex_cond_met) ? 1 : 0;
             
             always @(posedge clk) begin
                 if(!rst_n) begin

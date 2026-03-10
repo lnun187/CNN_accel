@@ -22,7 +22,7 @@
 
 module pu_ping_pong_fifo #(
     parameter WIDTH = 8,
-    parameter DEPTH = 11
+    parameter DEPTH = 2048
 )(
     input clk,
     input rst_n,
@@ -56,7 +56,7 @@ module pu_ping_pong_fifo #(
     assign pp_pe_data_a_o = pp_pu_id_i ? data_o1 : data_o2;
     assign pp_pe_empty_o = pp_pu_id_i ? empty2 : empty1;
     assign pp_cwc_end_data_o = pp_pu_id_i ? end_data2 : end_data1;
-    fifo #(
+    fifo_bram #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)
     ) fifo1 (
@@ -71,7 +71,7 @@ module pu_ping_pong_fifo #(
         .empty(empty1),
         .end_data(end_data1)
     );
-    fifo #(
+    fifo_bram #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)
     ) fifo2 (

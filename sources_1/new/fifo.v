@@ -22,7 +22,7 @@
 
 module fifo #(
     parameter WIDTH = 8,
-    parameter DEPTH = 11
+    parameter DEPTH = 224 * 12
 )(
     input clk,
     input rst_n,
@@ -40,7 +40,7 @@ module fifo #(
     assign full  = ( (wr_ptr + 1) % DEPTH ) == rd_ptr;
     assign empty = (wr_ptr == rd_ptr) || clr;
     assign end_data = (rd_ptr == wr_ptr - 1);
-    assign dout = mem[rd_ptr];
+    assign dout = empty ? {WIDTH{1'b0}} : mem[rd_ptr];
     always @(posedge clk) begin
         if (!rst_n || clr) begin
             wr_ptr <= 0;
@@ -53,7 +53,6 @@ module fifo #(
             end
             // Read Logic
             if (rd_en_i && !empty) begin
-                
                 rd_ptr <= (rd_ptr == DEPTH-1) ? 0 : rd_ptr + 1;
             end
         end

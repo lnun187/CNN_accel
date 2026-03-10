@@ -22,7 +22,8 @@
 
 module comp_pe#(
     parameter ID = 0,
-    parameter WIDTH = 8
+    parameter WIDTH = 8,
+    parameter K = 6
 )(
     input clk,
     input rst_n,
@@ -36,10 +37,10 @@ module comp_pe#(
     input pe_ifc_end_layer_i,
     input pe_ifc_end_height_i,
     input pe_ifc_vld_i,
-    input [WIDTH-1:0] pe_ifc_data_i,
+    input [K*WIDTH-1:0] pe_ifc_data_i,
 
     input pe_fltc_vld_i,
-    input [WIDTH-1:0] pe_fltc_data_i,
+    input [K*WIDTH-1:0] pe_fltc_data_i,
     // output flt_done_o,
     output pe_ifc_fltc_rdy_o,
 
@@ -52,32 +53,49 @@ module comp_pe#(
     output [WIDTH-1:0] pe_pp_data_o
 );
     reg [3:0] count;
-    reg [3:0] count_nxt;
+    // reg [3:0] count_nxt;
     reg is_channel_0;
     reg is_row_0;
-    reg swap;
+    // reg swap;
     reg [WIDTH-1:0] data;
-    wire [WIDTH-1:0] data_nxt;
+    reg [WIDTH-1:0] data_nxt;
     wire [3:0]id;
     reg [WIDTH-1:0] add_data;
     assign id = ID;
-    assign data_nxt = pe_ifc_data_i * pe_fltc_data_i + add_data;
+    
+    // assign data_nxt = pe_ifc_data_i * pe_fltc_data_i + add_data;
     assign pe_pp_wr_o = en && count == (pe_ins_hf_i - 1) && pe_ifc_vld_i && pe_fltc_vld_i && pe_ifc_fltc_rdy_o;
     assign pe_pp_data_o = data_nxt;
     // assign flt_done_o = ((pe_ifc_end_row_circle_i && !pe_ins_dw_i) || (pe_ifc_end_height_i && pe_ins_dw_i)) && pe_ifc_vld_i && pe_fltc_vld_i && pe_ifc_fltc_rdy_o;
-    assign pe_ifc_fltc_rdy_o = en && pe_fltc_vld_i && pe_ifc_vld_i && (pe_pp_empty_i && (!pe_ins_dw_i && pe_ifc_end_depth_i || pe_ins_dw_i && pe_ifc_end_row_circle_i ) || pe_ins_dw_i && !pe_ifc_end_row_circle_i || !pe_ins_dw_i && !pe_ifc_end_depth_i);
+    assign pe_ifc_fltc_rdy_o = en && pe_fltc_vld_i && pe_ifc_vld_i && (pe_pp_empty_i || !pe_ifc_end_depth_i);
+    // assign pe_ifc_fltc_rdy_o = en && pe_fltc_vld_i && pe_ifc_vld_i;
+    
+    integer i; // Biến chạy vòng lặp
+
+    // Sử dụng always @* cho mạch tổ hợp (Combinational Logic)
+    always @(*) begin
+        // 1. Khởi tạo giá trị ban đầu
+        data_nxt = add_data; 
+        
+        // 2. Vòng lặp cộng dồn các tích
+        for (i = 0; i < K; i = i + 1) begin
+            // Phép toán Multiply-Accumulate (MAC)
+            data_nxt = data_nxt + (pe_ifc_data_i[i*WIDTH +: WIDTH] * pe_fltc_data_i[i*WIDTH +: WIDTH]);
+        end
+    end
+
     always @(*) begin
         pe_pp_pre_rd_o = 0;
         pe_pp_cur_rd_o = 0;
-        casex({count == 0, is_row_0, is_channel_0, id % pe_ins_hf_i == 0})
-            4'b100x: begin 
+        casez({count == 0, is_row_0, is_channel_0, id % pe_ins_hf_i == 0})
+            4'b100?: begin 
                 add_data = pe_pp_cur_data_i;
-                pe_pp_cur_rd_o = 1;
+                pe_pp_cur_rd_o = 1 & pe_ifc_fltc_rdy_o;
             end
-            4'b0xxx: begin
+            4'b0???: begin
                 add_data = data;
             end
-            4'b11xx: begin
+            4'b11??: begin
                 add_data = 0;
             end
             4'b1011: begin
@@ -85,7 +103,7 @@ module comp_pe#(
             end
             4'b1010: begin
                 add_data = pe_pp_pre_data_i;
-                pe_pp_pre_rd_o = 1;
+                pe_pp_pre_rd_o = 1 & pe_ifc_fltc_rdy_o;
             end
             default: add_data = 0;
         endcase
@@ -100,12 +118,12 @@ module comp_pe#(
     always @(posedge clk) begin
         if(!rst_n || pe_ifc_end_layer_i) begin
             is_row_0 <= 1'b1;
-        end else if(en && pe_ifc_end_row_circle_i)begin
+        end else if(en && (pe_ifc_end_row_circle_i && !pe_ins_dw_i || pe_ifc_end_depth_i && pe_ins_dw_i))begin
             is_row_0 <= 0;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n || count == pe_ins_hf_i - 1) begin
+        if(!rst_n || count == (pe_ins_hf_i - 1)) begin
             count <= 0;
         end else if(en && pe_ifc_vld_i && pe_fltc_vld_i && pe_ifc_fltc_rdy_o)begin
             count <= count + 1;
