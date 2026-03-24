@@ -27,43 +27,44 @@ module filter_cache #(
 )(
 input clk,
 input rst_n,
-input en,
 input fltc_fltbuf_vld_i,
 input [WIDTH-1:0] fltc_fltbuf_data_i,
 output fltc_fltbuf_rdy_o,
 
-input fltc_ifc_end_layer_i,
 input [3:0] fltc_ins_hf_i,
 input fltc_fltbuf_done_pass_i,
 input fltc_pe_rdy_i,
 input fltc_pu_clr_ch_flt_i,
 output [PE_PER_PU-1:0] fltc_pe_vld_o,
-output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o
+output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o //THEM REG
     );
+
     reg [3:0] count_w;
     reg [3:0] count_w_nxt;
     reg [3:0] count_h;
     reg [3:0] count_h_nxt;
     reg id;
     reg done_prepare;
-    wire done_prepare_en;
+    // wire done_prepare_en;
     wire [PE_PER_PU-1:0] wr_en;
     wire [PE_PER_PU-1:0] rd_en;
     wire count_en;
     wire id_en;
-    wire [PE_PER_PU-1:0] empty_o;
+    wire [PE_PER_PU-1:0] vld_o;
     assign rd_en = {PE_PER_PU{fltc_pe_rdy_i}} & fltc_pe_vld_o;
-    assign fltc_pe_vld_o = ~empty_o;
-    assign fltc_fltbuf_rdy_o = (done_prepare == 0); // Cho phep nhan du lieu moi khi count chua den muc max
+    assign fltc_fltbuf_rdy_o = !done_prepare; // Cho phep nhan du lieu moi khi count chua den muc max
     assign count_en = fltc_fltbuf_vld_i & fltc_fltbuf_rdy_o;
-    assign id_en = (done_prepare || done_prepare_en) & (fltc_pu_clr_ch_flt_i | empty_o[0]); // Chuyen id khi du lieu da san sang cho comp 
-    assign done_prepare_en = fltc_fltbuf_done_pass_i && fltc_fltbuf_rdy_o && fltc_fltbuf_vld_i;
-    always @(posedge clk) begin
-      if(!rst_n | id_en) begin
+    assign id_en = (done_prepare || fltc_fltbuf_done_pass_i) & (fltc_pu_clr_ch_flt_i | !vld_o[0]);
+    assign fltc_pe_vld_o = vld_o;
+    always @(posedge clk or negedge rst_n) begin
+      if(!rst_n) begin
           done_prepare <= 0;
-      end else if (done_prepare_en) begin
+      end else begin
+        if(id_en) done_prepare <= 0;
+        else if (fltc_fltbuf_done_pass_i) begin
           done_prepare <= 1;
-      end
+        end
+      end 
     end
     always @(*) begin
         if (count_w == fltc_ins_hf_i - 1) begin
@@ -73,26 +74,32 @@ output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o
         end
         count_h_nxt = count_h + 1;
     end
-    always @(posedge clk) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             id <= 0;
-        end else if (id_en && en) begin
+        end else if (id_en ) begin
             id <= ~id; // Dao id khi du lieu da san sang cho comp
         end
     end
-    always @(posedge clk) begin
-        if (!rst_n || id_en) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             count_w <= 0;
-        end else if (count_en && en) begin
-           count_w <= count_w_nxt;
-        end
+        end else begin
+            if(id_en) count_w <= 0;
+            else if (count_en) begin
+                count_w <= count_w_nxt;
+            end
+        end 
     end
-    always @(posedge clk) begin
-        if (!rst_n || id_en) begin
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             count_h <= 0;
-        end else if (count_en && count_w == fltc_ins_hf_i - 1 && en) begin
-            count_h <= count_h_nxt; 
-        end
+        end else begin
+            if(id_en) count_h <= 0;
+            else if (count_en && count_w == fltc_ins_hf_i - 1) begin
+                count_h <= count_h_nxt; 
+            end
+        end 
     end
     genvar i;
     generate
@@ -105,18 +112,18 @@ output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o
                 .rst_n(rst_n),
                 .id_i(id),
                 .wr_en(wr_en[i]),
-                .rd_en(rd_en),
+                .rd_en(rd_en[i]),
                 .clr_i(fltc_pu_clr_ch_flt_i),
                 .data_i(fltc_fltbuf_data_i),
                 .data_o(fltc_pe_data_o[i*WIDTH +: WIDTH]),
-                .empty_o(empty_o[i])
+                .vld_o(vld_o[i])
             );
         end
     endgenerate
     genvar j;
     generate
         for (j = 0; j < PE_PER_PU; j = j + 1) begin : wr_en_array
-            assign wr_en[j] = count_en & (count_h == j) && en;
+            assign wr_en[j] = count_en & (count_h == j);
         end
     endgenerate
 endmodule

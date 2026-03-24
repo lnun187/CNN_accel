@@ -27,6 +27,7 @@ module pu_ping_pong_fifo #(
     input clk,
     input rst_n,
     input pp_pu_id_i,
+    input pp_pu_swap_en_i,
     input pp_pe_wr_en_i,
     input pp_pe_rd_ena_i,
     input pp_pe_rd_enb_i,
@@ -34,41 +35,52 @@ module pu_ping_pong_fifo #(
     input [WIDTH-1:0] pp_pe_data_i,
     output [WIDTH-1:0] pp_pe_data_a_o,
     output [WIDTH-1:0] pp_pe_cwc_data_b_o,
-    output wire pp_pe_empty_o,
-    output wire pp_cwc_end_data_o
+    output pp_pe_vld_o,
+    output pp_cwc_end_data_o
     );
+    reg pp_pu_swap_en_i_reg;
+    // wire [WIDTH-1:0] pp_pe_data_a_o_nxt;
+    // wire [WIDTH-1:0] pp_pe_cwc_data_b_o_nxt;
+    // wire pp_pe_empty_o_nxt;
+
+
     wire [WIDTH-1:0] data_o1, data_o2;
     wire [WIDTH-1:0] pp_pe_data_i1, pp_pe_data_i2;
     wire pp_pe_wr_en_i1, pp_pe_wr_en_i2;
     wire rd_en1, rd_en2;
     wire clr1, clr2;
-    wire empty1, empty2;
+    wire vld1, vld2;
     wire end_data1, end_data2;
     assign rd_en1 = pp_pe_rd_ena_i & pp_pu_id_i || pp_pe_rd_enb_i & ~pp_pu_id_i; // Cho phep doc tu fifo1 khi pp_pu_id_i=0 va tu fifo2 khi pp_pu_id_i=1
     assign rd_en2 = pp_pe_rd_ena_i & ~pp_pu_id_i || pp_pe_rd_enb_i & pp_pu_id_i;
     assign clr1 = pp_cwc_clr_i & ~pp_pu_id_i;
     assign clr2 = pp_cwc_clr_i & pp_pu_id_i;
-    assign pp_pe_wr_en_i1 = pp_pe_wr_en_i & pp_pu_id_i; // Cho phep ghi vao fifo1 khi pp_pu_id_i=1 hoac doc tu fifo1
-    assign pp_pe_wr_en_i2 = pp_pe_wr_en_i & ~pp_pu_id_i;  // Cho phep ghi vao fifo2 khi pp_pu_id_i=0 hoac doc tu fifo2
+    assign pp_pe_wr_en_i1 = pp_pe_wr_en_i && (pp_pu_id_i ^ pp_pu_swap_en_i_reg); // Cho phep ghi vao fifo1 khi pp_pu_id_i=1 hoac doc tu fifo1
+    assign pp_pe_wr_en_i2 = pp_pe_wr_en_i && (pp_pu_id_i ~^ pp_pu_swap_en_i_reg);  // Cho phep ghi vao fifo2 khi pp_pu_id_i=0 hoac doc tu fifo2
     assign pp_pe_data_i1 = pp_pe_data_i; 
     assign pp_pe_data_i2 = pp_pe_data_i; 
     assign pp_pe_cwc_data_b_o = pp_pu_id_i ? data_o2 : data_o1;
     assign pp_pe_data_a_o = pp_pu_id_i ? data_o1 : data_o2;
-    assign pp_pe_empty_o = pp_pu_id_i ? empty2 : empty1;
+    assign pp_pe_vld_o = pp_pu_id_i ? vld2 : vld1;
     assign pp_cwc_end_data_o = pp_pu_id_i ? end_data2 : end_data1;
+    
+    always @(posedge clk or negedge rst_n) begin
+        if(!rst_n) pp_pu_swap_en_i_reg <= 1'b0;
+        else pp_pu_swap_en_i_reg <= pp_pu_swap_en_i;
+    end
     fifo_bram #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)
     ) fifo1 (
         .clk(clk),
         .rst_n(rst_n),
-        .wr_en_i(pp_pe_wr_en_i1),
-        .rd_en_i(rd_en1),
+        .wr_en(pp_pe_wr_en_i1),
+        .rd_en(rd_en1),
         .clr(clr1),
         .din(pp_pe_data_i1),
         .dout(data_o1),
         .full(),
-        .empty(empty1),
+        .vld_o(vld1),
         .end_data(end_data1)
     );
     fifo_bram #(
@@ -77,13 +89,13 @@ module pu_ping_pong_fifo #(
     ) fifo2 (
         .clk(clk),
         .rst_n(rst_n),
-        .wr_en_i(pp_pe_wr_en_i2),
-        .rd_en_i(rd_en2),
+        .wr_en(pp_pe_wr_en_i2),
+        .rd_en(rd_en2),
         .clr(clr2),
         .din(pp_pe_data_i2),
         .dout(data_o2),
         .full(),
-        .empty(empty2),
+        .vld_o(vld2),
         .end_data(end_data2)
     );
 endmodule
