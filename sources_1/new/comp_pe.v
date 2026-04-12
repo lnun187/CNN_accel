@@ -4,12 +4,11 @@ module comp_pe#(
     parameter ID = 0,
     parameter WIDTH = 8,         // Độ rộng dữ liệu đầu vào (8-bit)
     parameter ACC_WIDTH = 32,    // Độ rộng bộ cộng dồn (thường dùng 32-bit cho INT8 MAC)
-    parameter K = 6
+    parameter K = 8
 )(
     input clk,
     input rst_n,
 
-    input pe_ins_dw_i,
     input [3:0] pe_ins_hf_i, 
 
     input pe_ifc_end_row_circle_i,
@@ -18,8 +17,8 @@ module comp_pe#(
     input pe_ifc_vld_i,
     input [K*WIDTH-1:0] pe_ifc_data_i,
     // Các input mới cho lượng tử hóa
-    input [7:0] pe_ifc_zp_i,  // Zero Point của Input Feature Map
-    input [7:0] pe_fltc_zp_i, // Zero Point của Filter/width
+    input [WIDTH-1:0] pe_ifc_zp_i,  // Zero Point của Input Feature Map
+    input [WIDTH-1:0] pe_fltc_zp_i, // Zero Point của Filter/width
 
     input pe_fltc_vld_i,
     input [K*WIDTH-1:0] pe_fltc_data_i,
@@ -32,136 +31,130 @@ module comp_pe#(
     input pe_pp_vld_i,
     output reg pe_pp_wr_o,
     output [ACC_WIDTH-1:0] pe_pp_data_o,
-    output pe_cwc_end_layer_o,
+    output reg pe_cwc_end_layer_o,
     output pe_cwc_swap_en_o
 );
-    localparam STAGES = $clog2(K);
-    reg [ACC_WIDTH-1:0] sum_pipe [0:STAGES][0:K-1];
-    reg [STAGES + 1 : 0] data_vld;
-    reg [STAGES + 2 : 0] is_row_0;
-    reg [STAGES + 2 : 0] is_channel_0;
-    reg [STAGES + 1 : 0] pu_ifc_end_layer_i_reg;
-    reg [STAGES + 1 : 0] pu_ifc_end_depth_i_reg;
-    reg [STAGES + 1 : 0] pe_ifc_end_row_circle_i_reg;
-    reg swap_en;
-    reg [3:0] count;
+    localparam STAGES = $clog2(2*K) + 1; //current design has 6 STAGES (+ 1 STAGE at data_out)
+    reg [ACC_WIDTH-1:0] sum_pipe [0:STAGES-2][0:K-1];
     reg [ACC_WIDTH-1:0] data;
-    // reg [ACC_WIDTH-1:0] data_nxt;
-    // reg [ACC_WIDTH-1:0] pe_pp_pre_data_i_reg;
-    // reg [ACC_WIDTH-1:0] pe_pp_cur_data_i_reg;
-    wire [3:0] id;
+    reg signed [K*(WIDTH + 1) - 1:0] ifc_sub;
+    reg signed [K*(WIDTH + 1) - 1:0] fltc_sub;
+    reg end_row;
+    reg [STAGES - 1 : 0] end_depth;
+    reg [STAGES - 1 : 0] end_layer;
+    reg [STAGES - 1 : 0] data_vld;
+    reg [ACC_WIDTH-1:0] pp_data [0:STAGES - 3];
+    reg is_row_0;
+    reg is_channel_0;
+    reg [3:0] count_rd;
+    reg [3:0] count_wr;
+    reg en_compute;
+    reg en_compute1;
+    reg swap_en;
     reg [ACC_WIDTH-1:0] add_data;
-    wire signed [8:0] ifc_zp_signed;
-    assign ifc_zp_signed = $signed({1'b0, pe_ifc_zp_i});
-    wire signed [8:0] fltc_zp_signed;
-    assign fltc_zp_signed = $signed({1'b0, pe_fltc_zp_i});
-    // reg pe_pp_cur_rd_o_nxt;
-    // reg pe_pp_pre_rd_o_nxt;
-
-    assign id = ID;
-    assign pe_pp_data_o = data;
-    assign pe_ifc_fltc_rdy_o = pe_fltc_vld_i && pe_ifc_vld_i && (!pe_pp_vld_i || !pe_ifc_end_depth_i);
-    assign pe_cwc_end_layer_o = pu_ifc_end_layer_i_reg[STAGES + 1];
+    //--------------------------------------------ASSIGN-----------------------------------------------
     assign pe_cwc_swap_en_o = swap_en;
-    
-
-    // ---------------------------------------------------------
-    // Pipeline Registers
-    // ---------------------------------------------------------
-    
-
-    // assign pe_pp_wr_o = (count == (pe_ins_hf_i - 1)) && data_vld[STAGES + 1];
-
-    integer vld_s;
-    // ---------------------------------------------------------
-    // Khối 1: Tín hiệu điều khiển (Control Pipeline) - FIXED
-    // ---------------------------------------------------------
+    assign pe_ifc_fltc_rdy_o = pe_fltc_vld_i && pe_ifc_vld_i && en_compute;
+    // assign 
+    assign pe_pp_data_o = data;
+    //--------------------------------------------CONTROL COMPUTE-----------------------------------------------
     always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            // Explicitly reset all pipeline registers
-            data_vld <= 0;
-            pu_ifc_end_layer_i_reg <= 0;
-            pu_ifc_end_depth_i_reg <= 0;
-            pe_ifc_end_row_circle_i_reg <= 0;
-            pe_pp_wr_o <= 1'b0;
-            is_row_0[STAGES + 2 : 1] <= 0;      // Highly recommended to reset these too
-            is_channel_0[STAGES + 2 : 1] <= 0;
+        if(!rst_n) begin
+            en_compute <= 1;
+            en_compute1 <= 1;
+            swap_en <= 0;
+            count_rd <= 0;
+            count_wr <= 0;
+            is_row_0 <= 1'b1;
+            is_channel_0 <= 1'b1;
+            pe_pp_pre_rd_o <= 0;
+            pe_pp_cur_rd_o <= 0;
+            pe_pp_wr_o <= 0;
+            pe_cwc_end_layer_o <= 0;
         end else begin
-            pe_pp_wr_o <= (count == (pe_ins_hf_i - 1)) && data_vld[STAGES + 1];
-            data_vld[0] <= pe_ifc_fltc_rdy_o;
-            pu_ifc_end_layer_i_reg[0] <= pe_ifc_end_layer_i;
-            pu_ifc_end_depth_i_reg[0] <= pe_ifc_end_depth_i;
-            pe_ifc_end_row_circle_i_reg[0] <= pe_ifc_end_row_circle_i;
-            
-            for (vld_s = 1; vld_s <= STAGES + 1; vld_s = vld_s + 1) begin
-                data_vld[vld_s] <= data_vld[vld_s - 1];
-                is_row_0[vld_s] <= is_row_0[vld_s - 1];
-                is_channel_0[vld_s] <= is_channel_0[vld_s - 1];
-                pu_ifc_end_layer_i_reg[vld_s] <= pu_ifc_end_layer_i_reg[vld_s - 1];
-                pu_ifc_end_depth_i_reg[vld_s] <= pu_ifc_end_depth_i_reg[vld_s - 1];
-                pe_ifc_end_row_circle_i_reg[vld_s] <= pe_ifc_end_row_circle_i_reg[vld_s - 1];
+            if(end_depth[STAGES-1] && pe_pp_vld_i) en_compute <= 0; //nếu hàng cuối cùng và chưa trống thì không hút nữa
+            else if(!pe_pp_vld_i) en_compute <= 1;
+            en_compute1 <= en_compute;
+            swap_en <= !pe_pp_vld_i && (end_depth[STAGES-1] || !en_compute);
+            if(data_vld[0] && en_compute) count_rd <= (count_rd == pe_ins_hf_i - 1) ? 0 : count_rd + 1;
+            if(data_vld[STAGES-1] && en_compute) count_wr <= (count_wr == pe_ins_hf_i - 1) ? 0 : count_wr + 1;
+            if(end_layer[0]) is_row_0 <= 1'b1;
+            else if(end_row)begin
+                is_row_0 <= 0;
             end
-            is_row_0[STAGES + 2] <= is_row_0[STAGES + 1];
-            is_channel_0[STAGES + 2] <= is_channel_0[STAGES + 1];
+            if(end_depth[0]) is_channel_0 <= 1'b1;
+            else if(end_row)begin
+                is_channel_0 <= 0;
+            end
+            pe_pp_pre_rd_o <= !is_row_0 && is_channel_0 && !(|count_rd) && data_vld[0] && |(ID % pe_ins_hf_i) && en_compute;
+            pe_pp_cur_rd_o <= !is_channel_0 && !(|count_rd) && data_vld[0] && en_compute;
+            pe_pp_wr_o <= (count_wr == pe_ins_hf_i - 1) && data_vld[STAGES-1] && en_compute;
+            if(swap_en) pe_cwc_end_layer_o <= 0;
+            else if(end_layer[STAGES-1]) pe_cwc_end_layer_o <= 1;
         end
     end
 
-    integer idx;
-    // ---------------------------------------------------------
-    // Khối 2: STAGE 0 - Tính các phép nhân song song (Lượng tử hóa)
-    // ---------------------------------------------------------
-    
-
-    // Thêm tên block 'stage0_process' để cho phép khai báo biến cục bộ
-    reg signed [K*(WIDTH + 1) - 1:0] ifc_sub;
-    reg signed [K*(WIDTH + 1) - 1:0] fltc_sub;
-    // reg signed [K*(WIDTH*2 + 1) - 1:0] mult_res;
+    //--------------------------------------------STAGE-----------------------------------------------
+    integer stage;
+    integer pp_idx;
+    integer d_idx;
     always @(posedge clk or negedge rst_n) begin
-        // Khai báo các biến tạm kiểu 'reg' thay vì 'wire'
-        // reg [7:0] ifc_val;
-        // reg [7:0] fltc_val;
-        
-
-        if (!rst_n) begin
-            for (idx = 0; idx < K; idx = idx + 1) begin
-                sum_pipe[0][idx] <= 0;
+        if(!rst_n) begin
+            end_row <= 0;
+            end_depth[STAGES-1:0] <= 0;
+            end_layer[STAGES-1:0] <= 0;
+            data_vld[STAGES-1:0] <= 0;
+        end else if(en_compute) begin
+            end_row <= pe_ifc_end_row_circle_i;
+            end_depth[0] <= pe_ifc_end_depth_i;
+            end_layer[0] <= pe_ifc_end_layer_i;
+            data_vld[0] <= pe_ifc_fltc_rdy_o;
+            for (stage = 1; stage < STAGES; stage = stage + 1) begin
+                end_depth[stage] <= end_depth[stage-1];
+                end_layer[stage] <= end_layer[stage-1];
+                data_vld[stage] <= data_vld[stage-1];
             end
-        end else begin
+        end
+    end
+    always @(posedge clk) begin
+        if(en_compute1) begin
+            pp_data[0] <= {ACC_WIDTH{pe_pp_pre_rd_o}} & pe_pp_pre_data_i | {ACC_WIDTH{pe_pp_cur_rd_o}} & pe_pp_cur_data_i; //Start at STAGE 2
+            for (pp_idx = 1; pp_idx < STAGES-2; pp_idx = pp_idx + 1) begin
+                pp_data[pp_idx] <= pp_data[pp_idx-1];
+            end
+        end
+    end
+    //--------------------------------------------STAGE 0 & STAGE 1-----------------------------------------------
+    wire signed [WIDTH:0] ifc_zp_signed;
+    assign ifc_zp_signed = $signed({1'b0, pe_ifc_zp_i});
+    wire signed [WIDTH:0] fltc_zp_signed;
+    assign fltc_zp_signed = $signed({1'b0, pe_fltc_zp_i});
+    integer idx;
+    always @(posedge clk) begin
+        if(en_compute) begin
             for (idx = 0; idx < K; idx = idx + 1) begin
-                // 1. Trích xuất dữ liệu 8-bit (Dùng phép gán blocking '=' cho logic tổ hợp)
-                // ifc_val[idx*WIDTH +: WIDTH] <= pe_ifc_data_i[idx*WIDTH +: WIDTH];
-                // fltc_val[idx*WIDTH +: WIDTH] <= pe_fltc_data_i[idx*WIDTH +: WIDTH];
-                
                 // 2. Trừ đi Zero Point
+                //STAGE 0
                 ifc_sub[idx*(WIDTH + 1) +: WIDTH + 1] <= $signed({1'b0, pe_ifc_data_i[idx*WIDTH +: WIDTH]})  - ifc_zp_signed;
                 fltc_sub[idx*(WIDTH + 1) +: WIDTH + 1] <= $signed({1'b0, pe_fltc_data_i[idx*WIDTH +: WIDTH]}) - fltc_zp_signed;
                 
-                // 3. Nhân 2 giá trị đã trừ ZP (Kết quả 18-bit signed)
-                // mult_res[idx*(WIDTH*2 + 1) +: WIDTH*2 + 1] <= ifc_sub[idx*(WIDTH + 1) +: WIDTH + 1] * fltc_sub[idx*(WIDTH + 1) +: WIDTH + 1];
-                
-                // 4. Mở rộng dấu và đưa vào pipeline 32-bit (Dùng gán non-blocking '<=' cho Flip-Flop)
+                // 4. Mở rộng dấu và đưa vào pipeline 32-bit
+                //STAGE 1
                 sum_pipe[0][idx] <= ifc_sub[idx*(WIDTH + 1) +: WIDTH + 1] * fltc_sub[idx*(WIDTH + 1) +: WIDTH + 1];
             end
         end
     end
-
-    // ---------------------------------------------------------
-    // Khối 3: STAGE 1 đến STAGES - Cây cộng bằng GENERATE
-    // ---------------------------------------------------------
+    //--------------------------------------------STAGE 2 -> 4-----------------------------------------------
     genvar s, i;
     generate
         
-        for (s = 1; s <= STAGES; s = s + 1) begin : adder_tree_stage
+        for (s = 1; s < STAGES - 1; s = s + 1) begin : adder_tree_stage
             // Hằng số bước nhảy tính ngay lúc compile
             localparam STEP = 1 << (s - 1);
-            
-
             // Cây cộng cho từng Node
             for (i = 0; i < K; i = i + 1) begin : adder_tree_node
-                always @(posedge clk or negedge rst_n) begin
-                    if (!rst_n) begin
-                        sum_pipe[s][i] <= 0;
-                    end else begin
+                always @(posedge clk) begin
+                    if(en_compute) begin 
                         if ((i % (STEP * 2)) == 0) begin
                             if (i + STEP < K) begin
                                 sum_pipe[s][i] <= sum_pipe[s-1][i] + sum_pipe[s-1][i + STEP];
@@ -176,79 +169,16 @@ module comp_pe#(
             end
         end
     endgenerate
-
-    // ---------------------------------------------------------
-    // Khối 4: STAGE CUỐI CÙNG - Cộng dồn kết quả cuối
-    // ---------------------------------------------------------
+    //--------------------------------------------STAGE 5-----------------------------------------------
     always @(posedge clk) begin
-        data <= add_data + sum_pipe[STAGES][0];
-        swap_en <= !pe_pp_vld_i && (pu_ifc_end_depth_i_reg[STAGES]) && (data_vld[STAGES]);    
-        // pe_pp_cur_data_i_reg <= pe_pp_cur_data_i;
-        // pe_pp_pre_data_i_reg <= pe_pp_pre_data_i;
-    end
-
-    // ---------------------------------------------------------
-    // Các logic điều khiển phía sau (Giữ nguyên)
-    // ---------------------------------------------------------
-    always @(*) begin
-        pe_pp_pre_rd_o = 0;
-        pe_pp_cur_rd_o = 0;
-        casez({count == 0, is_row_0[STAGES], is_channel_0[STAGES], id % pe_ins_hf_i == 0})
-            4'b100?: begin 
-                add_data = pe_pp_cur_data_i;
-                pe_pp_cur_rd_o = 1 & data_vld[STAGES + 1];
-            end
-            4'b0???: begin
-                add_data = data;
-            end
-            4'b11??: begin
-                add_data = 0;
-            end
-            4'b1011: begin
-                add_data = 0;
-            end
-            4'b1010: begin
-                add_data = pe_pp_pre_data_i;
-                pe_pp_pre_rd_o = 1 & data_vld[STAGES + 1];
-            end
-            default: add_data = 0;
-        endcase
-        // data_nxt = add_data + sum_pipe[STAGES][0];
-    end
-
-    always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) begin
-            is_channel_0[0] <= 1'b1;
-        end else begin
-            if(pu_ifc_end_depth_i_reg[STAGES + 1] && data_vld[STAGES + 1]) begin
-                is_channel_0[0] <= 1'b1;
-            end else if(pe_ifc_end_row_circle_i_reg[STAGES + 1] && !pe_ins_dw_i && data_vld[STAGES + 1]) begin
-                is_channel_0[0] <= 0;
-            end
-        end 
-    end
-
-    always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) begin
-            is_row_0[0] <= 1'b1;
-        end else begin
-            if(pu_ifc_end_layer_i_reg[STAGES + 1] && data_vld[STAGES + 1]) is_row_0[0] <= 1'b1;
-            else if((pe_ifc_end_row_circle_i_reg[STAGES + 1] && !pe_ins_dw_i || pu_ifc_end_depth_i_reg[STAGES + 1] && pe_ins_dw_i) && data_vld[STAGES + 1])begin
-                is_row_0[0] <= 0;
-            end
+        if(en_compute) begin
+            data <= add_data + sum_pipe[STAGES-2][0];
         end
     end
-
     always @(posedge clk or negedge rst_n) begin
-        if(!rst_n) begin
-            count <= 0;
-        end else begin
-            if(count == (pe_ins_hf_i - 1) && data_vld[STAGES + 1]) begin
-                count <= 0;
-            end else if(data_vld[STAGES + 1])begin
-                count <= count + 1;
-            end
-        end 
+        if(!rst_n) add_data <= 0;
+        else if(en_compute) begin
+            add_data <= (count_wr == pe_ins_hf_i - 1) || ((count_wr == 0) && data_vld[STAGES-2] && !data_vld[STAGES-1]) ? pp_data[STAGES-4] : add_data + sum_pipe[STAGES-2][0];
+        end
     end
-
 endmodule

@@ -36,12 +36,16 @@ module ifbuf_tb();
     reg  [31:0] ifbuf_ins_ifbaddr_i;
     reg  [8:0]  ifbuf_ins_width_i;
     reg  [10:0] ifbuf_ins_channel_i;
-    reg  [8:0]  ifbuf_ins_ifsize_i;
-    reg  [10:0] ifbuf_ins_ifblock_i;
-    reg  [10:0] ifbuf_ins_oftiles_i;
-    reg  [10:0] ifbuf_ins_iftiles_i;
+    reg  [3:0]  ifbuf_ins_ifparr_i;
+    reg  [3:0]  ifbuf_ins_ifparr_tail_i;
+    reg  [7:0]  ifbuf_ins_ifsize_i;
+    reg  [6:0]  ifbuf_ins_ifblock_i;
+    reg  [3:0]  ifbuf_ins_oftiles_i;
+    reg  [3:0]  ifbuf_ins_oftiles_tail_i;
+    reg  [6:0]  ifbuf_ins_iftiles_i;
     reg  [8:0]  ifbuf_ins_wp_i;
     reg  [1:0]  ifbuf_ins_padding_i;
+    reg  [7:0]  ifbuf_ins_ifc_zp_i;
     wire        ifbuf_ins_rdy_o;
 
     // Các tín hiệu giao tiếp DMA (từ giả lập Memory/DMA tới DUT)
@@ -55,22 +59,26 @@ module ifbuf_tb();
     wire        ifbuf_dma_rdy_o;
 
     // Các tín hiệu giao tiếp với khối khác (Downstream Consumer)
-    reg         ifbuf_ifc_rdy_i;
-    wire        ifbuf_ifc_vld_o;
-    wire [K*DATA_WIDTH-1:0] ifbuf_ifc_data_o;
-    wire        ifbuf_ifc_end_row_o;
-    wire        ifbuf_ifc_end_row_circle_o;
-    wire        ifbuf_ifc_end_depth_o;
-    wire        ifbuf_ifc_end_layer_o;
+    reg         ifbuf_comp_rdy_i;
+    wire        ifbuf_comp_vld_o;
+    wire [K*DATA_WIDTH-1:0] ifbuf_comp_data_o;
+    wire        ifbuf_comp_end_row_o;
+    wire        ifbuf_comp_end_row_circle_o;
+    wire        ifbuf_comp_end_depth_o;
+    wire        ifbuf_comp_end_layer_o;
 
     // Các biến cho quá trình test
     integer TEST_WIDTH    = 5; // Để số lẻ để test logic tự động align
     integer TEST_CHANNEL  = 9; // Giảm xuống 4 cho mô phỏng nhanh
     integer TEST_BLOCK    = 2;
     integer TEST_OFTILES  = 2;
-    integer TEST_IFTILES  = 2;
+    integer TEST_IFTILES  = 3;
     integer TEST_PADDING  = 1;
     integer TEST_HF = 3;
+    integer TEST_IFPARR = 4;
+    integer TEST_IFPARR_TAIL = 1;
+    integer TEST_OFTILES_TAIL = 1;
+    integer TEST_IFC_ZP = 8'h00;
     integer TEST_STRIDE = 1;
     integer ALIGNED_WIDTH;
     integer TEST_IFSIZE;
@@ -92,12 +100,16 @@ module ifbuf_tb();
         .ifbuf_ins_ifbaddr_i    (ifbuf_ins_ifbaddr_i),
         .ifbuf_ins_width_i      (ifbuf_ins_width_i),
         .ifbuf_ins_channel_i    (ifbuf_ins_channel_i),
+        .ifbuf_ins_ifparr_i     (ifbuf_ins_ifparr_i),
+        .ifbuf_ins_ifparr_tail_i(ifbuf_ins_ifparr_tail_i),
         .ifbuf_ins_ifsize_i     (ifbuf_ins_ifsize_i),
         .ifbuf_ins_ifblock_i    (ifbuf_ins_ifblock_i),
         .ifbuf_ins_oftiles_i    (ifbuf_ins_oftiles_i),
+        .ifbuf_ins_oftiles_tail_i(ifbuf_ins_oftiles_tail_i),
         .ifbuf_ins_iftiles_i    (ifbuf_ins_iftiles_i),
         .ifbuf_ins_wp_i         (ifbuf_ins_wp_i),
         .ifbuf_ins_padding_i    (ifbuf_ins_padding_i),
+        .ifbuf_ins_ifc_zp_i     (ifbuf_ins_ifc_zp_i),
         .ifbuf_ins_rdy_o        (ifbuf_ins_rdy_o),
 
         // Tín hiệu DMA
@@ -111,13 +123,13 @@ module ifbuf_tb();
         .ifbuf_dma_rdy_o        (ifbuf_dma_rdy_o),
 
         // Tín hiệu giao tiếp với khối khác
-        .ifbuf_ifc_rdy_i        (ifbuf_ifc_rdy_i),
-        .ifbuf_ifc_vld_o        (ifbuf_ifc_vld_o),
-        .ifbuf_ifc_data_o       (ifbuf_ifc_data_o),
-        .ifbuf_ifc_end_row_o    (ifbuf_ifc_end_row_o),
-        .ifbuf_ifc_end_row_circle_o(ifbuf_ifc_end_row_circle_o),
-        .ifbuf_ifc_end_depth_o  (ifbuf_ifc_end_depth_o),
-        .ifbuf_ifc_end_layer_o  (ifbuf_ifc_end_layer_o)
+        .ifbuf_comp_rdy_i       (ifbuf_comp_rdy_i),
+        .ifbuf_comp_vld_o       (ifbuf_comp_vld_o),
+        .ifbuf_comp_data_o      (ifbuf_comp_data_o),
+        .ifbuf_comp_end_row_o   (ifbuf_comp_end_row_o),
+        .ifbuf_comp_end_row_circle_o(ifbuf_comp_end_row_circle_o),
+        .ifbuf_comp_end_depth_o (ifbuf_comp_end_depth_o),
+        .ifbuf_comp_end_layer_o (ifbuf_comp_end_layer_o)
     );
 
     // -------------------------------------------------------------------------
@@ -173,10 +185,10 @@ module ifbuf_tb();
     // -------------------------------------------------------------------------
     always @(posedge clk) begin
         if (!rst_n) begin
-            ifbuf_ifc_rdy_i <= 0;
+            ifbuf_comp_rdy_i <= 0;
         end else begin
             // Consumer luôn sẵn sàng nhận dữ liệu (hoặc bạn có thể toggle random để test stall)
-            ifbuf_ifc_rdy_i <= 1;
+            ifbuf_comp_rdy_i <= 1;
         end
     end
 
@@ -231,12 +243,16 @@ module ifbuf_tb();
         ifbuf_ins_ifbaddr_i = 0;
         ifbuf_ins_width_i   = 0;
         ifbuf_ins_channel_i = 0;
+        ifbuf_ins_ifparr_i = 0;
+        ifbuf_ins_ifparr_tail_i = 0;
         ifbuf_ins_ifsize_i  = 0;
         ifbuf_ins_ifblock_i = 0;
         ifbuf_ins_oftiles_i = 0;
+        ifbuf_ins_oftiles_tail_i = 0;
         ifbuf_ins_iftiles_i = 0;
         ifbuf_ins_wp_i      = 0;
         ifbuf_ins_padding_i = 0;
+        ifbuf_ins_ifc_zp_i = 0;
 
         // Reset
         #20 rst_n = 1;
@@ -256,14 +272,18 @@ module ifbuf_tb();
         ifbuf_ins_ifbaddr_i <= 32'h1000;
         ifbuf_ins_width_i   <= TEST_WIDTH;
         ifbuf_ins_channel_i <= TEST_CHANNEL;
-        ifbuf_ins_ifsize_i  <= TEST_IFSIZE[8:0]; 
+        ifbuf_ins_ifparr_i  <= TEST_IFPARR[3:0];
+        ifbuf_ins_ifparr_tail_i <= TEST_IFPARR_TAIL[3:0];
+        ifbuf_ins_ifsize_i  <= TEST_IFSIZE[7:0]; 
         ifbuf_ins_ifblock_i <= TEST_BLOCK;
         
         // Thêm các thông số mới cho ifbuf
-        ifbuf_ins_oftiles_i <= TEST_OFTILES;
-        ifbuf_ins_iftiles_i <= TEST_IFTILES;
+        ifbuf_ins_oftiles_i <= TEST_OFTILES[3:0];
+        ifbuf_ins_oftiles_tail_i <= TEST_OFTILES_TAIL[3:0];
+        ifbuf_ins_iftiles_i <= TEST_IFTILES[6:0];
         ifbuf_ins_wp_i      <= TEST_WP;
         ifbuf_ins_padding_i <= TEST_PADDING;
+        ifbuf_ins_ifc_zp_i <= TEST_IFC_ZP[7:0];
 
         // Kéo vld xuống sau 1 clock
         @(posedge clk);

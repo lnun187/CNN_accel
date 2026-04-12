@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module fifo_bram #(
+module fifo_bram_zp #(
     parameter WIDTH = 8,
     parameter DEPTH = 224 * 12
 )(
@@ -10,6 +10,7 @@ module fifo_bram #(
     input rd_en,
     input clr,
     input [WIDTH-1:0] din,
+    input [WIDTH-1:0] zp,
     output [WIDTH-1:0] dout,
   
     output wire full,
@@ -44,7 +45,7 @@ module fifo_bram #(
     
     // MUX chọn nguồn dữ liệu ra cho FWFT
     assign data_out = use_bypass ? data_out_bypass : data_out_ram;
-    assign dout     = vld_o ? data_out : {WIDTH{1'b0}};
+    assign dout     = valid_out ? data_out : zp;
 
     // ==========================================
     // KHỐI CONTROL LOGIC (Giữ nguyên gốc của bạn)

@@ -48,12 +48,11 @@ output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o //THEM REG
     // wire done_prepare_en;
     wire [PE_PER_PU-1:0] wr_en;
     wire [PE_PER_PU-1:0] rd_en;
-    wire count_en;
+    reg count_en;
     wire id_en;
     wire [PE_PER_PU-1:0] vld_o;
     assign rd_en = {PE_PER_PU{fltc_pe_rdy_i}} & fltc_pe_vld_o;
     assign fltc_fltbuf_rdy_o = !done_prepare; // Cho phep nhan du lieu moi khi count chua den muc max
-    assign count_en = fltc_fltbuf_vld_i & fltc_fltbuf_rdy_o;
     assign id_en = (done_prepare || fltc_fltbuf_done_pass_i) & (fltc_pu_clr_ch_flt_i | !vld_o[0]);
     assign fltc_pe_vld_o = vld_o;
     always @(posedge clk or negedge rst_n) begin
@@ -83,6 +82,13 @@ output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o //THEM REG
     end
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+            count_en <= 0;
+        end else begin
+            count_en <= fltc_fltbuf_vld_i & fltc_fltbuf_rdy_o;
+        end
+    end
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             count_w <= 0;
         end else begin
             if(id_en) count_w <= 0;
@@ -104,13 +110,14 @@ output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o //THEM REG
     genvar i;
     generate
         for (i = 0; i < PE_PER_PU; i = i + 1) begin : fifo_array
-            ping_pong_circle_fifo #(
+            pp_circle_reg #(
                 .WIDTH(WIDTH),
                 .DEPTH(DEPTH)
             ) fifo_inst (
                 .clk(clk),
                 .rst_n(rst_n),
                 .id_i(id),
+                .ins_hf_i(fltc_ins_hf_i),
                 .wr_en(wr_en[i]),
                 .rd_en(rd_en[i]),
                 .clr_i(fltc_pu_clr_ch_flt_i),

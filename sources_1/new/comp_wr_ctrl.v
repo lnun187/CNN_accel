@@ -27,9 +27,8 @@ module comp_wr_ctrl#(
     input clk,
     input rst_n,
     input [3:0] cwc_ins_hf_i,
-    input [1:0] cwc_ins_stride_i,
+    input [2:0] cwc_ins_stride_i,
     input [1:0] cwc_ins_padding_i,
-    input cwc_pe_end_layer_i,
     input cwc_pe_end_layer_nxt_i,
     
     input [PE_PER_PU*WIDTH-1:0] cwc_pp_data_i,
@@ -37,6 +36,7 @@ module comp_wr_ctrl#(
     input [PE_PER_PU-1:0] cwc_pp_end_data_i,
     output [PE_PER_PU-1:0] cwc_pp_rdy_o,
     output [PE_PER_PU-1:0] cwc_pp_clear_o,
+    output [PE_PER_PU-1:0] cwc_pp_pe_is_read_o,
 
     input cwc_pu_swap_en_i,
     
@@ -48,9 +48,10 @@ module comp_wr_ctrl#(
     
     reg [3:0] count_p;
     wire [3:0] count_p_nxt;
-    reg [1:0] cwc_ins_stride_i_count;
-    wire [1:0] cwc_ins_stride_i_count_nxt;
+    reg [2:0] cwc_ins_stride_i_count;
+    wire [2:0] cwc_ins_stride_i_count_nxt;
     reg [$clog2(PE_PER_PU)-1:0] id;
+    reg end_layer;
     wire [$clog2(PE_PER_PU)-1:0] id_nxt;
     reg [PE_PER_PU-1:0] pp_clear_reg;
     wire [PE_PER_PU-1:0] pp_clear_nxt;
@@ -62,33 +63,51 @@ module comp_wr_ctrl#(
     wire vld_id;
     wire vld_id_nxt;
     wire end_data_id;
-    assign cwc_pu_done_compute_o = cwc_pe_end_layer_i && !(|cwc_pp_vld_i);
-    assign cwc_pp_rdy_o = {PE_PER_PU{cwc_ofbuf_rdy_i}} & (1'b1 << id);
+    posedge_detection a(
+    .clk(clk),
+    .rst_n(rst_n),
+    .signal_i(end_layer && !(|cwc_pp_vld_i)),
+    .signal_o(cwc_pu_done_compute_o)
+    );
+    assign cwc_pp_rdy_o = {PE_PER_PU{cwc_ofbuf_rdy_i && cwc_ofbuf_vld_o}} & (1'b1 << id);
     // assign end_data_id = (id < PE_PER_PU) ? cwc_pp_end_data_i[id] : 1'b0;
     assign end_data_id = |cwc_pp_end_data_i;
-    assign vld_id = (id < PE_PER_PU) ? cwc_pp_vld_i[id]: 1'b0;
-    assign cwc_ofbuf_vld_o = vld_id && !cwc_pp_clear_o[id];
+    assign vld_id = (id < PE_PER_PU) ? cwc_pp_vld_i[id] && !pp_clear_reg[id]: 1'b0;
+    assign cwc_ofbuf_vld_o = vld_id;
+    assign cwc_pp_pe_is_read_o = {PE_PER_PU{~end_layer}};
     wire [4:0] next_id_sum = {1'b0, id} + {1'b0, cwc_ins_hf_i};
-    assign vld_id_nxt = (next_id_sum < PE_PER_PU) ? cwc_pp_vld_i[next_id_sum]: 1'b0;
+    assign vld_id_nxt = (next_id_sum < PE_PER_PU) ? cwc_pp_vld_i[next_id_sum] && !pp_clear_reg[next_id_sum]: 1'b0;
     assign cwc_ofbuf_data_o = (id < PE_PER_PU) ? cwc_pp_data_i[id*WIDTH +: WIDTH] : {WIDTH{1'b0}};
     assign is_id_nxt_vld = vld_id_nxt;
-    // assign is_add_cwc_ins_padding_i_data = (cwc_pu_end_height_i & cwc_ins_dw_i) || cwc_pe_end_layer_i;
-    assign is_add_cwc_ins_padding_i_data = cwc_pe_end_layer_i;
+    // assign is_add_cwc_ins_padding_i_data = (cwc_pu_end_height_i & cwc_ins_dw_i) || end_layer;
+    assign is_add_cwc_ins_padding_i_data = end_layer && !cwc_pu_swap_en_i;
     // assign id_mod_cwc_ins_hf_i_nxt = id % cwc_ins_hf_i;
     // assign id_mod_cwc_ins_hf_i_nxt = is_id_nxt_vld ? id_mod_cwc_ins_hf_i : (is_add_cwc_ins_padding_i_data ? (id_mod_cwc_ins_hf_i - (cwc_ins_stride_i - cwc_ins_stride_i_count)) : (cwc_ins_hf_i - 1));
     assign id_nxt = is_id_nxt_vld ? (id + cwc_ins_hf_i) : (is_add_cwc_ins_padding_i_data ? (id % cwc_ins_hf_i - (cwc_ins_stride_i - cwc_ins_stride_i_count)) : (cwc_ins_hf_i - 1));
     // assign count_p_nxt = cwc_ins_dw_i & cwc_pu_end_height_i ? 1 : count_p + 1;
     assign count_p_nxt = count_p + 1;
     assign cwc_ins_stride_i_count_nxt = (cwc_ins_stride_i_count == cwc_ins_stride_i - 1) ? 0 : cwc_ins_stride_i_count + 1;
-    always @(posedge clk or negedge rst_n) begin
+    reg id_en;
+    always @(posedge clk) begin
+        if(!rst_n) begin
+          id_en <= 0;
+        //   id_mod_cwc_ins_hf_i <= cwc_ins_hf_i - 1;
+        end else begin
+           id_en <= vld_id || cwc_pu_swap_en_i;
+        end 
+    end
+    always @(posedge clk) begin
         if(!rst_n) begin
           id <= cwc_ins_hf_i - 1;
+          end_layer <= 0;
         //   id_mod_cwc_ins_hf_i <= cwc_ins_hf_i - 1;
         end else begin
             if(cwc_pu_swap_en_i) begin
                 id <= cwc_ins_hf_i - 1;
+                end_layer <= cwc_pe_end_layer_nxt_i;
             //   id_mod_cwc_ins_hf_i <= cwc_ins_hf_i - 1;
-            end else if(!vld_id || end_data_id && vld_id && cwc_ofbuf_rdy_i) begin
+            end 
+            else if(!vld_id || end_data_id && vld_id && cwc_ofbuf_rdy_i) begin
                 id <= id_nxt;
             //   id_mod_cwc_ins_hf_i <= id_mod_cwc_ins_hf_i_nxt;
             end
@@ -138,7 +157,7 @@ module comp_wr_ctrl#(
             //                       (i < 12 * cwc_ins_hf_i)? (i - 11 * cwc_ins_hf_i) : 4'd0;
             wire cwc_ins_stride_i_term_cond;
             assign cwc_ins_stride_i_term_cond = ((cwc_ins_stride_i_count_nxt == 0) && ((count_p + cwc_ins_padding_i) == cwc_ins_hf_i)) | ((cwc_ins_stride_i_count == 0) && ((count_p_nxt + cwc_ins_padding_i) == cwc_ins_hf_i));
-            wire [1:0] cwc_ins_stride_i_term;
+            wire [2:0] cwc_ins_stride_i_term;
             assign cwc_ins_stride_i_term = ((count_p + cwc_ins_padding_i) != cwc_ins_hf_i ) ? 2'b00 : (cwc_ins_stride_i - cwc_ins_stride_i_count_nxt);
             wire signed [6:0] val_term;
             assign val_term = $signed({1'b0, cwc_ins_hf_i}) - 1 - $signed({1'b0, i_mod_cwc_ins_hf_i}) - $signed({1'b0, cwc_ins_stride_i_term});
@@ -150,7 +169,8 @@ module comp_wr_ctrl#(
             wire val_mod_cwc_ins_stride_i_zero;
             assign val_mod_cwc_ins_stride_i_zero = (cwc_ins_stride_i == 1) ? 1'b1 :
                                        (cwc_ins_stride_i == 2) ? (val_term[0] == 1'b0) : // Chia hết cho 2 chỉ cần ktra LSB
-                                       (cwc_ins_stride_i == 3) ? (val_term == 0 || val_term == 3 || val_term == 6 || val_term == 9 || val_term == 12 || val_term == 15) : 1'b0;
+                                       (cwc_ins_stride_i == 3) ? (val_term == 0 || val_term == 3 || val_term == 6 || val_term == 9 || val_term == 12 || val_term == 15) : 
+                                       (cwc_ins_stride_i == 4) ? (val_term[1:0] == 2'b0) : 1'b0;
 
             wire cwc_ins_padding_i_cond;
             assign cwc_ins_padding_i_cond = cwc_ins_padding_i >= distance;

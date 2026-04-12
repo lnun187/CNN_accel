@@ -8,14 +8,14 @@ module ifmap_cache #(
     input wire clk,
     input wire rst_n,              
     input wire [3:0] ifc_ins_hf_i,
-    input wire [1:0] ifc_ins_stride_i,
+    input wire [2:0] ifc_ins_stride_i,
     input wire [K*DATA_WIDTH-1:0] ifc_ifbuf_data_i,
-    input wire ifc_ifbuf_tlast_i,
+    input wire ifc_ifbuf_end_row_i,
     input wire ifc_ifbuf_end_row_circle_i,
     input wire ifc_ifbuf_end_depth_i,
     input wire ifc_ifbuf_end_layer_i,
     input wire ifc_ifbuf_vld_i,
-    output reg ifc_ifbuf_rdy_o,  // Đã đổi thành reg (Flip-Flop)
+    output wire ifc_ifbuf_rdy_o,  
     
     input wire ifc_pu_rdy_i,
     output wire ifc_pu_vld_o,    
@@ -43,22 +43,22 @@ module ifmap_cache #(
     wire [3:0] window_cnt_nxt;
     wire window_active_nxt;
     
-    assign combined_data_in = {ifc_ifbuf_tlast_i, ifc_ifbuf_end_row_circle_i, ifc_ifbuf_end_depth_i, ifc_ifbuf_end_layer_i, ifc_ifbuf_data_i};
+    assign combined_data_in = {ifc_ifbuf_end_row_i, ifc_ifbuf_end_row_circle_i, ifc_ifbuf_end_depth_i, ifc_ifbuf_end_layer_i, ifc_ifbuf_data_i};
     assign window_active = (prefill_cnt == (|(ifc_ins_hf_i - ifc_ins_stride_i) ? (ifc_ins_hf_i - ifc_ins_stride_i) : 1));
 
     // ==========================================
     // 1. Logic Look-ahead (Tính toán chu kỳ tiếp theo)
     // ==========================================
-    assign prefill_cnt_nxt = (ifc_ifbuf_tlast_i == 1'b1) ? 4'd0 :
+    assign prefill_cnt_nxt = (ifc_ifbuf_end_row_i == 1'b1) ? 4'd0 :
                              (!window_active && ifc_ifbuf_vld_i && ifc_ifbuf_rdy_o) ? prefill_cnt + 1'b1 :
                              prefill_cnt;
 
     assign window_active_nxt = (prefill_cnt_nxt == (|(ifc_ins_hf_i - ifc_ins_stride_i) ? (ifc_ins_hf_i - ifc_ins_stride_i) : 1));
 
-    assign fifo_wr_en = ((prefill_cnt < (ifc_ins_hf_i - ifc_ins_stride_i)) && ifc_ifbuf_vld_i) || 
+    assign fifo_wr_en = ((prefill_cnt < (ifc_ins_hf_i - ifc_ins_stride_i) || (prefill_cnt < 1 && ifc_ins_hf_i == ifc_ins_stride_i)) && ifc_ifbuf_vld_i) || 
                         (window_active && ifc_pu_rdy_i);
 
-    assign window_cnt_nxt = (ifc_ifbuf_tlast_i == 1'b1) ? 4'd0 :
+    assign window_cnt_nxt = (ifc_ifbuf_end_row_i == 1'b1) ? 4'd0 :
                             (window_active && fifo_wr_en) ? 
                                 ((window_cnt == ifc_ins_hf_i - 1) ? 4'd0 : window_cnt + 1'b1) :
                             window_cnt;
@@ -70,18 +70,19 @@ module ifmap_cache #(
         if (!rst_n) begin
             prefill_cnt <= 0;
             window_cnt  <= 0;
-            ifc_ifbuf_rdy_o <= 1'b0; // Hoặc 1'b1 tùy thuộc vào trạng thái init thiết kế của bạn
+            //ifc_ifbuf_rdy_o <= 1'b0; // Hoặc 1'b1 tùy thuộc vào trạng thái init thiết kế của bạn
         end else begin
             // Cập nhật counter
             prefill_cnt <= prefill_cnt_nxt;
             window_cnt  <= window_cnt_nxt;
             
             // Tính trước và chốt ready cho chu kỳ tới
-            ifc_ifbuf_rdy_o <= (prefill_cnt_nxt < (ifc_ins_hf_i - ifc_ins_stride_i)) || 
-                               (window_active_nxt && (window_cnt_nxt < ifc_ins_stride_i) && ifc_pu_rdy_i);
+            //ifc_ifbuf_rdy_o <= (prefill_cnt_nxt < (ifc_ins_hf_i - ifc_ins_stride_i)) || 
+                               //(window_active_nxt && (window_cnt_nxt < ifc_ins_stride_i) && ifc_pu_rdy_i);
         end
     end
-
+    assign ifc_ifbuf_rdy_o = (prefill_cnt < (ifc_ins_hf_i - ifc_ins_stride_i)) || (prefill_cnt < 1 && ifc_ins_hf_i == ifc_ins_stride_i) ||
+                               (window_active && (window_cnt_nxt < ifc_ins_stride_i) && ifc_pu_rdy_i);
     // ==========================================
     // 3. Logic của thanh ghi đếm 'is_begin'
     // ==========================================

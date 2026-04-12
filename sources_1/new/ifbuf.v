@@ -31,14 +31,17 @@ module ifbuf #(
     // Giao tiếp Instruction
     input  wire ifbuf_ins_vld_i,
     input  wire [31:0] ifbuf_ins_ifbaddr_i,
-    input  wire [8:0]  ifbuf_ins_width_i,
+    input  wire [7:0]  ifbuf_ins_width_i,
     input  wire [10:0] ifbuf_ins_channel_i,
-    input  wire [8:0]  ifbuf_ins_ifsize_i,
-    input  wire [10:0] ifbuf_ins_ifblock_i,
-    input  wire [10:0] ifbuf_ins_oftiles_i,
-    input  wire [10:0] ifbuf_ins_iftiles_i,
+    input  wire [3:0] ifbuf_ins_ifparr_i,
+    input  wire [15:0]  ifbuf_ins_ifsize_i,
+    input  wire [6:0] ifbuf_ins_ifblock_i,
+    input  wire [3:0] ifbuf_ins_oftiles_i,
+    input  wire [3:0] ifbuf_ins_oftiles_tail_i,
+    input  wire [6:0] ifbuf_ins_iftiles_i,
     input  wire [8:0]  ifbuf_ins_wp_i,
     input  wire [1:0]  ifbuf_ins_padding_i,
+    input wire [DATA_WIDTH-1:0] ifbuf_ins_ifc_zp_i,
     output wire ifbuf_ins_rdy_o,
 
     // Tín hiệu DMA
@@ -52,33 +55,36 @@ module ifbuf #(
     output  wire ifbuf_dma_rdy_o,
 
     // Tín hiệu giao tiếp với khối khác
-    input  wire ifbuf_ifc_rdy_i,
-    output wire ifbuf_ifc_vld_o,
-    output wire [K*DATA_WIDTH-1:0] ifbuf_ifc_data_o,
-    output wire ifbuf_ifc_end_row_o,
-    output wire ifbuf_ifc_end_row_circle_o,
-    output wire ifbuf_ifc_end_depth_o,
-    output wire ifbuf_ifc_end_layer_o
+    input  wire ifbuf_comp_rdy_i,
+    output wire ifbuf_comp_vld_o,
+    output wire [K*DATA_WIDTH-1:0] ifbuf_comp_data_o,
+    output wire ifbuf_comp_end_row_o,
+    output wire ifbuf_comp_end_row_circle_o,
+    output wire ifbuf_comp_end_depth_o,
+    output wire ifbuf_comp_end_layer_o
 );
 
     // ==========================================
     // 1. Latch các thông số Instruction nội bộ của ifbuf 
     // (Các thông số không thuộc về ifbuf_mem)
     // ==========================================
-    reg [10:0] ifbuf_ins_oftiles_reg;
-    reg [10:0] ifbuf_ins_iftiles_reg;
+    reg [3:0] ifbuf_ins_oftiles_reg;
+    reg [3:0] ifbuf_ins_oftiles_tail_reg;
+    reg [6:0] ifbuf_ins_iftiles_reg;
     reg [8:0]  ifbuf_ins_wp_reg;
     reg [1:0]  ifbuf_ins_padding_reg;
+    reg [DATA_WIDTH-1:0] ifbuf_ins_ifc_zp_reg;
+    reg [3:0] ifbuf_ins_ifparr_reg;
     wire swap_en;
 
     // ==========================================
     // 2. Instantiate module con ifbuf_mem
     // ==========================================
     reg [31:0] ifbuf_ins_ifbaddr_reg;
-    reg [8:0]  ifbuf_ins_width_reg;
+    reg [7:0]  ifbuf_ins_width_reg;
     reg [10:0] ifbuf_ins_channel_reg;
-    reg [8:0]  ifbuf_ins_ifsize_reg;
-    reg [10:0] ifbuf_ins_ifblock_reg;
+    reg [15:0]  ifbuf_ins_ifsize_reg;
+    reg [6:0] ifbuf_ins_ifblock_reg;
 
     // Khai báo các tín hiệu logic nội bộ
     reg         vld_i_reg;
@@ -86,18 +92,21 @@ module ifbuf #(
     reg         vld;
     reg         en_config;
     wire        en_config_rst;
-    reg [10:0]  ifblock_count;
+    reg [5:0]  ifblock_count;
+    reg [5:0]  ifblock_count_r;
     wire        ifblock_count_en;
+    wire        ifblock_count_r_en;
     reg [8:0]   height_config;
     reg [16:0]  height_width_config;
     wire        height_config_en;
     reg [10:0]  channel_config;
+    reg [3:0] channel_count;
     wire        channel_config_en;  // Bổ sung wire bị thiếu
     reg [31:0]  base_addr_config;
     wire [31:0] base_addr_config_nxt;
     wire [8:0]  width_align;
     wire [K-1:0] wr_en;
-    wire [K-1:0] vld_o;
+    wire vld_o;
     wire clr;
     wire [K*DATA_WIDTH-1:0] data_o;
     reg [K-1:0] key_ring;
@@ -106,9 +115,9 @@ module ifbuf #(
     wire is_padding_data;
     reg [8:0] count_w_read;
     wire count_w_read_en;
-    reg [10:0] count_oftiles_read;
+    reg [2:0] count_oftiles_read;
     wire count_oftiles_read_en;
-    reg [10:0] count_depth_read;
+    reg [6:0] count_depth_read;
     wire count_depth_read_en;
     reg [8:0] count_height_read;
     wire count_height_read_en;
@@ -126,7 +135,7 @@ module ifbuf #(
                                    (ifbuf_ins_ifbaddr_reg + height_width_config + ifbuf_dma_burst_o) : 
                                    (base_addr_config + ifbuf_ins_ifsize_reg));
                                   
-    assign en_config_rst        = channel_config_en && ((&channel_config[2:0]) || (channel_config == ifbuf_ins_channel_reg - 1));
+    assign en_config_rst        = channel_config_en && ((channel_count == ifbuf_ins_ifparr_reg - 1) || (channel_config == ifbuf_ins_channel_reg - 1));
 
     // Đẩy giá trị nội bộ ra Output
     assign ifbuf_dma_baddr_o   = base_addr_config;
@@ -139,6 +148,8 @@ module ifbuf #(
             ifbuf_ins_iftiles_reg <= ifbuf_ins_iftiles_i;
             ifbuf_ins_wp_reg      <= ifbuf_ins_wp_i;
             ifbuf_ins_padding_reg <= ifbuf_ins_padding_i;
+            ifbuf_ins_ifparr_reg <= ifbuf_ins_ifparr_i;
+            ifbuf_ins_oftiles_tail_reg <= ifbuf_ins_oftiles_tail_i;
         end
     end
 
@@ -150,6 +161,7 @@ module ifbuf #(
             ifbuf_ins_channel_reg <= ifbuf_ins_channel_i;
             ifbuf_ins_ifsize_reg  <= ifbuf_ins_ifsize_i;
             ifbuf_ins_ifblock_reg <= ifbuf_ins_ifblock_i;
+            ifbuf_ins_ifc_zp_reg <= ifbuf_ins_ifc_zp_i;
         end
     end
 
@@ -194,8 +206,10 @@ module ifbuf #(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             channel_config <= 0;
+            channel_count <= 0;
         end else if (channel_config_en) begin
             channel_config <= (channel_config == ifbuf_ins_channel_reg - 1) ? 0 : channel_config + 1;
+            channel_count <= en_config_rst ? 0 : channel_count + 1;
         end 
     end
 
@@ -235,15 +249,23 @@ module ifbuf #(
     // ==========================================
     
     assign clr = count_depth_read_en;
-    assign ifbuf_ifc_vld_o = vld_o[0];
-    assign swap_en = done_prepare && (!vld_o[0] || clr);
+    assign ifbuf_comp_vld_o = vld_o;
+    assign swap_en = done_prepare && (!vld_o || clr);
     assign ifbuf_dma_rdy_o = !done_prepare;
+    reg [10:0] channel_wr_cnt;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            channel_wr_cnt <= 0;
+        end else if (ifbuf_dma_tlast_i) begin
+            channel_wr_cnt <= channel_wr_cnt == ifbuf_ins_channel_reg - 1 ? 0 : channel_wr_cnt + 1;
+        end 
+    end
     always @(posedge clk or negedge rst_n) begin
       if(!rst_n) begin
           done_prepare <= 0;
       end else begin
         if(swap_en) done_prepare <= 0;
-        else if (ifbuf_dma_tlast_i && !en_config) begin
+        else if (ifbuf_dma_tlast_i && (channel_wr_cnt + 1 == channel_config || channel_wr_cnt == ifbuf_ins_channel_reg - 1) && !en_config) begin
           done_prepare <= 1;
         end
       end 
@@ -256,20 +278,41 @@ module ifbuf #(
       end 
     end
 
+
     genvar i;
     generate
         for (i = 0; i < K; i = i + 1) begin : fifo_array
-        always @(posedge clk or negedge rst_n) begin
-            if (!rst_n) begin
-                key_ring[i] <= (i == 0) ? 1'b1 : 1'b0;
-            end else begin
-                if (swap_en) begin
+            always @(posedge clk or negedge rst_n) begin
+                if (!rst_n) begin
                     key_ring[i] <= (i == 0) ? 1'b1 : 1'b0;
-                end else if(ifbuf_dma_tlast_i) begin
-                    key_ring[i] <= (i == 0) ? key_ring[K - 1] : key_ring[i - 1];
+                end else begin
+                    if (swap_en) begin
+                        key_ring[i] <= (i == 0) ? 1'b1 : 1'b0;
+                    end else if(ifbuf_dma_tlast_i) begin
+                        key_ring[i] <= (i == 0) ? key_ring[K - 1] : key_ring[i - 1];
+                    end
                 end
             end
         end
+    endgenerate
+    ping_pong_circle_fifo #(
+                .WIDTH(DATA_WIDTH),
+                .DEPTH(DEPTH)
+            ) fifo_inst (
+                .clk    (clk),
+                .rst_n  (rst_n),
+                .id_i   (id), // Cần khai báo 'id'
+                .wr_en  (wr_en[0]),
+                .rd_en  (count_w_read_en && !is_padding_data),
+                .clr_i  (clr), // Cần khai báo
+                .data_i (ifbuf_dma_data_i),
+                .zp(ifbuf_ins_ifc_zp_reg),
+                .data_o (data_o[0 +: DATA_WIDTH]),
+                .vld_o  (vld_o)
+            );
+    genvar pp;
+    generate
+        for (pp = 1; pp < K; pp = pp + 1) begin : ping_pong
             ping_pong_circle_fifo #(
                 .WIDTH(DATA_WIDTH),
                 .DEPTH(DEPTH)
@@ -277,16 +320,17 @@ module ifbuf #(
                 .clk    (clk),
                 .rst_n  (rst_n),
                 .id_i   (id), // Cần khai báo 'id'
-                .wr_en  (wr_en[i]),
+                .wr_en  (wr_en[pp]),
                 .rd_en  (count_w_read_en && !is_padding_data),
                 .clr_i  (clr), // Cần khai báo
                 .data_i (ifbuf_dma_data_i),
-                .data_o (data_o[i*DATA_WIDTH +: DATA_WIDTH]),
-                .vld_o  (vld_o[i])
+                .zp(ifbuf_ins_ifc_zp_reg),
+                .data_o (data_o[pp*DATA_WIDTH +: DATA_WIDTH]),
+                .vld_o  ()
             );
         end
     endgenerate
-    assign ifbuf_ifc_data_o = is_padding_data ? {(K*DATA_WIDTH){1'b0}} : data_o;
+    assign ifbuf_comp_data_o = is_padding_data ? {K{ifbuf_ins_ifc_zp_reg}} : data_o;
     genvar j;
     generate
         for (j = 0; j < K; j = j + 1) begin : wr_en_array
@@ -295,11 +339,11 @@ module ifbuf #(
     endgenerate
     
     assign is_padding_data = count_w_read < ifbuf_ins_padding_reg || count_w_read >= ifbuf_ins_width_reg + ifbuf_ins_padding_reg;
-    assign count_w_read_en = ifbuf_ifc_rdy_i && ifbuf_ifc_vld_o;
+    assign count_w_read_en = ifbuf_comp_rdy_i && ifbuf_comp_vld_o;
     assign count_oftiles_read_en = count_w_read_en && (count_w_read == ifbuf_ins_wp_reg);
-    assign count_depth_read_en   = count_oftiles_read_en && (count_oftiles_read == ifbuf_ins_oftiles_reg - 1);
+    assign count_depth_read_en   = count_oftiles_read_en && ((ifblock_count_r == ifbuf_ins_ifblock_reg - 1) && (count_oftiles_read == ifbuf_ins_oftiles_tail_reg - 1) || (count_oftiles_read == ifbuf_ins_oftiles_reg - 1));
     assign count_height_read_en  = count_depth_read_en && (count_depth_read == ifbuf_ins_iftiles_reg - 1);
-
+    assign ifblock_count_r_en = count_height_read_en && (count_height_read == ifbuf_ins_width_reg - 1);
     always @(posedge clk or negedge rst_n) begin
       if(!rst_n) begin
           count_w_read <= 9'b0;
@@ -312,10 +356,16 @@ module ifbuf #(
       if(!rst_n) begin
           count_oftiles_read <= 11'b0;
       end else if(count_oftiles_read_en) begin
-          count_oftiles_read <= (count_oftiles_read == ifbuf_ins_oftiles_reg - 1) ? 11'b0 : count_oftiles_read + 1;
+          count_oftiles_read <= ((ifblock_count_r == ifbuf_ins_ifblock_reg - 1) && (count_oftiles_read == ifbuf_ins_oftiles_tail_reg - 1) || (count_oftiles_read == ifbuf_ins_oftiles_reg - 1)) ? 11'b0 : count_oftiles_read + 1;
       end
     end
-
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            ifblock_count_r <= 0;
+        end else if (ifblock_count_r_en) begin
+            ifblock_count_r <= (ifblock_count_r == ifbuf_ins_ifblock_reg - 1) ? 0 : ifblock_count_r + 1;
+        end 
+    end
     always @(posedge clk or negedge rst_n) begin
       if(!rst_n) begin
           count_depth_read <= 11'b0;
@@ -331,8 +381,8 @@ module ifbuf #(
           count_height_read <= (count_height_read == ifbuf_ins_width_reg - 1) ? 9'b0 : count_height_read + 1;
       end
     end
-    assign ifbuf_ifc_end_row_o = (count_w_read == ifbuf_ins_wp_reg);
-    assign ifbuf_ifc_end_row_circle_o = ifbuf_ifc_end_row_o && (count_oftiles_read == ifbuf_ins_oftiles_reg - 1);
-    assign ifbuf_ifc_end_depth_o = ifbuf_ifc_end_row_circle_o && (count_depth_read == ifbuf_ins_iftiles_reg - 1);
-    assign ifbuf_ifc_end_layer_o = ifbuf_ifc_end_depth_o && (count_height_read == ifbuf_ins_width_reg - 1);
+    assign ifbuf_comp_end_row_o = (count_w_read == ifbuf_ins_wp_reg);
+    assign ifbuf_comp_end_row_circle_o = ifbuf_comp_end_row_o && ((ifblock_count_r == ifbuf_ins_ifblock_reg - 1) && (count_oftiles_read == ifbuf_ins_oftiles_tail_reg - 1) || (count_oftiles_read == ifbuf_ins_oftiles_reg - 1));
+    assign ifbuf_comp_end_depth_o = ifbuf_comp_end_row_circle_o && (count_depth_read == ifbuf_ins_iftiles_reg - 1);
+    assign ifbuf_comp_end_layer_o = ifbuf_comp_end_depth_o && (count_height_read == ifbuf_ins_width_reg - 1);
 endmodule

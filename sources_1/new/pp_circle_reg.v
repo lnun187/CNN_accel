@@ -3,9 +3,9 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 02/11/2026 11:40:36 AM
+// Create Date: 04/05/2026 11:22:24 AM
 // Design Name: 
-// Module Name: ping_pong_circle_fifo
+// Module Name: pp_circle_reg
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
@@ -20,7 +20,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module ping_pong_circle_fifo #(
+module pp_circle_reg#(
     parameter WIDTH = 8,
     parameter DEPTH = 11
 )(
@@ -30,8 +30,8 @@ module ping_pong_circle_fifo #(
     input wr_en,
     input rd_en,
     input clr_i,
+    input wire [3:0] ins_hf_i,
     input [WIDTH-1:0] data_i,
-    input [WIDTH-1:0] zp,
     output [WIDTH-1:0] data_o,
     output vld_o
     );
@@ -52,37 +52,34 @@ module ping_pong_circle_fifo #(
     assign data_i2 = data_i; // Du lieu vao fifo2 la data_i khi ghi, la data_o2 khi doc
     assign data_o = id_i ? data_o2 : data_o1;
     assign vld_o = id_i ? vld2 : vld1;
-    fifo_bram_zp #(
+    circle_cache #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)
     ) fifo1 (
         .clk(clk),
         .rst_n(rst_n),
-        .wr_en(wr_en1 || rd_en1 && vld1),
+        .wr_en(wr_en1),
         .rd_en(rd_en1),
+        .ins_hf_i(ins_hf_i),
         .clr(clr1),
-        .din(rd_en1 && vld1 ? data_o1 : data_i1),
-        .zp(zp),
+        .din(data_i1),
         .dout(data_o1),
-        .full(),
-        .vld_o(vld1),
-        .end_data()
+        .vld_o(vld1)
     );
-    fifo_bram_zp #(
+    circle_cache #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)
     ) fifo2 (
         .clk(clk),
         .rst_n(rst_n),
-        .wr_en(wr_en2 || rd_en2 && vld2),
+        .wr_en(wr_en2),
         .rd_en(rd_en2),
+        .ins_hf_i(ins_hf_i),
         .clr(clr2),
-        .din(rd_en2 && vld2 ? data_o2 : data_i2),
-        .zp(zp),
+        .din(data_i2),
         .dout(data_o2),
-        .full(),
-        .vld_o(vld2),
-        .end_data()
+        .vld_o(vld2)
     );
 endmodule
+
 

@@ -17,17 +17,16 @@ module computation #(
     input wire rst_n,
 
     // Tín hiệu Instruction (Dùng chung và riêng cho PU/Cache)
-    input wire comp_ins_dw_i,
     input wire [3:0] comp_ins_hf_i,
-    input wire [1:0] comp_ins_stride_i,
+    input wire [2:0] comp_ins_stride_i,
     input wire [1:0] comp_ins_padding_i,
-    input wire [7:0] comp_ins_ifc_zp_i,
-    input wire [7:0] comp_ins_fltc_zp_i,
+    input wire [WIDTH-1:0] comp_ins_ifc_zp_i,
+    input wire [WIDTH-1:0] comp_ins_fltc_zp_i,
 
     // Giao tiếp với Input Feature Map (ifbuf) - đi vào ifmap_cache
     input wire comp_ifbuf_vld_i,
     input wire [K*WIDTH-1:0] comp_ifbuf_data_i,
-    input wire comp_ifbuf_tlast_i,
+    input wire comp_ifbuf_end_row_i,
     input wire comp_ifbuf_end_row_circle_i,
     input wire comp_ifbuf_end_depth_i,
     input wire comp_ifbuf_end_layer_i,
@@ -35,7 +34,7 @@ module computation #(
 
     // Giao tiếp với Filter Buffer (fltbuf) - đi vào comp_pu (Đã mở rộng cho M PU)
     input wire [K*M-1:0] comp_fltbuf_vld_i,
-    input wire [WIDTH-1:0] comp_fltbuf_data_i,
+    input wire [K*M*WIDTH-1:0] comp_fltbuf_data_i,
     input wire comp_fltbuf_done_pass_i, // Dùng chung
     output wire [M-1:0] comp_fltbuf_rdy_o,
 
@@ -64,7 +63,7 @@ module computation #(
     wire [M-1:0] pu_pa_done_compute_m;
 
     // Chỉ báo rdy cho cache khi tất cả M PUs đều sẵn sàng
-    assign pu_ifc_rdy_w = &pu_ifc_rdy_m; 
+    assign pu_ifc_rdy_w = pu_ifc_rdy_m[0]; 
     
     // Gán tín hiệu done compute từ PU 0 ra ngoài theo yêu cầu
     assign comp_pa_done_compute_o = pu_pa_done_compute_m[0];
@@ -86,7 +85,7 @@ module computation #(
         
         // Giao tiếp với IFBUF bên ngoài
         .ifc_ifbuf_data_i(comp_ifbuf_data_i),
-        .ifc_ifbuf_tlast_i(comp_ifbuf_tlast_i),
+        .ifc_ifbuf_end_row_i(comp_ifbuf_end_row_i),
         .ifc_ifbuf_end_row_circle_i(comp_ifbuf_end_row_circle_i),
         .ifc_ifbuf_end_depth_i(comp_ifbuf_end_depth_i),
         .ifc_ifbuf_end_layer_i(comp_ifbuf_end_layer_i),
@@ -106,6 +105,9 @@ module computation #(
     // ==========================================
     // Instantiation: M comp_pu modules
     // ==========================================
+    wire [M-1:0] pu_comp_vld_o;
+    wire pu_comp_vld_i;
+    assign pu_comp_vld_i = |pu_comp_vld_o;
     genvar i;
     generate
         for (i = 0; i < M; i = i + 1) begin : gen_comp_pu
@@ -120,8 +122,6 @@ module computation #(
                 .clk(clk),
                 .rst_n(rst_n),
 
-                // Từ Instruction (Chung cho tất cả PU)
-                .pu_ins_dw_i(comp_ins_dw_i),
                 .pu_ins_hf_i(comp_ins_hf_i),
                 .pu_ins_stride_i(comp_ins_stride_i),
                 .pu_ins_padding_i(comp_ins_padding_i),
@@ -142,10 +142,12 @@ module computation #(
                 
                 // Giao tiếp với FLTBUF bên ngoài (Phần riêng)
                 .pu_fltbuf_vld_i(comp_fltbuf_vld_i[i*K +: K]),
-                .pu_fltbuf_data_i(comp_fltbuf_data_i),
+                .pu_fltbuf_data_i(comp_fltbuf_data_i[i*K*WIDTH +: K*WIDTH]),
                 .pu_fltbuf_done_pass_i(comp_fltbuf_done_pass_i), // Dùng chung
                 .pu_fltbuf_rdy_o(comp_fltbuf_rdy_o[i]),
-
+                
+                .pu_comp_vld_o(pu_comp_vld_o[i]),
+                .pu_comp_vld_i(pu_comp_vld_i),
                 // Giao tiếp với OFBUF bên ngoài (Phần riêng)
                 .pu_ofbuf_rdy_i(comp_ofbuf_rdy_i[i]),
                 .pu_ofbuf_vld_o(comp_ofbuf_vld_o[i]),
@@ -156,5 +158,10 @@ module computation #(
             );
         end
     endgenerate
-
+(* keep = "false" *) wire _unused_sink; 
+    
+    assign _unused_sink = &{
+        1'b0,                                                               // Pad to ensure reduction AND works cleanly
+        pu_pa_done_compute_m[1]                                              // Unused bit 0
+    };
 endmodule
