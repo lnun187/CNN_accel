@@ -53,6 +53,8 @@ module comp_pu #(
     output pu_comp_vld_o,
     input pu_comp_vld_i,
     //from and to ofbuf
+    input pu_swap_fltc_i,
+    output pu_swap_fltc_o,
     input pu_ofbuf_rdy_i,
     output pu_ofbuf_vld_o,
     output [ACC_WIDTH-1:0] pu_ofbuf_data_o,
@@ -112,6 +114,7 @@ module comp_pu #(
     wire cwc_pe_end_layer_nxt_i;
     wire [ACC_WIDTH*PE_PER_PU-1:0] cwc_pp_data_i;
     wire [PE_PER_PU-1:0] cwc_pp_vld_i;
+    wire [PE_PER_PU-1:0] swap_fltc_o;
     wire [PE_PER_PU-1:0] cwc_pp_end_data_i;
     wire [PE_PER_PU-1:0] cwc_pp_rdy_o;
     wire [PE_PER_PU-1:0] cwc_pp_clear_o;
@@ -128,7 +131,7 @@ module comp_pu #(
     assign pu_ofbuf_vld_o = cwc_ofbuf_vld_o;
     assign pu_ofbuf_data_o = cwc_ofbuf_data_o;
     assign pu_pa_done_compute_o = cwc_pu_done_compute_o;
-
+    assign pu_swap_fltc_o = swap_fltc_o[0];
     always @(posedge clk or negedge rst_n) begin
         if(!rst_n) begin
             pp_id <= 0;
@@ -159,6 +162,8 @@ module comp_pu #(
             .fltc_fltbuf_data_i(fltc_fltbuf_data_i[j*WIDTH +: WIDTH]),
             .fltc_fltbuf_rdy_o(fltc_fltbuf_rdy_o[j]),
             .fltc_ins_hf_i(fltc_ins_hf_i),
+            .swap_fltc_i(pu_swap_fltc_i),
+            .swap_fltc_o(swap_fltc_o[j]),
             
             .fltc_pe_rdy_i(fltc_pe_rdy_i),
             .fltc_pu_clr_ch_flt_i(fltc_pu_clr_ch_flt_i),

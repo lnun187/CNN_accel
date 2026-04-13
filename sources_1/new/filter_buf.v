@@ -320,7 +320,7 @@ module filter_buf #(
         actual_rd_filter1 = actual_rd_filter >> 1;
         
         cache_rd_en[0] = pass_valid[pass_idx] && pa0_rd_vld && fltbuf_comp_rdy_i;
-        cache_rd_en[1] = pass_valid[pass_idx] && pa1_rd_vld && fltbuf_comp_rdy_i;
+        cache_rd_en[1] = pass_valid[pass_idx] && (|actual_rd_filter1) && pa1_rd_vld && fltbuf_comp_rdy_i;
     end
     assign iftiles_rd_cnt_after = iftiles_rd_cnt_en ? ((last_iftile_rd) ? 7'd0 : (iftiles_rd_cnt + 1'b1)) : iftiles_rd_cnt;
     assign oftiles_rd_cnt_after = oftiles_rd_cnt_en ? ((last_oftile_rd) ? 4'd0 : (oftiles_rd_cnt + 1'b1)) : oftiles_rd_cnt;
@@ -511,7 +511,7 @@ module filter_buf #(
     generate
         for (i = 0; i < K * M; i = i + 1) begin : gen_fltbuf_cache
             assign cache_wr_en[i] = wr_map[i/K][i%K];
-            assign fltbuf_comp_vld_o_nxt[i] = !(end_layer_nxt || end_layer1) && mem_vld[i] && pass_valid_after_sel && ((i < K) ? pa0_rd_vld_after : pa1_rd_vld_after);
+            assign fltbuf_comp_vld_o_nxt[i] = !(end_layer_nxt || end_layer1) && mem_vld[i] && pass_valid_after_sel && ((i < K) ? pa0_rd_vld_after : pa1_rd_vld_after && (|actual_rd_filter1));
             // always @(posedge clk) begin
             //     (*keep = 1'b1*) fltbuf_comp_vld_o[i] <= mem_vld[i] && pass_valid[pass_idx] && ((i < K) ? pa0_rd_vld : pa1_rd_vld);
             // end

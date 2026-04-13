@@ -316,6 +316,21 @@ module CNN_accel_tb;
     int lane0_rel;
     int lane1_rel;
     int tile_base;
+    int active_tiles;
+    int fp_active;
+    int row_per_tile_local;
+    int lane0_seq [0:MAX_F-1];
+    int lane1_seq [0:MAX_F-1];
+    int lane0_count;
+    int lane1_count;
+    int fp_active_tile;
+    int lane0_in_tile;
+    int lane1_in_tile;
+    int block_rows;
+    int max_lane0_rows_tile;
+    int max_lane1_rows_tile;
+    int lane0_cnt_tile [0:31];
+    int lane1_cnt_tile [0:31];
     begin
       exp_out_count = 0;
       exp_pkt_count = 0;
@@ -358,30 +373,67 @@ module CNN_accel_tb;
       exp_out_count = current_co * ho * wo;
 
       for (fg = 0; fg < current_co; fg += (current_oftile * current_ofparr)) begin
-        group_ch = min2(current_oftile * current_ofparr, current_co - fg);
+        group_ch            = min2(current_oftile * current_ofparr, current_co - fg);
+        active_tiles        = ceil_div(group_ch, current_ofparr);
+        lane0_count         = 0;
+        lane1_count         = 0;
+        max_lane0_rows_tile = 0;
+        max_lane1_rows_tile = 0;
+
+        for (tile_idx = 0; tile_idx < active_tiles; tile_idx++) begin
+          tile_base      = tile_idx * current_ofparr;
+          fp_active_tile = min2(current_ofparr, group_ch - tile_base);
+          lane0_in_tile  = ceil_div(fp_active_tile, M);
+          lane1_in_tile  = fp_active_tile - lane0_in_tile;
+
+          lane0_cnt_tile[tile_idx] = lane0_in_tile;
+          lane1_cnt_tile[tile_idx] = lane1_in_tile;
+
+          if (lane0_in_tile > max_lane0_rows_tile) max_lane0_rows_tile = lane0_in_tile;
+          if (lane1_in_tile > max_lane1_rows_tile) max_lane1_rows_tile = lane1_in_tile;
+        end
+
+        // Thu tu accel: trong moi lane, xuat theo row cua lane tren toan block.
+        // Vi du oftile=2, ofparr=3 => lane0: 0,3,1 ; lane1: 2,4
+        for (row_idx = 0; row_idx < max_lane0_rows_tile; row_idx++) begin
+          for (tile_idx = 0; tile_idx < active_tiles; tile_idx++) begin
+            tile_base = tile_idx * current_ofparr;
+            if (row_idx < lane0_cnt_tile[tile_idx]) begin
+              lane0_seq[lane0_count] = tile_base + row_idx;
+              lane0_count = lane0_count + 1;
+            end
+          end
+        end
+
+        for (row_idx = 0; row_idx < max_lane1_rows_tile; row_idx++) begin
+          for (tile_idx = 0; tile_idx < active_tiles; tile_idx++) begin
+            tile_base = tile_idx * current_ofparr;
+            if (row_idx < lane1_cnt_tile[tile_idx]) begin
+              lane1_seq[lane1_count] = tile_base + lane0_cnt_tile[tile_idx] + row_idx;
+              lane1_count = lane1_count + 1;
+            end
+          end
+        end
+
+        block_rows = (lane0_count > lane1_count) ? lane0_count : lane1_count;
         for (oh = 0; oh < ho; oh++) begin
-          for (row_idx = 0; row_idx < row_per_tile; row_idx++) begin
-            for (tile_idx = 0; tile_idx < current_oftile; tile_idx++) begin
-              tile_base = tile_idx * current_ofparr;
-              lane0_rel = tile_base + row_idx;
-              lane1_rel = tile_base + row_idx + row_per_tile;
-              if ((lane0_rel < group_ch) || ((((row_idx + row_per_tile) < current_ofparr)) && (lane1_rel < group_ch))) begin
-                for (ow = 0; ow < wo; ow++) begin
-                  pkt_vld = '0;
-                  pkt_word = '0;
-                  if (lane0_rel < group_ch) begin
-                    pkt_vld[0] = 1'b1;
-                    pkt_word[ACC_WIDTH-1:0] = of_t[fg + lane0_rel][oh][ow];
-                  end
-                  if ((((row_idx + row_per_tile) < current_ofparr)) && (lane1_rel < group_ch)) begin
-                    pkt_vld[1] = 1'b1;
-                    pkt_word[2*ACC_WIDTH-1:ACC_WIDTH] = of_t[fg + lane1_rel][oh][ow];
-                  end
-                  exp_vld_mem[exp_pkt_count] = pkt_vld;
-                  exp_pkt_mem[exp_pkt_count] = pkt_word;
-                  exp_pkt_count = exp_pkt_count + 1;
-                end
+          for (row_idx = 0; row_idx < block_rows; row_idx++) begin
+            for (ow = 0; ow < wo; ow++) begin
+              pkt_vld  = '0;
+              pkt_word = '0;
+
+              if (row_idx < lane0_count) begin
+                pkt_vld[0] = 1'b1;
+                pkt_word[ACC_WIDTH-1:0] = of_t[fg + lane0_seq[row_idx]][oh][ow];
               end
+              if (row_idx < lane1_count) begin
+                pkt_vld[1] = 1'b1;
+                pkt_word[2*ACC_WIDTH-1:ACC_WIDTH] = of_t[fg + lane1_seq[row_idx]][oh][ow];
+              end
+
+              exp_vld_mem[exp_pkt_count] = pkt_vld;
+              exp_pkt_mem[exp_pkt_count] = pkt_word;
+              exp_pkt_count = exp_pkt_count + 1;
             end
           end
         end
@@ -543,6 +595,8 @@ module CNN_accel_tb;
       if (act_out_count != wanted_scalar_count)
         $fatal(1, "Output scalar count mismatch after collection. collected=%0d wanted=%0d", act_out_count, wanted_scalar_count);
     end
+    $display("act_pkt_count=%0d act_out_count=%0d vld=%b",
+         act_pkt_count, act_out_count, comp_ofbuf_vld_o & comp_ofbuf_rdy_i);
   endtask
 
   task automatic issue_instructions();
@@ -612,6 +666,17 @@ module CNN_accel_tb;
     begin
       $display("\n========== RUN %s ==========", tc_name);
 
+      if (stride > 7)
+        $fatal(1, "%s: invalid testcase, stride=%0d exceeds 3-bit field", tc_name, stride);
+      if (padding > 3)
+        $fatal(1, "%s: invalid testcase, padding=%0d exceeds 2-bit field", tc_name, padding);
+      if ((stride > kw) || (stride > kh))
+        $fatal(1, "%s: invalid testcase, stride=%0d > filter=(%0d,%0d)", tc_name, stride, kw, kh);
+      if ((padding >= kw) || (padding >= kh))
+        $fatal(1, "%s: invalid testcase, padding=%0d must be < filter=(%0d,%0d)", tc_name, padding, kw, kh);
+      if ((w + 2 * padding < kw) || (h + 2 * padding < kh))
+        $fatal(1, "%s: invalid testcase, padded ifmap smaller than filter", tc_name);
+
       clear_all_memories();
 
       current_if_base   = 0;
@@ -631,7 +696,8 @@ module CNN_accel_tb;
       fill_ifmap_external_memory(current_if_base, w, h, ci);
       fill_filter_external_memory(current_flt_base, kw, kh, ci, co, ifparr, ofparr);
       build_expected_output();
-
+      $display("%s: exp_pkt_count=%0d exp_out_count=%0d",
+         tc_name, exp_pkt_count, exp_out_count);
       align_w      = align_even(w);
       iftiles      = ceil_div(ci, ifparr);
       ifparr_tail  = ((ci % ifparr) == 0) ? ifparr : (ci % ifparr);
@@ -838,7 +904,8 @@ module CNN_accel_tb;
 
     clear_all_memories();
     apply_reset();
-
+    //tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile
+    
     // 1) Ifmap kích thước chẵn, burst filter chẵn
     //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1
     run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1);  
@@ -855,13 +922,42 @@ module CNN_accel_tb;
     // ifmap 8x8, Ci=11, Co=3, kernel 3x3, ifparr=1, ofparr=3, oftile=1, padding=2, stride=2
     run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1);
 
-    // 5) Pointwise 1x1xCi xCo
-    // ifmap 20x20, Ci=8, Co=3, kernel 11x11, ifparr=1, ofparr=2, stride=4, padding=2, oftile=1
-    run_case("TC4_large_filter", 20, 20, 8, 3, 11, 11, 4, 2, 1, 2, 1);
-    // run_case("TC4_large_filter", 5, 5, 3, 3, 5, 5, 4, 2, 1, 2, 1);
+    // 5) 1x1 pointwise, 2 block output-channel, test ofparr_tail
+    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=3, oftile=1
+    run_case("TC4_pointwise_ofparr_tail_2block", 11, 11, 3, 5, 1, 1, 1, 0, 2, 3, 1);
+
+    // 6) 1x1 pointwise, gop du output-channel vao 1 block, test oftiles_tail = 2
+    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=3, oftile=2
+    run_case("TC5_pointwise_oftile_tail", 11, 11, 3, 5, 1, 1, 1, 0, 2, 3, 2);
+
+    // 7) Kernel lon 5x5, stride=3 (< filter), padding=1, test ifparr/ofparr tail dong thoi
+    // ifmap 22x22, Ci=5, Co=7, kernel 5x5, ifparr=2, ofparr=3, oftile=1
+    run_case("TC6_5x5_stride3_tail_mix", 22, 22, 5, 7, 5, 5, 3, 1, 2, 3, 1);
+
+    // 8) stride = filter size, khong overlap receptive field
+    // ifmap 9x9, Ci=4, Co=6, kernel 3x3, stride=3, padding=0, ifparr=2, ofparr=2, oftile=2
+    run_case("TC7_stride_eq_filter", 9, 9, 4, 6, 1, 1, 1, 0, 2, 2, 2);
+
+    // 9) padding lon nhung van nho hon filter, de cover case near-upper-bound
+    // ifmap 11x11, Ci=2, Co=4, kernel 3x3, stride=1, padding=2, ifparr=1, ofparr=2, oftile=1
+    run_case("TC8_padding_near_filter", 11, 11, 2, 4, 3, 3, 1, 2, 1, 2, 1);
+
+    // 10) Kernel 7x7, stride=2, padding=3 (same-like), test burst lon hon va output tile tail
+    // ifmap 13x13, Ci=3, Co=5, kernel 7x7, ifparr=3, ofparr=2, oftile=2
+    run_case("TC9_7x7_large_kernel_tail", 13, 13, 3, 5, 7, 7, 2, 3, 3, 2, 2);
+
+    // 11) ifmap nho, filter bang ifmap, output 1 diem moi channel
+    // ifmap 11x11, Ci=3, Co=3, kernel 5x5, stride=1, padding=0, ifparr=2, ofparr=2, oftile=1
+    run_case("TC10_filter_equal_ifmap", 11, 11, 3, 3, 5, 5, 1, 0, 2, 2, 1);
+
+    // 12) Ket hop stride = filter va padding < filter, sat hon voi CNN thuc te
+    // ifmap 11x11, Ci=3, Co=4, kernel 3x3, stride=3, padding=2, ifparr=1, ofparr=2, oftile=2
+    run_case("TC11_stride_eq_filter_pad_lt_filter", 11, 11, 3, 4, 3, 3, 3, 2, 1, 2, 2);
     $display("\nAll requested environment-only testcases completed.");
     $finish;
   end
-
+  initial begin
+    // #200000 $finish;
+  end
 endmodule
 

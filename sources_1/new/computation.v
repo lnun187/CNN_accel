@@ -106,6 +106,7 @@ module computation #(
     // Instantiation: M comp_pu modules
     // ==========================================
     wire [M-1:0] pu_comp_vld_o;
+    wire [M-1:0] pu_swap_fltc_o;
     wire pu_comp_vld_i;
     assign pu_comp_vld_i = |pu_comp_vld_o;
     genvar i;
@@ -146,6 +147,8 @@ module computation #(
                 .pu_fltbuf_done_pass_i(comp_fltbuf_done_pass_i), // Dùng chung
                 .pu_fltbuf_rdy_o(comp_fltbuf_rdy_o[i]),
                 
+                .pu_swap_fltc_i(pu_swap_fltc_o[0]),
+                .pu_swap_fltc_o(pu_swap_fltc_o[i]),
                 .pu_comp_vld_o(pu_comp_vld_o[i]),
                 .pu_comp_vld_i(pu_comp_vld_i),
                 // Giao tiếp với OFBUF bên ngoài (Phần riêng)

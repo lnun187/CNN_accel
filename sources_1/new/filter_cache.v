@@ -31,11 +31,14 @@ input fltc_fltbuf_vld_i,
 input [WIDTH-1:0] fltc_fltbuf_data_i,
 output fltc_fltbuf_rdy_o,
 
+input swap_fltc_i,
+output swap_fltc_o,
 input [3:0] fltc_ins_hf_i,
 input fltc_fltbuf_done_pass_i,
 input fltc_pe_rdy_i,
 input fltc_pu_clr_ch_flt_i,
 output [PE_PER_PU-1:0] fltc_pe_vld_o,
+
 output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o //THEM REG
     );
 
@@ -53,7 +56,9 @@ output [PE_PER_PU*WIDTH-1:0] fltc_pe_data_o //THEM REG
     wire [PE_PER_PU-1:0] vld_o;
     assign rd_en = {PE_PER_PU{fltc_pe_rdy_i}} & fltc_pe_vld_o;
     assign fltc_fltbuf_rdy_o = !done_prepare; // Cho phep nhan du lieu moi khi count chua den muc max
-    assign id_en = (done_prepare || fltc_fltbuf_done_pass_i) & (fltc_pu_clr_ch_flt_i | !vld_o[0]);
+    // assign id_en = (done_prepare || fltc_fltbuf_done_pass_i) & (fltc_pu_clr_ch_flt_i | !vld_o[0]);
+    assign swap_fltc_o = (done_prepare || fltc_fltbuf_done_pass_i) & (fltc_pu_clr_ch_flt_i | !vld_o[0]);
+    assign id_en = swap_fltc_i;
     assign fltc_pe_vld_o = vld_o;
     always @(posedge clk or negedge rst_n) begin
       if(!rst_n) begin
