@@ -4,40 +4,44 @@ module fifo_bram #(
     parameter WIDTH = 8,
     parameter DEPTH = 224 * 12
 )(
-    input clk,
-    input rst_n,
-    input wr_en,
-    input rd_en,
-    input clr,
-    input [WIDTH-1:0] din,
-    output [WIDTH-1:0] dout,
+    input               clk,
+    input               rst_n,
+    input               wr_en,
+    input               rd_en,
+    input               clr,
+    input   [WIDTH-1:0] din,
+    output  [WIDTH-1:0] dout,
   
-    output wire full,
-    output wire vld_o,
-    output wire end_data
+    output              full,
+    output              vld_o,
+    output              end_data
 );
 
-    reg [WIDTH-1:0] mem [0:DEPTH-1];
+    reg [WIDTH-1:0]         mem [0:DEPTH-1];
     
     reg [$clog2(DEPTH)-1:0] wr_ptr, rd_ptr;
     
     // Flag indicating if data_out holds valid pre-fetched data
-    reg valid_out; 
+    reg                     valid_out; 
     
     // --- CÁC TÍN HIỆU MỚI ĐỂ TÁCH BRAM VÀ BYPASS LOGIC ---
-    wire [WIDTH-1:0] data_out;
-    reg  [WIDTH-1:0] data_out_ram;
-    reg  [WIDTH-1:0] data_out_bypass;
-    reg  use_bypass;
+    wire [WIDTH-1:0]        data_out;
+    reg  [WIDTH-1:0]        data_out_ram;
+    reg  [WIDTH-1:0]        data_out_bypass;
+    reg                     use_bypass;
     // -----------------------------------------------------
 
     // Tối ưu các phép toán tính địa chỉ tiếp theo
-    wire [$clog2(DEPTH)-1:0] next_wr_ptr = (wr_ptr == DEPTH-1) ? 0 : wr_ptr + 1;
-    wire [$clog2(DEPTH)-1:0] next_rd_ptr = (rd_ptr == DEPTH-1) ? 0 : rd_ptr + 1;
+    wire [$clog2(DEPTH)-1:0] next_wr_ptr;
+    wire [$clog2(DEPTH)-1:0] next_rd_ptr;
+     wire mem_empty;
+
+    assign next_wr_ptr = (wr_ptr == DEPTH-1) ? 0 : wr_ptr + 1;
+    assign next_rd_ptr = (rd_ptr == DEPTH-1) ? 0 : rd_ptr + 1;
 
     // Internal RAM empty condition
-    wire mem_empty = (wr_ptr == rd_ptr);
-
+   
+    assign mem_empty = (wr_ptr == rd_ptr);
     assign full     = (next_wr_ptr == rd_ptr);
     assign vld_o    = valid_out; 
     assign end_data = valid_out && mem_empty;
@@ -49,7 +53,7 @@ module fifo_bram #(
     // ==========================================
     // KHỐI CONTROL LOGIC (Giữ nguyên gốc của bạn)
     // ==========================================
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         if (!rst_n) begin
             wr_ptr    <= 0;
             rd_ptr    <= 0;

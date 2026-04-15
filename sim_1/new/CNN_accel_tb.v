@@ -21,7 +21,8 @@
 
 
 module CNN_accel_tb;
-  localparam int DATA_WIDTH = 32;
+  localparam int WIDTH      = 8;
+  localparam int DATA_WIDTH = WIDTH;
   localparam int ACC_WIDTH  = 32;
   localparam int K          = 8;
   localparam int M          = 2;
@@ -135,6 +136,8 @@ module CNN_accel_tb;
   int current_ifparr;
   int current_ofparr;
   int current_oftile;
+  int current_ifc_zp;
+  int current_fltc_zp;
 
   // =========================================================
   // Helpers
@@ -151,14 +154,14 @@ module CNN_accel_tb;
     return (x % 2 == 0) ? x : (x + 1);
   endfunction
 
-  // DATA_WIDTH=32 cho dễ debug.
+  // Input ifmap/filter duoc quantize theo WIDTH bit.
   // Ifmap dùng đúng pattern init_memory: c*10000 + h*100 + w
-  function automatic logic [31:0] mk_if_val(input int c, input int h, input int w);
+  function automatic logic [WIDTH-1:0] mk_if_val(input int c, input int h, input int w);
     // return c * 10000 + h * 100 + w;
     return c+h+w;
   endfunction
 
-  function automatic logic [31:0] mk_flt_val(input int f, input int c, input int h, input int w);
+  function automatic logic [WIDTH-1:0] mk_flt_val(input int f, input int c, input int h, input int w);
     // return {f * 1000000 + c * 10000 + h * 100 + w};
     return f+c+h+w;
   endfunction
@@ -184,6 +187,8 @@ module CNN_accel_tb;
       act_out_count = 0;
       exp_pkt_count = 0;
       act_pkt_count = 0;
+      current_ifc_zp = 0;
+      current_fltc_zp = 0;
     end
   endtask
 
@@ -226,7 +231,7 @@ module CNN_accel_tb;
             if (w_idx < w) begin
               if_ext_mem[addr] = mk_if_val(c_idx, h_idx, w_idx);
             end else begin
-              if_ext_mem[addr] = 32'h000000FF;
+              if_ext_mem[addr] = {WIDTH{1'b1}};
             end
           end
         end
@@ -283,7 +288,7 @@ module CNN_accel_tb;
             end
             burst_width = kw * kh * cp * fp;
             if ((burst_width % 2) != 0) begin
-              flt_ext_mem[addr] = 32'hFFFF_FFFF;
+              flt_ext_mem[addr] = {WIDTH{1'b1}};
               addr++;
             end
           end
@@ -298,12 +303,12 @@ module CNN_accel_tb;
   // trong moi group: h -> row_in_tile -> tile -> w
   // moi beat xuat {lane1, lane0}
   task automatic build_expected_output();
-    logic [31:0] if_t [0:MAX_C-1][0:MAX_H-1][0:MAX_W-1];
-    logic [31:0] flt_t[0:MAX_F-1][0:MAX_C-1][0:MAX_KSZ-1][0:MAX_KSZ-1];
+    logic [WIDTH-1:0] if_t [0:MAX_C-1][0:MAX_H-1][0:MAX_W-1];
+    logic [WIDTH-1:0] flt_t[0:MAX_F-1][0:MAX_C-1][0:MAX_KSZ-1][0:MAX_KSZ-1];
     logic [ACC_WIDTH-1:0] of_t [0:MAX_F-1][0:MAX_H-1][0:MAX_W-1];
     logic [M*ACC_WIDTH-1:0] pkt_word;
     logic [M-1:0] pkt_vld;
-    logic signed [63:0] acc;
+    longint signed acc;
     int co_idx, ci_idx, h_idx, w_idx;
     int fg;
     int oh, ow;
@@ -331,6 +336,9 @@ module CNN_accel_tb;
     int max_lane1_rows_tile;
     int lane0_cnt_tile [0:31];
     int lane1_cnt_tile [0:31];
+    logic signed [WIDTH:0] if_val_adj;
+    logic signed [WIDTH:0] flt_val_adj;
+    logic signed [2*WIDTH+1:0] mac_term;
     begin
       exp_out_count = 0;
       exp_pkt_count = 0;
@@ -353,14 +361,17 @@ module CNN_accel_tb;
       for (co_idx = 0; co_idx < current_co; co_idx++) begin
         for (oh = 0; oh < ho; oh++) begin
           for (ow = 0; ow < wo; ow++) begin
-            acc = 64'sd0;
+            acc = 0;
             for (ci_idx = 0; ci_idx < current_ci; ci_idx++) begin
               for (h_idx = 0; h_idx < current_kh; h_idx++) begin
                 for (w_idx = 0; w_idx < current_kw; w_idx++) begin
                   ih = oh * current_stride + h_idx - current_padding;
                   iw = ow * current_stride + w_idx - current_padding;
                   if ((ih >= 0) && (ih < current_h) && (iw >= 0) && (iw < current_w)) begin
-                    acc += $signed(if_t[ci_idx][ih][iw]) * $signed(flt_t[co_idx][ci_idx][h_idx][w_idx]);
+                    if_val_adj  = $signed({1'b0, if_t[ci_idx][ih][iw]}) - $signed((WIDTH+1)'(current_ifc_zp));
+                    flt_val_adj = $signed({1'b0, flt_t[co_idx][ci_idx][h_idx][w_idx]}) - $signed((WIDTH+1)'(current_fltc_zp));
+                    mac_term    = if_val_adj * flt_val_adj;
+                    acc += mac_term;
                   end
                 end
               end
@@ -653,7 +664,9 @@ module CNN_accel_tb;
     input int    padding,
     input int    ifparr,
     input int    ofparr,
-    input int    oftile
+    input int    oftile,
+    input int    if_zp,
+    input int    fl_zp
   );
     int align_w;
     int iftiles;
@@ -692,6 +705,8 @@ module CNN_accel_tb;
       current_ifparr    = ifparr;
       current_ofparr    = ofparr;
       current_oftile    = oftile;
+      current_ifc_zp    = if_zp;
+      current_fltc_zp   = fl_zp;
 
       fill_ifmap_external_memory(current_if_base, w, h, ci);
       fill_filter_external_memory(current_flt_base, kw, kh, ci, co, ifparr, ofparr);
@@ -719,7 +734,7 @@ module CNN_accel_tb;
       ifbuf_ins_iftiles_i      = iftiles[6:0];
       ifbuf_ins_wp_i           = wp[8:0];
       ifbuf_ins_padding_i      = padding[1:0];
-      ifbuf_ins_ifc_zp_i       = 32'd0;
+      ifbuf_ins_ifc_zp_i       = current_ifc_zp[DATA_WIDTH-1:0];
 
       // Program FLTBUF instruction fields
       fltbuf_ins_fltbaddr_i      = current_flt_base;
@@ -737,8 +752,8 @@ module CNN_accel_tb;
       comp_ins_hf_i         = kh[3:0];
       comp_ins_stride_i     = stride[2:0];
       comp_ins_padding_i    = padding[1:0];
-      comp_ins_ifc_zp_i     = 32'd0;
-      comp_ins_fltc_zp_i    = 32'd0;
+      comp_ins_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
+      comp_ins_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
 
       fork
         if_dma_agent();
@@ -759,26 +774,26 @@ module CNN_accel_tb;
   // =========================================================
   // DUT
   // =========================================================
-  wire [31:0] fltbuf_comp_data_tb [0:K*M-1];
-  wire [31:0] ifbuf_comp_data_tb  [0:K-1];
-  wire [31:0] ofbuf_comp_data_tb  [0:M-1];
-  wire [31:0] flt_cache_pe_data_tb [0:K*M*12-1];
-  wire [31:0] if_cache_pe_data_tb [0:K-1];
+  wire [WIDTH-1:0]     fltbuf_comp_data_tb   [0:K*M-1];
+  wire [WIDTH-1:0]     ifbuf_comp_data_tb    [0:K-1];
+  wire [ACC_WIDTH-1:0] ofbuf_comp_data_tb    [0:M-1];
+  wire [WIDTH-1:0]     flt_cache_pe_data_tb  [0:K*M*12-1];
+  wire [WIDTH-1:0]     if_cache_pe_data_tb   [0:K-1];
   genvar i;
   generate
       for (i = 0; i < K*M; i = i + 1) begin : GEN_FLTBUF_TAP
-          assign fltbuf_comp_data_tb[i] = dut.fltbuf_comp_data_w[(i+1)*32-1 -: 32];
+          assign fltbuf_comp_data_tb[i] = dut.fltbuf_comp_data_w[(i+1)*WIDTH-1 -: WIDTH];
       end
       for (i = 0; i < K; i = i + 1) begin : GEN_IFBUF_TAP
-          assign ifbuf_comp_data_tb[i]  = dut.ifbuf_comp_data_w[(i+1)*32-1 -: 32];
-          assign if_cache_pe_data_tb[i] = dut.u_computation.ifmap_cache_inst.ifc_pu_data_o[(i+1)*32-1 -: 32];
+          assign ifbuf_comp_data_tb[i]  = dut.ifbuf_comp_data_w[(i+1)*WIDTH-1 -: WIDTH];
+          assign if_cache_pe_data_tb[i] = dut.u_computation.ifmap_cache_inst.ifc_pu_data_o[(i+1)*WIDTH-1 -: WIDTH];
       end
     for (i = 0; i < K*M*12; i = i + 1) begin : GEN_FTC_TAP
         assign flt_cache_pe_data_tb[i] =
-            dut.u_computation.gen_comp_pu[0].comp_pu_inst.pe_fltc_data_i[(i+1)*32-1 -: 32];
+            dut.u_computation.gen_comp_pu[0].comp_pu_inst.pe_fltc_data_i[(i+1)*WIDTH-1 -: WIDTH];
     end
     for (i = 0; i < M; i = i + 1) begin : GEN_OFBUF_TAP
-          assign ofbuf_comp_data_tb[i] = comp_ofbuf_data_o[(i+1)*32-1 -: 32];
+          assign ofbuf_comp_data_tb[i] = comp_ofbuf_data_o[(i+1)*ACC_WIDTH-1 -: ACC_WIDTH];
       end
   endgenerate
   CNN_accel #(
@@ -908,51 +923,51 @@ module CNN_accel_tb;
     
     // 1) Ifmap kích thước chẵn, burst filter chẵn
     //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1
-    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1);  
+    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 1, 2);  
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
     // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2
-    run_case("TC1_odd_ifmap_align_and_padding", 5, 5, 8, 4, 3, 3, 1, 1, 1, 2, 2);
+    run_case("TC1_odd_ifmap_align_and_padding", 5, 5, 8, 4, 3, 3, 1, 1, 1, 2, 2, 3, 1);
 
     // 3) 1 burst filter le -> phai co them 1 word pad
     // ifmap 7x7, Ci=3, Co=10, kernel 3x3, ifparr=3, ofparr=1, oftile=3, padding = 1, stride = 1
-    run_case("TC2_odd_filter_burst_need_pad", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3);
+    run_case("TC2_odd_filter_burst_need_pad", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5);
 
     // 4) So filter song song = 1 tile, stride = 2, padding = 2
     // ifmap 8x8, Ci=11, Co=3, kernel 3x3, ifparr=1, ofparr=3, oftile=1, padding=2, stride=2
-    run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1);
+    run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
 
     // 5) 1x1 pointwise, 2 block output-channel, test ofparr_tail
     // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=3, oftile=1
-    run_case("TC4_pointwise_ofparr_tail_2block", 11, 11, 3, 5, 1, 1, 1, 0, 2, 3, 1);
+    run_case("TC4_pointwise_ofparr_tail_2block", 11, 11, 3, 5, 1, 1, 1, 0, 2, 4, 1, 3, 3);
 
     // 6) 1x1 pointwise, gop du output-channel vao 1 block, test oftiles_tail = 2
     // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=3, oftile=2
-    run_case("TC5_pointwise_oftile_tail", 11, 11, 3, 5, 1, 1, 1, 0, 2, 3, 2);
+    run_case("TC5_pointwise_oftile_tail", 11, 11, 3, 5, 1, 1, 1, 0, 2, 4, 2, 3, 1);
 
     // 7) Kernel lon 5x5, stride=3 (< filter), padding=1, test ifparr/ofparr tail dong thoi
     // ifmap 22x22, Ci=5, Co=7, kernel 5x5, ifparr=2, ofparr=3, oftile=1
-    run_case("TC6_5x5_stride3_tail_mix", 22, 22, 5, 7, 5, 5, 3, 1, 2, 3, 1);
+    run_case("TC6_5x5_stride3_tail_mix", 22, 22, 5, 7, 5, 5, 3, 1, 2, 3, 1, 3, 2);
 
     // 8) stride = filter size, khong overlap receptive field
-    // ifmap 9x9, Ci=4, Co=6, kernel 3x3, stride=3, padding=0, ifparr=2, ofparr=2, oftile=2
-    run_case("TC7_stride_eq_filter", 9, 9, 4, 6, 1, 1, 1, 0, 2, 2, 2);
+    // ifmap 9x9, Ci=4, Co=6, kernel 1x1, stride=1, padding=0, ifparr=2, ofparr=2, oftile=2
+    run_case("TC7_stride_eq_filter", 9, 9, 4, 6, 1, 1, 1, 0, 2, 4, 2, 2, 3);
 
     // 9) padding lon nhung van nho hon filter, de cover case near-upper-bound
     // ifmap 11x11, Ci=2, Co=4, kernel 3x3, stride=1, padding=2, ifparr=1, ofparr=2, oftile=1
-    run_case("TC8_padding_near_filter", 11, 11, 2, 4, 3, 3, 1, 2, 1, 2, 1);
+    run_case("TC8_padding_near_filter", 11, 11, 2, 4, 3, 3, 1, 2, 1, 2, 1, 4, 6);
 
     // 10) Kernel 7x7, stride=2, padding=3 (same-like), test burst lon hon va output tile tail
     // ifmap 13x13, Ci=3, Co=5, kernel 7x7, ifparr=3, ofparr=2, oftile=2
-    run_case("TC9_7x7_large_kernel_tail", 13, 13, 3, 5, 7, 7, 2, 3, 3, 2, 2);
+    run_case("TC9_7x7_large_kernel_tail", 13, 13, 3, 5, 7, 7, 2, 3, 3, 2, 2, 1, 3);
 
     // 11) ifmap nho, filter bang ifmap, output 1 diem moi channel
     // ifmap 11x11, Ci=3, Co=3, kernel 5x5, stride=1, padding=0, ifparr=2, ofparr=2, oftile=1
-    run_case("TC10_filter_equal_ifmap", 11, 11, 3, 3, 5, 5, 1, 0, 2, 2, 1);
+    run_case("TC10_filter_equal_ifmap", 11, 11, 3, 3, 5, 5, 1, 0, 2, 2, 1, 1, 2);
 
     // 12) Ket hop stride = filter va padding < filter, sat hon voi CNN thuc te
     // ifmap 11x11, Ci=3, Co=4, kernel 3x3, stride=3, padding=2, ifparr=1, ofparr=2, oftile=2
-    run_case("TC11_stride_eq_filter_pad_lt_filter", 11, 11, 3, 4, 3, 3, 3, 2, 1, 2, 2);
+    run_case("TC11_stride_eq_filter_pad_lt_filter", 11, 11, 3, 4, 3, 3, 3, 2, 1, 2, 2, 3, 5);
     $display("\nAll requested environment-only testcases completed.");
     $finish;
   end

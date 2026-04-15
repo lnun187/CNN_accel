@@ -21,39 +21,43 @@
 
 
 module circle_cache #(
-    parameter WIDTH = 8,
-    parameter DEPTH = 16
+    parameter WIDTH     = 8,
+    parameter DEPTH     = 16
 )(
-    input  wire             clk,
-    input  wire             rst_n,
-    input  wire             wr_en,
-    input  wire             rd_en,
-    input  wire             clr,
-    input  wire [3:0]       ins_hf_i,
-    input  wire [WIDTH-1:0] din,
-    output wire [WIDTH-1:0] dout,
-    output wire             vld_o
+    input              clk,
+    input              rst_n,
+    input              wr_en,
+    input              rd_en,
+    input              clr,
+    input  [3:0]       ins_hf_i,
+    input  [WIDTH-1:0] zp,
+    input  [WIDTH-1:0] din,
+    output [WIDTH-1:0] dout,
+    output             vld_o
 );
 
     // 1. Khai báo bộ nhớ (Không reset để dễ dàng map vào LUTRAM/Block RAM)
     reg [WIDTH-1:0] mem [0:DEPTH-1];
 
     // 2. Khai báo con trỏ ghi và đọc
-    reg [3:0] wr_ptr;
-    reg [3:0] rd_ptr;
+    reg [3:0]       wr_ptr;
+    reg [3:0]       rd_ptr;
 
     // 3. Khai báo thanh ghi cho Output (đảm bảo output là Flip-Flop)
     reg [WIDTH-1:0] dout_reg;
     reg             vld_o_reg;
 
     // 4. Logic tính toán vòng lặp cho con trỏ (Quay về 0 khi chạm mốc hf - 1)
-    wire [3:0] rd_ptr_next = (rd_ptr >= ins_hf_i - 4'd1) ? 4'd0 : (rd_ptr + 4'd1);
-    wire [3:0] wr_ptr_next = (wr_ptr >= ins_hf_i - 4'd1) ? 4'd0 : (wr_ptr + 4'd1);
+    wire [3:0]      rd_ptr_next;
+    wire [3:0]      wr_ptr_next;
+
+    assign rd_ptr_next = (rd_ptr >= ins_hf_i - 4'd1) ? 4'd0 : (rd_ptr + 4'd1);
+    assign wr_ptr_next = wr_ptr + 4'd1;
 
     // ==========================================
     // KHỐI LOGIC GHI (WRITE)
     // ==========================================
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         if (!rst_n) begin
             wr_ptr <= 4'd0;
         end else if (clr) begin
@@ -73,7 +77,7 @@ module circle_cache #(
     // ==========================================
     // KHỐI LOGIC ĐỌC (READ)
     // ==========================================
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         if (!rst_n) begin
             rd_ptr <= 4'd0;
         end else if (clr) begin
@@ -86,12 +90,8 @@ module circle_cache #(
     // ==========================================
     // KHỐI LOGIC FWFT (Đảm bảo độ trễ 0 chu kỳ khi rd_en = 1)
     // ==========================================
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            dout_reg <= {WIDTH{1'b0}};
-        end else if (clr) begin
-            dout_reg <= {WIDTH{1'b0}};
-        end else if (rd_en) begin
+    always @(posedge clk) begin
+        if (rd_en) begin
             // ĐANG ĐỌC: Nạp sẵn dữ liệu của địa chỉ TIẾP THEO vào dout.
             // Nếu địa chỉ tiếp theo đang được ghi đúng vào chu kỳ này -> Lấy trực tiếp din (Bypass).
             if (wr_en && (wr_ptr == rd_ptr_next)) begin
@@ -111,7 +111,7 @@ module circle_cache #(
     // ==========================================
     // KHỐI LOGIC VALID OUT
     // ==========================================
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk) begin
         if (!rst_n) begin
             vld_o_reg <= 1'b0;
         end else if (clr) begin
@@ -124,7 +124,7 @@ module circle_cache #(
     end
 
     // Gán Flip-Flop ra output
-    assign dout  = dout_reg;
+    assign dout  = vld_o ? dout_reg : zp;
     assign vld_o = vld_o_reg;
 
 endmodule
