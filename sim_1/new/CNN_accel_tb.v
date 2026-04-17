@@ -21,7 +21,7 @@
 
 
 module CNN_accel_tb;
-  localparam int WIDTH      = 8;
+  localparam int WIDTH      = 32;
   localparam int DATA_WIDTH = WIDTH;
   localparam int ACC_WIDTH  = 32;
   localparam int K          = 8;
@@ -246,12 +246,13 @@ module CNN_accel_tb;
   // moi f_tile la 1 burst rieng, add one padding word if burst is odd
   task automatic fill_filter_external_memory(
     input int base_addr,
-    input int kw,
-    input int kh,
-    input int ci,
-    input int co,
-    input int ifparr,
-    input int ofparr
+    input int kw,//width of kernel
+    input int kh,//height of kernel
+    input int ci,//channel of ifmap
+    input int co,//channel of ofmap
+    input int ifparr, //channel parrallel
+    input int ofparr //filter parrallel
+    // input current_oftile //filter tile
   );
     int addr;
     int fg, cg;
@@ -276,10 +277,10 @@ module CNN_accel_tb;
                 for (h_idx = 0; h_idx < kh; h_idx++) begin
                   for (w_idx = 0; w_idx < kw; w_idx++) begin
                     flt_ext_mem[addr] = mk_flt_val(
-                      fg + f_tile * ofparr + f_local,
-                      cg + c_local,
-                      h_idx,
-                      w_idx
+                      fg + f_tile * ofparr + f_local, //filter idx
+                      cg + c_local,//channel idx
+                      h_idx,//height idx
+                      w_idx//width
                     );
                     addr++;
                   end
@@ -919,11 +920,11 @@ module CNN_accel_tb;
 
     clear_all_memories();
     apply_reset();
-    //tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile
+    //tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,zp,zp
     
     // 1) Ifmap kích thước chẵn, burst filter chẵn
     //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1
-    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 1, 2);  
+    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
     // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2

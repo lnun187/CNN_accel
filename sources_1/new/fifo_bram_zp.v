@@ -18,7 +18,7 @@ module fifo_bram_zp #(
     output wire end_data
 );
 
-    reg [WIDTH-1:0] mem [0:DEPTH-1];
+    reg [WIDTH-1:0] mem_zp [0:DEPTH-1];
     
     reg [$clog2(DEPTH)-1:0] wr_ptr, rd_ptr;
     
@@ -37,11 +37,11 @@ module fifo_bram_zp #(
     wire [$clog2(DEPTH)-1:0] next_rd_ptr = (rd_ptr == DEPTH-1) ? 0 : rd_ptr + 1;
 
     // Internal RAM empty condition
-    wire mem_empty = (wr_ptr == rd_ptr);
+    wire mem_zp_empty = (wr_ptr == rd_ptr);
 
     assign full     = (next_wr_ptr == rd_ptr);
     assign vld_o    = valid_out; 
-    assign end_data = valid_out && mem_empty;
+    assign end_data = valid_out && mem_zp_empty;
     
     // MUX chọn nguồn dữ liệu ra cho FWFT
     assign data_out = use_bypass ? data_out_bypass : data_out_ram;
@@ -68,7 +68,7 @@ module fifo_bram_zp #(
 
                 // 2. FWFT Read, Prefetch & BYPASS Control Logic
                 if (rd_en || !valid_out) begin
-                    if (!mem_empty) begin
+                    if (!mem_zp_empty) begin
                         rd_ptr    <= next_rd_ptr;
                         valid_out <= 1'b1;
                     end else if (wr_en && !full) begin
@@ -88,12 +88,12 @@ module fifo_bram_zp #(
     always @(posedge clk) begin
         // Ghi vào BRAM
         if (wr_en && !full) begin
-            mem[wr_ptr] <= din;
+            mem_zp[wr_ptr] <= din;
         end
         
         // Đọc từ BRAM: Sạch sẽ, không dính logic điều kiện phức tạp của Bypass
-        if ((rd_en || !valid_out) && !mem_empty) begin
-            data_out_ram <= mem[rd_ptr];
+        if ((rd_en || !valid_out) && !mem_zp_empty) begin
+            data_out_ram <= mem_zp[rd_ptr];
         end
     end
 
@@ -102,7 +102,7 @@ module fifo_bram_zp #(
     // ==========================================
     always @(posedge clk) begin
         // Lưu trữ dữ liệu ngõ vào khi rơi vào trường hợp Bypass
-        if ((rd_en || !valid_out) && mem_empty && (wr_en && !full)) begin
+        if ((rd_en || !valid_out) && mem_zp_empty && (wr_en && !full)) begin
             data_out_bypass <= din; 
         end
     end
@@ -114,7 +114,7 @@ module fifo_bram_zp #(
         end else if (clr) begin
             use_bypass <= 1'b0;
         end else if (rd_en || !valid_out) begin
-            if (!mem_empty) begin
+            if (!mem_zp_empty) begin
                 use_bypass <= 1'b0; // FIFO có data -> dùng RAM
             end else if (wr_en && !full) begin
                 use_bypass <= 1'b1; // FIFO rỗng nhưng đang ghi -> Bypass

@@ -27,6 +27,7 @@ module fltbuf_cache #(
     localparam PTR_W = $clog2(DEPTH);
     reg [PTR_W-1:0] wr_ptr, rd_ptr;
     reg [WIDTH-1:0] mem_out;
+    reg mem_vld;
     // Hint the synthesizer to prefer BRAM.
     (* ram_style = "block" *) reg [WIDTH-1:0] mem [0:DEPTH-1];
     assign vld_o    = wr_ptr != rd_ptr;
@@ -36,6 +37,7 @@ module fltbuf_cache #(
         if (!rst_n) begin
             wr_ptr    <= {PTR_W{1'b0}};
             rd_ptr    <= {PTR_W{1'b0}};
+            mem_vld   <= 0;
         end else begin
             if (clear_rd_wr) begin
                 wr_ptr    <= {PTR_W{1'b0}};
@@ -53,19 +55,21 @@ module fltbuf_cache #(
                     rd_ptr    <= rd_ptr + 1;
                 end
             end
+            mem_vld <= vld_o;
         end
+        
     end
 
     // ==========================================
     // RAM DATAPATH
     // ==========================================
-    reg mem_vld;
+    
     always @(posedge clk) begin
         if (wr_en) begin
             mem[wr_ptr] <= din;
         end
         mem_out <= mem[rd_ptr];
-        mem_vld <= vld_o;
+        
     end
     assign dout = mem_vld ? mem_out : zp;
 endmodule

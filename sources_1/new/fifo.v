@@ -1,95 +1,110 @@
-`timescale 1ns / 1ps
-
-module fifo #(
-    parameter WIDTH = 8,
-    parameter DEPTH = 16
-)(
-    input                  clk,
-    input                  rst_n,
-    input                  wr_en,
-    input                  rd_en,
-    input                  clr,
-    input  [3:0]           ins_hf_i, // Port này giữ nguyên theo interface của bạn (hiện chưa dùng tới)
-    input  [WIDTH-1:0]     din,
-    input  [WIDTH-1:0]     zp,
-    output [WIDTH-1:0]     dout,
-    output wire            full,
-    output wire            vld_o,
-    output wire            end_data
-);
-
-    // Tính toán số bit cần thiết cho con trỏ (pointer)
-    localparam ADDR_W = $clog2(DEPTH);
-
-    // Khai báo bộ nhớ
-    // Cố ý không dùng pragma BRAM vì cấu trúc đọc tổ hợp (combinatorial read)
-    reg [WIDTH-1:0] mem [0:DEPTH-1];
-
-    // Khai báo con trỏ và biến đếm
-    reg [ADDR_W-1:0] wr_ptr;
-    reg [ADDR_W-1:0] rd_ptr;
-    reg [ADDR_W:0]   count;  // Biến đếm cần nhiều hơn 1 bit để đếm đến DEPTH
-
-    // Các cờ trạng thái nội bộ
-    wire empty = (count == 0);
-    assign full  = (count == DEPTH);
-
-    // Điều kiện thực thi đọc/ghi
-    wire do_write = wr_en && !full;
-    wire do_read  = rd_en && !empty;
-
-    // =========================================================
-    // CONTROL: Quản lý Pointers và Count
-    // =========================================================
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            wr_ptr <= {ADDR_W{1'b0}};
-            rd_ptr <= {ADDR_W{1'b0}};
-            count  <= 0;
-        end else if (clr) begin
-            wr_ptr <= {ADDR_W{1'b0}};
-            rd_ptr <= {ADDR_W{1'b0}};
-            count  <= 0;
-        end else begin
-            // Cập nhật Write Pointer
-            if (do_write) begin
-                wr_ptr <= (wr_ptr == DEPTH - 1) ? {ADDR_W{1'b0}} : wr_ptr + 1'b1;
-            end
-            
-            // Cập nhật Read Pointer
-            if (do_read) begin
-                rd_ptr <= (rd_ptr == DEPTH - 1) ? {ADDR_W{1'b0}} : rd_ptr + 1'b1;
-            end
-            
-            // Cập nhật Count (Số lượng data đang có trong FIFO)
-            case ({do_write, do_read})
-                2'b10: count <= count + 1'b1; // Chỉ ghi
-                2'b01: count <= count - 1'b1; // Chỉ đọc
-                default: count <= count;      // Ghi đọc đồng thời hoặc không làm gì
-            endcase
+// Old version FIFO
+module fifo
+#(
+    parameter  DATA_WIDTH    = 8,
+    parameter  FIFO_DEPTH    = 32,
+    // Do not configure
+    parameter  ADDR_WIDTH    = $clog2(FIFO_DEPTH)
+)
+(
+    input                       clk,
+    
+    input   [DATA_WIDTH - 1:0]  data_i,
+    output  [DATA_WIDTH - 1:0]  data_o,
+    
+    input                       wr_valid_i,
+    input                       rd_valid_i,
+    
+    output                      empty_o,
+    output                      full_o,
+    output                      almost_empty_o,
+    output                      almost_full_o,
+    
+    output  [ADDR_WIDTH:0]      counter,
+    input                       rst_n
+    );
+    // Internal variable declaration
+    genvar addr;
+    
+    // Internal signal declaration
+    // wire declaration
+    wire[ADDR_WIDTH:0]      wr_addr_inc;
+    wire[ADDR_WIDTH - 1:0]  wr_addr_map;
+    wire[ADDR_WIDTH:0]      rd_addr_inc;
+    wire[ADDR_WIDTH - 1:0]  rd_addr_map;
+    wire[DATA_WIDTH - 1:0]  buffer_nxt [0:FIFO_DEPTH - 1];
+    // reg declaration
+	reg [DATA_WIDTH - 1:0]  buffer     [0:FIFO_DEPTH - 1];
+	reg [ADDR_WIDTH:0]      wr_addr;
+    reg [ADDR_WIDTH:0]      rd_addr;
+    
+    // combinational logic
+    assign data_o = buffer[rd_addr_map];
+    
+    assign wr_addr_inc = wr_addr + 1'b1;
+    assign rd_addr_inc = rd_addr + 1'b1;
+    assign wr_addr_map = wr_addr[ADDR_WIDTH - 1:0];
+    assign rd_addr_map = rd_addr[ADDR_WIDTH - 1:0];
+    
+    assign empty_o = wr_addr == rd_addr;
+    assign almost_empty_o = rd_addr_inc ==  wr_addr;
+    assign full_o = (wr_addr_map == rd_addr_map) & (wr_addr[ADDR_WIDTH] ^ rd_addr[ADDR_WIDTH]);
+    assign almost_full_o = wr_addr_map + 1'b1 == rd_addr_map;
+    
+    assign counter = wr_addr - rd_addr;
+    generate
+        for(addr = 0; addr < FIFO_DEPTH; addr = addr + 1) begin : BUF_NXT_GEN
+            assign buffer_nxt[addr] = (wr_addr_map == addr) ? data_i : buffer[addr];
         end
-    end
-
-    // =========================================================
-    // DATA PATH: Ghi vào RAM
-    // =========================================================
+    endgenerate
+    
+    // flip-flop logic
+    // -- Buffer updater
+    generate
+        for(addr = 0; addr < FIFO_DEPTH; addr = addr + 1) begin : BUF_LOAD
+            always @(posedge clk) begin
+                if(!rst_n) begin 
+                    buffer[addr] <= {DATA_WIDTH{1'b0}};
+                end
+                else if(wr_valid_i & !full_o) begin
+                    buffer[addr] <= buffer_nxt[addr];
+                end
+            end
+        end
+    endgenerate
+    // -- Write pointer updater
     always @(posedge clk) begin
-        if (do_write) begin
-            mem[wr_ptr] <= din;
+        if(!rst_n) begin 
+            wr_addr <= 0;        
+        end
+        else if(wr_valid_i & !full_o) begin
+            wr_addr <= wr_addr_inc;
         end
     end
-
-    // =========================================================
-    // OUTPUT ASSIGNMENTS
-    // =========================================================
-    
-    // Xuất trực tiếp dữ liệu theo đúng yêu cầu
-    assign dout = vld_o ? mem[rd_ptr] : zp;
-    
-    // Dữ liệu hợp lệ khi FIFO không rỗng
-    assign vld_o = !empty;
-    
-    // end_data: Báo hiệu đây là data cuối cùng trong FIFO (chỉ còn 1 phần tử)
-    assign end_data = (count == 1);
-
+    // -- Read pointer updater
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            rd_addr <= 0;
+        end
+        else if(rd_valid_i & !empty_o) begin
+            rd_addr <= rd_addr_inc;
+        end
+        
+    end
 endmodule
+//    fifo 
+//        #(
+//        .DATA_WIDTH(),
+//        .FIFO_DEPTH(32)
+//        ) fifo (
+//        .clk(clk),
+//        .data_i(),
+//        .data_o(),
+//        .rd_valid_i(),
+//        .wr_valid_i(),
+//        .empty_o(),
+//        .full_o(),
+//        .almost_empty_o(),
+//        .almost_full_o(),
+//        .rst_n(rst_n)
+//        );

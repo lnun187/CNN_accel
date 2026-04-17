@@ -54,7 +54,9 @@ module comp_wr_ctrl#(
     reg                             end_layer;
     wire    [$clog2(PE_PER_PU)-1:0] id_nxt;
     reg     [PE_PER_PU-1:0]         pp_clear_reg;
+    reg     [PE_PER_PU-1:0]         is_read_reg;
     wire    [PE_PER_PU-1:0]         pp_clear_nxt;
+    wire    [PE_PER_PU-1:0]         is_read_nxt;
 
     wire                            is_add_cwc_ins_padding_i_data;
     wire                            vld_id;
@@ -92,11 +94,14 @@ module comp_wr_ctrl#(
         end
     end
     always @(posedge clk) begin
-        if(cwc_pu_swap_en_i) begin
-            id          <= cwc_ins_hf_i - 1;
-        end 
-        else if(!vld_id || end_data_id && vld_id && cwc_ofbuf_rdy_i) begin
-            id          <= id_nxt;
+        if(!rst_n) id          <= 0;
+        else begin 
+            if(cwc_pu_swap_en_i) begin
+                id          <= cwc_ins_hf_i - 1;
+            end 
+            else if(!vld_id || end_data_id && vld_id && cwc_ofbuf_rdy_i) begin
+                id          <= id_nxt;
+            end
         end
     end
     always @(posedge clk) begin
@@ -154,12 +159,19 @@ module comp_wr_ctrl#(
             assign pp_clear_nxt[i]              = is_cwc_ins_hf_i_edge ? (cwc_ins_stride_i_term_cond ? 0 : 1)
                                                 : (cwc_pe_end_layer_nxt_i & !complex_cond_met) ? 1 : 0;
             
+            // assign is_read_nxt[i] = ~((is_cwc_ins_hf_i_edge && cwc_ins_stride_i_term_cond) || (cwc_pe_end_layer_nxt_i && complex_cond_met));
             always @(posedge clk) begin
+                if(!rst_n) begin
+                    pp_clear_reg[i] <= 0;
+                    // is_read_reg[i]  <= 1;
+                end
                 if(cwc_pu_swap_en_i) begin
                     pp_clear_reg[i] <= pp_clear_nxt[i];
+                    // is_read_reg[i]  <= is_read_nxt[i];
                 end
             end
             assign cwc_pp_clear_o[i] = pp_clear_reg[i];
+            // assign cwc_pp_pe_is_read_o[i]  = is_read_reg[i];
         end
     endgenerate
 endmodule

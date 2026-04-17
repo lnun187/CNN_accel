@@ -37,8 +37,8 @@ module comp_pe#(
     localparam STAGES = $clog2(2*K) + 1; //current design has 6 STAGES (+ 1 STAGE at data_out)
     reg         [ACC_WIDTH-1:0]         sum_pipe [0:STAGES-2][0:K-1];
     reg         [ACC_WIDTH-1:0]         data;
-    reg signed  [K*(WIDTH + 1) - 1:0]   ifc_sub;
-    reg signed  [K*(WIDTH + 1) - 1:0]   fltc_sub;
+    reg signed  [WIDTH:0]               ifc_sub [K-1:0];
+    reg signed  [WIDTH:0]               fltc_sub [K-1:0];
     reg                                 end_row;
     reg         [STAGES - 1 : 0]        end_depth;
     reg         [STAGES - 1 : 0]        end_layer;
@@ -52,12 +52,18 @@ module comp_pe#(
     reg                                 en_compute1;
     reg                                 swap_en;
     reg         [ACC_WIDTH-1:0]         add_data;
+    reg         [WIDTH-1:0]             pe_fltc_zp_reg;
+    reg         [WIDTH-1:0]             pe_ifc_zp_reg;
     //--------------------------------------------ASSIGN-----------------------------------------------
     assign pe_cwc_swap_en_o     = swap_en;
     assign pe_ifc_fltc_rdy_o    = pe_fltc_vld_i && pe_ifc_vld_i && en_compute;
     // assign 
     assign pe_pp_data_o         = data;
     //--------------------------------------------CONTROL COMPUTE-----------------------------------------------
+    always @(posedge clk) begin
+        pe_fltc_zp_reg <= pe_fltc_zp_i;
+        pe_ifc_zp_reg <= pe_ifc_zp_i;
+    end
     always @(posedge clk) begin
         if(!rst_n) begin
             en_compute          <= 1;
@@ -131,14 +137,14 @@ module comp_pe#(
     wire signed [WIDTH:0] ifc_zp_signed;
     wire signed [WIDTH:0] fltc_zp_signed;
 
-    assign ifc_zp_signed    = $signed({1'b0, pe_ifc_zp_i});
-    assign fltc_zp_signed   = $signed({1'b0, pe_fltc_zp_i});
+    assign ifc_zp_signed    = $signed({1'b0, pe_ifc_zp_reg});
+    assign fltc_zp_signed   = $signed({1'b0, pe_fltc_zp_reg});
     integer idx;
     always @(posedge clk) begin
         if (en_compute) begin
             for (idx = 0; idx < K; idx = idx + 1) begin
-                ifc_sub[idx*(WIDTH + 1) +: WIDTH + 1]   <= $signed({1'b0, pe_ifc_data_i[idx*WIDTH +: WIDTH]})  - ifc_zp_signed;
-                fltc_sub[idx*(WIDTH + 1) +: WIDTH + 1]  <= $signed({1'b0, pe_fltc_data_i[idx*WIDTH +: WIDTH]}) - fltc_zp_signed;
+                ifc_sub[idx]   <= $signed({1'b0, pe_ifc_data_i[idx*WIDTH +: WIDTH]})  - ifc_zp_signed;
+                fltc_sub[idx]  <= $signed({1'b0, pe_fltc_data_i[idx*WIDTH +: WIDTH]}) - fltc_zp_signed;
             end
         end
     end
@@ -146,7 +152,7 @@ module comp_pe#(
     always @(posedge clk) begin
         if (en_compute) begin
             for (sum = 0; sum < K; sum = sum + 1) begin
-                sum_pipe[0][sum] <= $signed(ifc_sub[sum*(WIDTH + 1) +: WIDTH + 1]) * $signed(fltc_sub[sum*(WIDTH + 1) +: WIDTH + 1]);
+                sum_pipe[0][sum] <= $signed(ifc_sub[sum]) * $signed(fltc_sub[sum]);
             end
         end
     end
