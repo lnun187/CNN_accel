@@ -24,7 +24,7 @@ module CNN_accel_tb;
   localparam int WIDTH      = 32;
   localparam int DATA_WIDTH = WIDTH;
   localparam int ACC_WIDTH  = 32;
-  localparam int K          = 8;
+  localparam int K          = 4;
   localparam int M          = 2;
 
   localparam int MAX_MEM = 65536;
@@ -923,7 +923,7 @@ module CNN_accel_tb;
     //tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,zp,zp
     
     // 1) Ifmap kích thước chẵn, burst filter chẵn
-    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1
+    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2
     run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap

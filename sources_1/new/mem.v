@@ -28,7 +28,6 @@ module memory
 )
 (
     input                   clk,
-    input                   rst_n,
 
     // Input declaration
     input   [DATA_W-1:0]    wr_data_i,

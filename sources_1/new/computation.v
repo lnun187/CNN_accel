@@ -49,30 +49,15 @@ module computation #(
 
     // ==========================================
     // Khai báo wire kết nối nội bộ giữa ifmap_cache và comp_pu
-    // Có chèn skid_buffer giữa 2 khối
     // ==========================================
-    localparam IFC_SBUF_WIDTH = K*WIDTH + 4;
+    wire [K*WIDTH-1:0]  ifc_pu_data_w;
+    wire                ifc_pu_vld_w;
+    wire                pu_ifc_rdy_w;
+    wire                ifc_pu_end_row_w;
+    wire                ifc_pu_end_row_circle_w;
+    wire                ifc_pu_end_depth_w;
+    wire                ifc_pu_end_layer_w;
 
-    // Phía output của ifmap_cache -> input của skid_buffer
-    wire [K*WIDTH-1:0]        ifc_cache_data_w;
-    wire                      ifc_cache_vld_w;
-    wire                      ifc_cache_rdy_w;
-    wire                      ifc_cache_end_row_w;
-    wire                      ifc_cache_end_row_circle_w;
-    wire                      ifc_cache_end_depth_w;
-    wire                      ifc_cache_end_layer_w;
-
-    // Phía output của skid_buffer -> input của comp_pu
-    wire [K*WIDTH-1:0]        ifc_pu_data_w;
-    wire                      ifc_pu_vld_w;
-    wire                      pu_ifc_rdy_w;
-    wire                      ifc_pu_end_row_w;
-    wire                      ifc_pu_end_row_circle_w;
-    wire                      ifc_pu_end_depth_w;
-    wire                      ifc_pu_end_layer_w;
-
-    wire [IFC_SBUF_WIDTH-1:0] ifc_sbuf_bwd_data_w;
-    wire [IFC_SBUF_WIDTH-1:0] ifc_sbuf_fwd_data_w;
     // Tín hiệu rdy và done compute gom từ các PU
     wire [M-1:0]        pu_ifc_rdy_m;
     wire [M-1:0]        pu_pa_done_compute_m;
@@ -120,45 +105,15 @@ module computation #(
         .ifc_ifbuf_vld_i(comp_ifbuf_vld_i),
         .ifc_ifbuf_rdy_o(comp_ifbuf_rdy_o),
         
-        // Giao tiếp nội bộ với comp_pu qua skid_buffer
-        .ifc_pu_rdy_i(ifc_cache_rdy_w),
-        .ifc_pu_vld_o(ifc_cache_vld_w),
-        .ifc_pu_data_o(ifc_cache_data_w),
-        .ifc_pu_end_row_o(ifc_cache_end_row_w),
-        .ifc_pu_end_row_circle_o(ifc_cache_end_row_circle_w),
-        .ifc_pu_end_depth_o(ifc_cache_end_depth_w),
-        .ifc_pu_end_layer_o(ifc_cache_end_layer_w)
+        // Giao tiếp nội bộ với comp_pu
+        .ifc_pu_rdy_i(pu_ifc_rdy_w), // Nhận tín hiệu AND từ tất cả PUs
+        .ifc_pu_vld_o(ifc_pu_vld_w),
+        .ifc_pu_data_o(ifc_pu_data_w),
+        .ifc_pu_end_row_o(ifc_pu_end_row_w),
+        .ifc_pu_end_row_circle_o(ifc_pu_end_row_circle_w),
+        .ifc_pu_end_depth_o(ifc_pu_end_depth_w),
+        .ifc_pu_end_layer_o(ifc_pu_end_layer_w)
     );
-
-    assign ifc_sbuf_bwd_data_w = {
-        ifc_cache_end_layer_w,
-        ifc_cache_end_depth_w,
-        ifc_cache_end_row_circle_w,
-        ifc_cache_end_row_w,
-        ifc_cache_data_w
-    };
-
-    skid_buffer #(
-        .SBUF_TYPE(4),
-        .DATA_WIDTH(IFC_SBUF_WIDTH)
-    ) ifc_to_pu_skid_buffer_inst (
-        .clk(clk),
-        .rst_n(rst_n),
-        .bwd_data_i(ifc_sbuf_bwd_data_w),
-        .bwd_valid_i(ifc_cache_vld_w),
-        .fwd_ready_i(pu_ifc_rdy_w),
-        .fwd_data_o(ifc_sbuf_fwd_data_w),
-        .bwd_ready_o(ifc_cache_rdy_w),
-        .fwd_valid_o(ifc_pu_vld_w)
-    );
-
-    assign {
-        ifc_pu_end_layer_w,
-        ifc_pu_end_depth_w,
-        ifc_pu_end_row_circle_w,
-        ifc_pu_end_row_w,
-        ifc_pu_data_w
-    } = ifc_sbuf_fwd_data_w;
 
     // ==========================================
     // Instantiation: M comp_pu modules

@@ -147,6 +147,7 @@ else if (SBUF_TYPE == 1) begin : OPT_BWD_TIMING
 
     fifo #(
         .DATA_WIDTH(DATA_WIDTH),
+        .FF_TYPE(0),
         .FIFO_DEPTH(4)
     ) u_fifo (
         .clk            (clk),
@@ -154,6 +155,8 @@ else if (SBUF_TYPE == 1) begin : OPT_BWD_TIMING
         .data_o         (fifo_data_o),
         .rd_valid_i     (fifo_rd_en),
         .wr_valid_i     (fifo_wr_en),
+        .clr_rd_i       (1'b0),
+        .clr_ff_i       (1'b0),
         .empty_o        (fifo_empty),
         .full_o         (fifo_full),
         .almost_empty_o (),

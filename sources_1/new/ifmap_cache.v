@@ -34,6 +34,7 @@ module ifmap_cache #(
     reg                         is_begin;
     wire    [K*DATA_WIDTH + 3:0] fifo_dout;
     wire                        fifo_wr_en;
+    wire                        empty;
     wire    [K*DATA_WIDTH + 3:0] fifo_din;
     reg                         window_active;              
     wire    [K*DATA_WIDTH + 3:0] combined_data_in;
@@ -105,23 +106,28 @@ module ifmap_cache #(
     assign ifc_pu_end_depth_o       = fifo_dout[K*DATA_WIDTH + 1];
     assign ifc_pu_end_row_circle_o  = fifo_dout[K*DATA_WIDTH + 2];
     assign ifc_pu_end_row_o         = fifo_dout[K*DATA_WIDTH + 3];
-    assign ifc_pu_vld_o             = is_begin;
+    assign ifc_pu_vld_o             = is_begin && ~empty;
     
-    fifo_bram #(
-        .WIDTH(K*DATA_WIDTH + 4),
-        .DEPTH(FIFO_DEPTH)
-    ) fifo_uut (
+       fifo #(
+       .DATA_WIDTH(K*DATA_WIDTH + 4),
+       .FF_TYPE(0),
+       .FF_NUM(2),
+       .FIFO_DEPTH(FIFO_DEPTH)
+       ) ifmap_cache_uut (
         .clk(clk),
-        .rst_n(rst_n),
-        .wr_en(fifo_wr_en),
-        .rd_en(ifc_pu_rdy_i && ifc_pu_vld_o),
-        .clr(1'b0),
-        .din(fifo_din),
-        .dout(fifo_dout),
-        .full(),
-        .vld_o(),
-        .end_data()
-    );
+        .data_i(fifo_din),
+        .data_o(fifo_dout),
+        .rd_valid_i(ifc_pu_rdy_i && ifc_pu_vld_o),
+        .wr_valid_i(fifo_wr_en),
+        .clr_rd_i(1'b0),
+        .clr_ff_i(1'b0),
+        .empty_o(empty),
+        .full_o(),
+        .almost_empty_o(),
+        .almost_full_o(),
+        .counter(),
+        .rst_n(rst_n)
+       );
     (* keep = "false" *) wire _unused_sink;
     assign _unused_sink = &{
         window_active_nxt

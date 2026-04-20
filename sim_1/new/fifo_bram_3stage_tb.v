@@ -18,6 +18,7 @@ module fifo_bram_3stage_tb;
 
     fifo_bram #(
         .WIDTH(WIDTH),
+        .FF_TYPE(0),
         .DEPTH(DEPTH)
     ) dut (
         .clk      (clk),

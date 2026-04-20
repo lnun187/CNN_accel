@@ -27,7 +27,7 @@ module CNN_accel#(
     parameter FLTBUF_DEPTH  = 2304,
     parameter COMP_DEPTH    = 12,
     parameter FIFO_DEPTH    = 12,
-    parameter K             = 8,
+    parameter K             = 4,
     parameter M             = 2,
     parameter PE_PER_PU     = 12,
     parameter PPDEPTH       = 640

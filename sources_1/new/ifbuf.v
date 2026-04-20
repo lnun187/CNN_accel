@@ -290,7 +290,7 @@ module ifbuf #(
     ping_pong_circle_fifo #(
         .WIDTH(DATA_WIDTH),
         .DEPTH(DEPTH)
-    ) fifo_inst (
+    ) ifbuf_uut (
         .clk    (clk),
         .rst_n  (rst_n),
         .id_i   (id),
@@ -308,7 +308,7 @@ module ifbuf #(
             ping_pong_ifbuf #(
                 .WIDTH(DATA_WIDTH),
                 .DEPTH(DEPTH)
-            ) fifo_inst (
+            ) ifbuf_uut (
                 .clk    (clk),
                 .rst_n  (rst_n),
                 .id_i   (id),

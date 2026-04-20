@@ -54,9 +54,9 @@ module comp_wr_ctrl#(
     reg                             end_layer;
     wire    [$clog2(PE_PER_PU)-1:0] id_nxt;
     reg     [PE_PER_PU-1:0]         pp_clear_reg;
-    reg     [PE_PER_PU-1:0]         is_read_reg;
+    // reg     [PE_PER_PU-1:0]         is_read_reg;
     wire    [PE_PER_PU-1:0]         pp_clear_nxt;
-    wire    [PE_PER_PU-1:0]         is_read_nxt;
+    // wire    [PE_PER_PU-1:0]         is_read_nxt;
 
     wire                            is_add_cwc_ins_padding_i_data;
     wire                            vld_id;
