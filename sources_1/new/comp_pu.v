@@ -52,12 +52,12 @@ module comp_pu #(
     output                  pu_fltbuf_rdy_o,
     output                  pu_comp_vld_o,
     input                   pu_comp_vld_i,
-    //from and to ofbuf
+    //from and to scale
     input                   pu_swap_fltc_i,
     output                  pu_swap_fltc_o,
-    input                   pu_ofbuf_rdy_i,
-    output                  pu_ofbuf_vld_o,
-    output  [ACC_WIDTH-1:0] pu_ofbuf_data_o,
+    input                   pu_scale_rdy_i,
+    output                  pu_scale_vld_o,
+    output  [ACC_WIDTH-1:0] pu_scale_data_o,
     output                  pu_pa_done_compute_o
     );
 
@@ -120,9 +120,9 @@ module comp_pu #(
     wire    [PE_PER_PU-1:0]             cwc_pp_pe_is_read_o;
     wire    [ACC_WIDTH*PE_PER_PU-1:0]   data_pre_mask;
     wire                                cwc_pu_swap_en_i;
-    wire                                cwc_ofbuf_rdy_i;
-    wire                                cwc_ofbuf_vld_o;
-    wire    [ACC_WIDTH-1:0]             cwc_ofbuf_data_o;
+    wire                                cwc_scale_rdy_i;
+    wire                                cwc_scale_vld_o;
+    wire    [ACC_WIDTH-1:0]             cwc_scale_data_o;
     wire                                cwc_pu_done_compute_o;
 
     reg     [3:0]                       pu_ins_hf_reg;
@@ -142,8 +142,8 @@ module comp_pu #(
     assign clr_ch_flt               = pu_ifc_end_row_i && pe_ifc_fltc_rdy_o[0];
     assign pu_fltbuf_rdy_o          = fltc_fltbuf_rdy_o[0];
     assign pu_ifc_rdy_o             = pe_ifc_fltc_rdy_o[0];
-    assign pu_ofbuf_vld_o           = cwc_ofbuf_vld_o;
-    assign pu_ofbuf_data_o          = cwc_ofbuf_data_o;
+    assign pu_scale_vld_o           = cwc_scale_vld_o;
+    assign pu_scale_data_o          = cwc_scale_data_o;
     assign pu_pa_done_compute_o     = cwc_pu_done_compute_o;
     assign pu_swap_fltc_o           = swap_fltc_o[0];
     
@@ -300,7 +300,7 @@ module comp_pu #(
     assign cwc_pp_vld_i             = pp_pe_vld_o;
     assign cwc_pp_end_data_i        = pp_cwc_end_data_o;
     assign cwc_pu_swap_en_i         = pe_cwc_swap_en_o[0];
-    assign cwc_ofbuf_rdy_i          = pu_ofbuf_rdy_i;
+    assign cwc_scale_rdy_i          = pu_scale_rdy_i;
     
     comp_wr_ctrl #(
         .WIDTH(ACC_WIDTH),
@@ -321,9 +321,9 @@ module comp_pu #(
         .cwc_pp_pe_is_read_o        (cwc_pp_pe_is_read_o),
         .cwc_pu_swap_en_i           (cwc_pu_swap_en_i),
         
-        .cwc_ofbuf_rdy_i            (cwc_ofbuf_rdy_i),
-        .cwc_ofbuf_vld_o            (cwc_ofbuf_vld_o),
-        .cwc_ofbuf_data_o           (cwc_ofbuf_data_o),
+        .cwc_scale_rdy_i            (cwc_scale_rdy_i),
+        .cwc_scale_vld_o            (cwc_scale_vld_o),
+        .cwc_scale_data_o           (cwc_scale_data_o),
         .cwc_pu_done_compute_o      (cwc_pu_done_compute_o)
     );
 // =========================================================================

@@ -17,11 +17,20 @@ module computation #(
     input  rst_n,
 
     // Tín hiệu Instruction (Dùng chung và riêng cho PU/Cache)
-    input  [3:0]        comp_ins_hf_i,
-    input  [2:0]        comp_ins_stride_i,
-    input  [1:0]        comp_ins_padding_i,
-    input  [WIDTH-1:0]  comp_ins_ifc_zp_i,
-    input  [WIDTH-1:0]  comp_ins_fltc_zp_i,
+    input           [3:0]       comp_ins_hf_i,
+    input           [2:0]       comp_ins_stride_i,
+    input           [1:0]       comp_ins_padding_i,
+    input           [WIDTH-1:0] comp_ins_ifc_zp_i,
+    input           [WIDTH-1:0] comp_ins_fltc_zp_i,
+    input           [7:0]       comp_ins_ofwidth_i,
+    input   signed  [31:0]      comp_ins_mult_i,
+    input           [5:0]       comp_ins_mult_shift_i,
+    input   signed  [31:0]      comp_ins_alphamult_i,
+    input           [5:0]       comp_ins_alphamult_shift_i,
+    input   signed  [7:0]       comp_ins_zpy_i,
+    input   signed  [7:0]       comp_ins_qmin_i,
+    input   signed  [7:0]       comp_ins_qmax_i,
+    input                       comp_ins_is_leaky_ReLU_i,
 
     // Giao tiếp với Input Feature Map (ifbuf) - đi vào ifmap_cache
     input                   comp_ifbuf_vld_i,
@@ -38,10 +47,14 @@ module computation #(
     input                   comp_fltbuf_done_pass_i, // Dùng chung
     output [M-1:0]          comp_fltbuf_rdy_o,
 
-    // Giao tiếp với Output Buffer (ofbuf) - đi ra từ comp_pu (Đã mở rộng cho M PU)
+    input    [M*ACC_WIDTH-1:0]      comp_bias_data_i,
+    input    [M-1:0]            comp_bias_vld_i,
+    output   [M-1:0]            comp_bias_rdy_o,
+
+    // Giao tiếp với Output Buffer (scale) - đi ra từ comp_pu (Đã mở rộng cho M PU)
     input  [M-1:0]          comp_ofbuf_rdy_i,
     output [M-1:0]          comp_ofbuf_vld_o,
-    output [M*ACC_WIDTH-1:0] comp_ofbuf_data_o,
+    output [M*WIDTH-1:0] comp_ofbuf_data_o,
     
     // Tín hiệu báo xong - Lấy từ PU[0]
     output                  comp_pa_done_compute_o
@@ -120,6 +133,9 @@ module computation #(
     // ==========================================
     wire [M-1:0]    pu_comp_vld_o;
     wire [M-1:0]    pu_swap_fltc_o;
+    wire [M-1:0]    comp_scale_vld_w;
+    wire [M-1:0]    scale_comp_rdy_w;
+    wire [M*ACC_WIDTH-1:0] comp_scale_data_w;
     wire            pu_comp_vld_i;
     assign pu_comp_vld_i = |pu_comp_vld_o;
     genvar i;
@@ -164,13 +180,43 @@ module computation #(
                 .pu_swap_fltc_o(pu_swap_fltc_o[i]),
                 .pu_comp_vld_o(pu_comp_vld_o[i]),
                 .pu_comp_vld_i(pu_comp_vld_i),
-                // Giao tiếp với OFBUF bên ngoài (Phần riêng)
-                .pu_ofbuf_rdy_i(comp_ofbuf_rdy_i[i]),
-                .pu_ofbuf_vld_o(comp_ofbuf_vld_o[i]),
-                .pu_ofbuf_data_o(comp_ofbuf_data_o[(i+1)*ACC_WIDTH-1 : i*ACC_WIDTH]),
+                // Giao tiếp với scale bên ngoài (Phần riêng)
+                .pu_scale_rdy_i(scale_comp_rdy_w[i]),
+                .pu_scale_vld_o(comp_scale_vld_w[i]),
+                .pu_scale_data_o(comp_scale_data_w[(i+1)*ACC_WIDTH-1 : i*ACC_WIDTH]),
                 
                 // Tín hiệu done (Xuất ra mảng rồi lấy phần tử 0)
                 .pu_pa_done_compute_o(pu_pa_done_compute_m[i])
+            );
+
+            scale_ReLU  #(
+                .DATA_IN_WIDTH(ACC_WIDTH),
+                .DATA_OUT_WIDTH(WIDTH)
+            ) scale_ReLU_inst (
+                .clk(clk),
+                .rst_n(rst_n),
+
+                .scale_ins_width_i(comp_ins_ofwidth_i),
+                .scale_ins_mult_i(comp_ins_mult_i),
+                .scale_ins_mult_shift_i(comp_ins_mult_shift_i),
+                .scale_ins_alphamult_i(comp_ins_alphamult_i),
+                .scale_ins_alphamult_shift_i(comp_ins_alphamult_shift_i),
+                .scale_ins_zpy_i(comp_ins_zpy_i),
+                .scale_ins_qmin_i(comp_ins_qmin_i),
+                .scale_ins_qmax_i(comp_ins_qmax_i),
+                .scale_ins_is_leaky_ReLU_i(comp_ins_is_leaky_ReLU_i),
+
+                .scale_bias_data_i(comp_bias_data_i[i*ACC_WIDTH +: ACC_WIDTH]),
+                .scale_bias_vld_i(comp_bias_vld_i[i]),
+                .scale_bias_rdy_o(comp_bias_rdy_o[i]),
+
+                .scale_comp_data_i(comp_scale_data_w[(i+1)*ACC_WIDTH-1 : i*ACC_WIDTH]),
+                .scale_comp_vld_i(comp_scale_vld_w[i]),
+                .scale_comp_rdy_o(scale_comp_rdy_w[i]),
+
+                .scale_ofbuf_rdy_i(comp_ofbuf_rdy_i[i]),
+                .scale_ofbuf_data_o(comp_ofbuf_data_o[WIDTH*i +: WIDTH]),
+                .scale_ofbuf_vld_o(comp_ofbuf_vld_o[i])
             );
         end
     endgenerate

@@ -21,7 +21,7 @@
 
 
 module CNN_accel_tb;
-  localparam int WIDTH      = 32;
+  localparam int WIDTH      = 8;
   localparam int DATA_WIDTH = WIDTH;
   localparam int ACC_WIDTH  = 32;
   localparam int K          = 4;
@@ -46,7 +46,7 @@ module CNN_accel_tb;
   // =========================================================
   logic        ifbuf_ins_vld_i;
   logic [31:0] ifbuf_ins_ifbaddr_i;
-  logic [8:0]  ifbuf_ins_width_i;
+  logic [7:0]  ifbuf_ins_ifwidth_i;
   logic [10:0] ifbuf_ins_channel_i;
   logic [3:0]  ifbuf_ins_ifparr_i;
   logic [15:0]  ifbuf_ins_ifsize_i;
@@ -72,11 +72,30 @@ module CNN_accel_tb;
   logic [6:0]  fltbuf_ins_iftiles_i;
   wire         fltbuf_ins_rdy_o;
 
+  logic        bias_ins_vld_i;
+  wire         bias_ins_rdy_o;
+  logic [31:0] bias_ins_bias_baddr_i;
+  logic [7:0]  bias_ins_ofwidth_i;
+  logic [10:0] bias_ins_ofchannel_i;
+  logic [4:0]  bias_ins_burstlen_i;
+  logic [4:0]  bias_ins_burstlen_tail_i;
+  logic [4:0]  bias_ins_burstlen_lane0_i;
+  logic [4:0]  bias_ins_burstlen_tail_lane0_i;
+
   logic [3:0]  comp_ins_hf_i;
   logic [2:0]  comp_ins_stride_i;
   logic [1:0]  comp_ins_padding_i;
   logic [DATA_WIDTH-1:0]  comp_ins_ifc_zp_i;
   logic [DATA_WIDTH-1:0]  comp_ins_fltc_zp_i;
+  logic [7:0]  comp_ins_ofwidth_i;
+  logic signed [31:0] comp_ins_mult_i;
+  logic [5:0]  comp_ins_mult_shift_i;
+  logic signed [31:0] comp_ins_alphamult_i;
+  logic [5:0]  comp_ins_alphamult_shift_i;
+  logic signed [7:0] comp_ins_zpy_i;
+  logic signed [7:0] comp_ins_qmin_i;
+  logic signed [7:0] comp_ins_qmax_i;
+  logic        comp_ins_is_leaky_ReLU_i;
 
   logic                  ifbuf_dma_rdycfg_i;
   logic                  ifbuf_dma_vld_i;
@@ -96,6 +115,15 @@ module CNN_accel_tb;
   wire [31:0]            fltbuf_dma_baddr_o;
   wire                   fltbuf_dma_rdy_o;
 
+  logic                  bias_dma_rdycfg_i;
+  wire                   bias_dma_vldcfg_o;
+  wire [8:0]             bias_dma_burst_o;
+  wire [31:0]            bias_dma_baddr_o;
+  logic                  bias_dma_vld_i;
+  logic signed [31:0]    bias_dma_data_i;
+  logic                  bias_dma_tlast_i;
+  wire                   bias_dma_rdy_o;
+
   logic [M-1:0]            comp_ofbuf_rdy_i;
   wire  [M-1:0]            comp_ofbuf_vld_o;
   wire  [M*ACC_WIDTH-1:0]  comp_ofbuf_data_o;
@@ -109,15 +137,17 @@ module CNN_accel_tb;
   // =========================================================
   logic [DATA_WIDTH-1:0] if_ext_mem  [0:MAX_MEM-1];
   logic [DATA_WIDTH-1:0] flt_ext_mem [0:MAX_MEM-1];
+  logic signed [31:0]    bias_ext_mem[0:MAX_MEM-1];
   logic [ACC_WIDTH-1:0]  exp_out_mem [0:MAX_OUT-1];
   logic [ACC_WIDTH-1:0]  act_out_mem [0:MAX_OUT-1];
-  logic [M*ACC_WIDTH-1:0] exp_pkt_mem [0:MAX_OUT-1];
-  logic [M*ACC_WIDTH-1:0] act_pkt_mem [0:MAX_OUT-1];
+  logic [M*WIDTH-1:0] exp_pkt_mem [0:MAX_OUT-1];
+  logic [M*WIDTH-1:0] act_pkt_mem [0:MAX_OUT-1];
   logic [M-1:0]           exp_vld_mem [0:MAX_OUT-1];
   logic [M-1:0]           act_vld_mem [0:MAX_OUT-1];
 
   int current_if_words;
   int current_flt_words;
+  int current_bias_words;
   int exp_out_count;
   int act_out_count;
   int exp_pkt_count;
@@ -125,6 +155,7 @@ module CNN_accel_tb;
 
   int current_if_base;
   int current_flt_base;
+  int current_bias_base;
   int current_w;
   int current_h;
   int current_ci;
@@ -138,6 +169,14 @@ module CNN_accel_tb;
   int current_oftile;
   int current_ifc_zp;
   int current_fltc_zp;
+  int current_mult;
+  int current_mult_shift;
+  int current_alphamult;
+  int current_alphamult_shift;
+  int current_zpy;
+  int current_qmin;
+  int current_qmax;
+  int current_is_leaky_relu;
 
   // =========================================================
   // Helpers
@@ -166,12 +205,88 @@ module CNN_accel_tb;
     return f+c+h+w;
   endfunction
 
+  function automatic logic signed [31:0] mk_bias_val(input int f);
+    int signed tmp;
+    begin
+      // Small signed bias pattern, deterministic per output channel.
+      tmp = f % 2 ? f : -f;
+      return tmp;
+    end
+  endfunction
+
+  function automatic longint signed arshift(
+    input longint signed value,
+    input int shift
+  );
+    longint signed bias;
+
+    begin
+      if (shift <= 0) begin
+        return value;
+      end
+
+      bias = 64'sd1 <<< (shift - 1);
+
+      if (value < 0) begin
+        return (value + bias - 64'sd1) >>> shift;
+      end else begin
+        return (value + bias) >>> shift;
+      end
+    end
+  endfunction
+
+  function automatic logic [ACC_WIDTH-1:0] apply_output_pipeline(
+    input longint signed mac_acc,
+    input int co_idx
+  );
+    longint signed with_bias;
+    longint signed scaled;
+    longint signed activated;
+    longint signed shifted_zp;
+    longint signed clamped;
+    begin
+      // Expected datapath:
+      // MAC + bias -> scale -> ReLU/LeakyReLU -> +zpy -> clamp.
+
+      with_bias = mac_acc + $signed(mk_bias_val(co_idx));
+
+      // Main quantization scale always happens first.
+      scaled = arshift(with_bias * current_mult,
+                       current_mult_shift);
+
+      // Activation is applied after main scale.
+      if (scaled < 0) begin
+        if (current_is_leaky_relu) begin
+          activated = arshift(scaled * current_alphamult,
+                              current_alphamult_shift);
+        end else begin
+          activated = 0;
+        end
+      end else begin
+        activated = scaled;
+      end
+
+      shifted_zp = activated + current_zpy;
+
+      if (shifted_zp < current_qmin) begin
+        clamped = current_qmin;
+      end else if (shifted_zp > current_qmax) begin
+        clamped = current_qmax;
+      end else begin
+        clamped = shifted_zp;
+      end
+
+      return clamped[ACC_WIDTH-1:0];
+    end
+  endfunction
+
   task automatic clear_all_memories();
     int i;
     begin
       for (i = 0; i < MAX_MEM; i++) begin
-        if_ext_mem[i]  = '0;
-        flt_ext_mem[i] = '0;
+        if_ext_mem[i]   = '0;
+        flt_ext_mem[i]  = '0;
+        bias_ext_mem[i] = '0;
       end
       for (i = 0; i < MAX_OUT; i++) begin
         exp_out_mem[i] = '0;
@@ -183,12 +298,21 @@ module CNN_accel_tb;
       end
       current_if_words = 0;
       current_flt_words = 0;
+      current_bias_words = 0;
       exp_out_count = 0;
       act_out_count = 0;
       exp_pkt_count = 0;
       act_pkt_count = 0;
       current_ifc_zp = 0;
       current_fltc_zp = 0;
+      current_mult = 1;
+      current_mult_shift = 0;
+      current_alphamult = 1;
+      current_alphamult_shift = 0;
+      current_zpy = 0;
+      current_qmin = -128;
+      current_qmax = 127;
+      current_is_leaky_relu = 0;
     end
   endtask
 
@@ -197,12 +321,16 @@ module CNN_accel_tb;
       rst_n = 1'b0;
       ifbuf_ins_vld_i = 1'b0;
       fltbuf_ins_vld_i = 1'b0;
+      bias_ins_vld_i = 1'b0;
       ifbuf_dma_vld_i = 1'b0;
       fltbuf_dma_vld_i = 1'b0;
+      bias_dma_vld_i = 1'b0;
       ifbuf_dma_data_i = '0;
       fltbuf_dma_data_i = '0;
+      bias_dma_data_i = '0;
       ifbuf_dma_tlast_i = 1'b0;
       fltbuf_dma_tlast_i = 1'b0;
+      bias_dma_tlast_i = 1'b0;
       comp_ofbuf_rdy_i = '1;
       repeat (8) @(posedge clk);
       rst_n = 1'b1;
@@ -299,15 +427,88 @@ module CNN_accel_tb;
     end
   endtask
 
-  // Expected output order theo mo ta ofbuf:
+  // Bias memory layout follows the same one-config/one-burst DMA handshake style
+  // as filter DMA.  Payload order is head0 lanes first, then head1 lanes.  When
+  // a block has an odd number of real bias values, one dummy beat is appended
+  // and tlast belongs to that dummy beat.
+  task automatic fill_bias_external_memory(
+    input int base_addr,
+    input int co,
+    input int ofparr,
+    input int oftile
+  );
+    int addr;
+    int block_size;
+    int block_total;
+    int block_idx;
+    int block_base;
+    int real_count;
+    int full_tile;
+    int tail;
+    int tail_h0;
+    int tail_h1;
+    int h0_lanes;
+    int parr_idx;
+    int tile_idx;
+    int lane_count;
+    int channel_idx;
+    int tail_base;
+    begin
+      addr        = base_addr;
+      block_size  = ofparr * oftile;
+      block_total = ceil_div(co, block_size);
+      h0_lanes    = ceil_div(ofparr, M);
+
+      for (block_idx = 0; block_idx < block_total; block_idx++) begin
+        block_base = block_idx * block_size;
+        real_count = min2(block_size, co - block_base);
+        full_tile  = real_count / ofparr;
+        tail       = real_count % ofparr;
+        tail_h0    = ceil_div(tail, M);
+        tail_h1    = tail - tail_h0;
+        tail_base  = block_base + full_tile * ofparr;
+
+        for (parr_idx = 0; parr_idx < ofparr; parr_idx++) begin
+          lane_count = full_tile;
+          if (parr_idx < h0_lanes) begin
+            if (parr_idx < tail_h0) lane_count = lane_count + 1;
+          end else begin
+            if ((parr_idx - h0_lanes) < tail_h1) lane_count = lane_count + 1;
+          end
+
+          for (tile_idx = 0; tile_idx < lane_count; tile_idx++) begin
+            if (tile_idx < full_tile) begin
+              channel_idx = block_base + tile_idx * ofparr + parr_idx;
+            end else if (parr_idx < h0_lanes) begin
+              channel_idx = tail_base + parr_idx;
+            end else begin
+              channel_idx = tail_base + tail_h0 + (parr_idx - h0_lanes);
+            end
+
+            bias_ext_mem[addr] = mk_bias_val(channel_idx);
+            addr = addr + 1;
+          end
+        end
+
+        if ((real_count % 2) != 0) begin
+          bias_ext_mem[addr] = '0;
+          addr = addr + 1;
+        end
+      end
+
+      current_bias_words = addr - base_addr;
+    end
+  endtask
+
+  // Expected output order theo mo ta scale:
   // group channel = oftile * ofparr
   // trong moi group: h -> row_in_tile -> tile -> w
   // moi beat xuat {lane1, lane0}
   task automatic build_expected_output();
     logic [WIDTH-1:0] if_t [0:MAX_C-1][0:MAX_H-1][0:MAX_W-1];
     logic [WIDTH-1:0] flt_t[0:MAX_F-1][0:MAX_C-1][0:MAX_KSZ-1][0:MAX_KSZ-1];
-    logic [ACC_WIDTH-1:0] of_t [0:MAX_F-1][0:MAX_H-1][0:MAX_W-1];
-    logic [M*ACC_WIDTH-1:0] pkt_word;
+    logic [WIDTH-1:0] of_t [0:MAX_F-1][0:MAX_H-1][0:MAX_W-1];
+    logic [M*WIDTH-1:0] pkt_word;
     logic [M-1:0] pkt_vld;
     longint signed acc;
     int co_idx, ci_idx, h_idx, w_idx;
@@ -377,7 +578,7 @@ module CNN_accel_tb;
                 end
               end
             end
-            of_t[co_idx][oh][ow] = acc[ACC_WIDTH-1:0];
+            of_t[co_idx][oh][ow] = apply_output_pipeline(acc, co_idx);
           end
         end
       end
@@ -436,11 +637,11 @@ module CNN_accel_tb;
 
               if (row_idx < lane0_count) begin
                 pkt_vld[0] = 1'b1;
-                pkt_word[ACC_WIDTH-1:0] = of_t[fg + lane0_seq[row_idx]][oh][ow];
+                pkt_word[WIDTH-1:0] = of_t[fg + lane0_seq[row_idx]][oh][ow];
               end
               if (row_idx < lane1_count) begin
                 pkt_vld[1] = 1'b1;
-                pkt_word[2*ACC_WIDTH-1:ACC_WIDTH] = of_t[fg + lane1_seq[row_idx]][oh][ow];
+                pkt_word[2*WIDTH-1:WIDTH] = of_t[fg + lane1_seq[row_idx]][oh][ow];
               end
 
               exp_vld_mem[exp_pkt_count] = pkt_vld;
@@ -576,6 +777,66 @@ module CNN_accel_tb;
     end
   endtask
 
+  // Generic DMA responder cho BIAS BUF.
+  task automatic bias_dma_agent();
+    int req_base;
+    int req_words;
+    int idx;
+    bit busy;
+    begin
+      req_base = 0;
+      req_words = 0;
+      idx = 0;
+      busy = 1'b0;
+      bias_dma_rdycfg_i <= 1'b0;
+      bias_dma_vld_i    <= 1'b0;
+      bias_dma_data_i   <= '0;
+      bias_dma_tlast_i  <= 1'b0;
+
+      forever begin
+        @(posedge clk);
+
+        if (!rst_n) begin
+          busy                = 1'b0;
+          req_base            = 0;
+          req_words           = 0;
+          idx                 = 0;
+          bias_dma_rdycfg_i   <= 1'b1;
+          bias_dma_vld_i      <= 1'b0;
+          bias_dma_data_i     <= '0;
+          bias_dma_tlast_i    <= 1'b0;
+        end else begin
+          bias_dma_rdycfg_i <= !busy;
+          bias_dma_vld_i    <= 1'b0;
+          bias_dma_data_i   <= '0;
+          bias_dma_tlast_i  <= 1'b0;
+
+          if (!busy) begin
+            if (bias_dma_vldcfg_o && bias_dma_rdycfg_i) begin
+              req_base  = bias_dma_baddr_o;
+              req_words = bias_dma_burst_o;
+              idx       = 0;
+              busy      = 1'b1;
+              bias_dma_rdycfg_i <= 1'b0;
+            end
+          end else begin
+            if (bias_dma_rdy_o && (idx < req_words)) begin
+              bias_dma_vld_i   <= 1'b1;
+              bias_dma_data_i  <= bias_ext_mem[req_base + idx];
+              bias_dma_tlast_i <= (idx == req_words - 1);
+
+              if (idx == req_words - 1) begin
+                busy = 1'b0;
+                bias_dma_rdycfg_i <= 1'b1;
+              end
+              idx = idx + 1;
+            end
+          end
+        end
+      end
+    end
+  endtask
+
   // Collector theo tung beat {lane1, lane0}.
   // Chi so sanh cac lane co valid = 1.
   task automatic collect_outputs(input int wanted_pkt_count, input int wanted_scalar_count);
@@ -593,7 +854,7 @@ module CNN_accel_tb;
             act_pkt_mem[act_pkt_count] = comp_ofbuf_data_o;
             for (lane = 0; lane < M; lane++) begin
               if ((comp_ofbuf_vld_o[lane] == 1'b1) && (comp_ofbuf_rdy_i[lane] == 1'b1)) begin
-                act_out_mem[act_out_count] = comp_ofbuf_data_o[lane*ACC_WIDTH +: ACC_WIDTH];
+                act_out_mem[act_out_count] = comp_ofbuf_data_o[lane*WIDTH +: WIDTH];
                 act_out_count = act_out_count + 1;
               end
             end
@@ -613,13 +874,15 @@ module CNN_accel_tb;
 
   task automatic issue_instructions();
     begin
-      wait (ifbuf_ins_rdy_o === 1'b1 && fltbuf_ins_rdy_o === 1'b1);
+      wait (ifbuf_ins_rdy_o === 1'b1 && fltbuf_ins_rdy_o === 1'b1 && bias_ins_rdy_o === 1'b1);
       @(posedge clk);
       ifbuf_ins_vld_i  <= 1'b1;
       fltbuf_ins_vld_i <= 1'b1;
+      bias_ins_vld_i   <= 1'b1;
       @(posedge clk);
       ifbuf_ins_vld_i  <= 1'b0;
       fltbuf_ins_vld_i <= 1'b0;
+      bias_ins_vld_i   <= 1'b0;
     end
   endtask
 
@@ -639,11 +902,11 @@ module CNN_accel_tb;
         end
         for (lane = 0; lane < M; lane++) begin
           if (exp_vld_mem[i][lane]) begin
-            if (act_pkt_mem[i][lane*ACC_WIDTH +: ACC_WIDTH] !== exp_pkt_mem[i][lane*ACC_WIDTH +: ACC_WIDTH]) begin
+            if (act_pkt_mem[i][lane*WIDTH +: WIDTH] !== exp_pkt_mem[i][lane*WIDTH +: WIDTH]) begin
               $display("%s: data mismatch at pkt=%0d lane=%0d act=0x%08x exp=0x%08x",
                        tc_name, i, lane,
-                       act_pkt_mem[i][lane*ACC_WIDTH +: ACC_WIDTH],
-                       exp_pkt_mem[i][lane*ACC_WIDTH +: ACC_WIDTH]);
+                       act_pkt_mem[i][lane*WIDTH +: WIDTH],
+                       exp_pkt_mem[i][lane*WIDTH +: WIDTH]);
               $fatal(1, "%s failed", tc_name);
             end
           end
@@ -677,6 +940,15 @@ module CNN_accel_tb;
     int oftiles_tail;
     int wp;
     int normal_burst;
+    int bias_block_real;
+    int bias_tail_real;
+    int bias_burst;
+    int bias_tail_burst;
+    int bias_h0_lanes;
+    int bias_lane0;
+    int bias_tail_full_tile;
+    int bias_tail_mod;
+    int bias_tail_lane0;
     begin
       $display("\n========== RUN %s ==========", tc_name);
 
@@ -695,6 +967,7 @@ module CNN_accel_tb;
 
       current_if_base   = 0;
       current_flt_base  = 8192;
+      current_bias_base = 32768;
       current_w         = w;
       current_h         = h;
       current_ci        = ci;
@@ -708,9 +981,18 @@ module CNN_accel_tb;
       current_oftile    = oftile;
       current_ifc_zp    = if_zp;
       current_fltc_zp   = fl_zp;
+      current_mult      = 3;
+      current_mult_shift = 2;
+      current_alphamult = 1;
+      current_alphamult_shift = 3;
+      current_zpy       = 0;
+      current_qmin      = -128;
+      current_qmax      = 127;
+      current_is_leaky_relu = co % 2;
 
       fill_ifmap_external_memory(current_if_base, w, h, ci);
       fill_filter_external_memory(current_flt_base, kw, kh, ci, co, ifparr, ofparr);
+      fill_bias_external_memory(current_bias_base, co, ofparr, oftile);
       build_expected_output();
       $display("%s: exp_pkt_count=%0d exp_out_count=%0d",
          tc_name, exp_pkt_count, exp_out_count);
@@ -722,10 +1004,20 @@ module CNN_accel_tb;
       oftiles_tail = ((total_oftiles % oftile) == 0) ? oftile : (total_oftiles % oftile);
       wp           = ((w + 2 * padding - kh) / stride) * stride + kh - 1;
       normal_burst = kw * kh;
+      bias_block_real      = ofparr * oftile;
+      bias_tail_real       = ((co % bias_block_real) == 0) ? bias_block_real : (co % bias_block_real);
+      bias_burst           = ((co < bias_block_real)) ? bias_tail_real : bias_block_real;
+      bias_tail_burst      = bias_tail_real;
+      bias_h0_lanes        = ceil_div(ofparr, M);
+      
+      bias_tail_full_tile  = bias_tail_real / ofparr;
+      bias_tail_mod        = bias_tail_real % ofparr;
+      bias_tail_lane0      = bias_tail_full_tile * bias_h0_lanes + ceil_div(bias_tail_mod, M);
+      bias_lane0           = ((co < bias_block_real)) ? bias_tail_lane0 : bias_h0_lanes * oftile;
 
       // Program IFBUF instruction fields
       ifbuf_ins_ifbaddr_i      = current_if_base;
-      ifbuf_ins_width_i        = w[8:0];
+      ifbuf_ins_ifwidth_i        = w[7:0];
       ifbuf_ins_channel_i      = ci[10:0];
       ifbuf_ins_ifparr_i       = ifparr[3:0];
       ifbuf_ins_ifsize_i       = align_w * h;
@@ -749,16 +1041,36 @@ module CNN_accel_tb;
       fltbuf_ins_oftiles_tail_i  = oftiles_tail[3:0];
       fltbuf_ins_iftiles_i       = iftiles[6:0];
 
+      // Program BIAS instruction fields. burstlen includes optional dummy;
+      // lane0 counts only real head0 bias values.
+      bias_ins_bias_baddr_i           = current_bias_base;
+      bias_ins_ofwidth_i              = ((w + 2 * padding - kw) / stride + 1);
+      bias_ins_ofchannel_i            = co[10:0];
+      bias_ins_burstlen_i             = bias_burst[4:0];
+      bias_ins_burstlen_tail_i        = bias_tail_burst[4:0];
+      bias_ins_burstlen_lane0_i       = bias_lane0[4:0];
+      bias_ins_burstlen_tail_lane0_i  = bias_tail_lane0[4:0];
+
       // Program COMPUTATION instruction fields
       comp_ins_hf_i         = kh[3:0];
       comp_ins_stride_i     = stride[2:0];
       comp_ins_padding_i    = padding[1:0];
       comp_ins_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
       comp_ins_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
+      comp_ins_ofwidth_i    = ((w + 2 * padding - kw) / stride + 1);
+      comp_ins_mult_i       = current_mult;
+      comp_ins_mult_shift_i = current_mult_shift[5:0];
+      comp_ins_alphamult_i  = current_alphamult;
+      comp_ins_alphamult_shift_i = current_alphamult_shift[5:0];
+      comp_ins_zpy_i        = current_zpy[7:0];
+      comp_ins_qmin_i       = current_qmin[7:0];
+      comp_ins_qmax_i       = current_qmax[7:0];
+      comp_ins_is_leaky_ReLU_i = current_is_leaky_relu[0];
 
       fork
         if_dma_agent();
         flt_dma_agent();
+        bias_dma_agent();
         collect_outputs(exp_pkt_count, exp_out_count);
       join_none
 
@@ -772,12 +1084,242 @@ module CNN_accel_tb;
     end
   endtask
 
+
+
+  // =========================================================
+  // Reset-abort fault-injection run case
+  // =========================================================
+  // abort_packets > 0 : cho DUT chay den khi da thu du so packet nay roi reset.
+  // abort_packets == 0: reset sau abort_cycles clock ke tu luc issue instruction.
+  // Sau khi task nay release reset, TB KHONG goi apply_reset() nua; run_case tiep theo
+  // se duoc issue truc tiep de kiem tra DUT/agent co recover sach hay khong.
+  task automatic run_case_abort_reset(
+    input string tc_name,
+    input int    w,
+    input int    h,
+    input int    ci,
+    input int    co,
+    input int    kw,
+    input int    kh,
+    input int    stride,
+    input int    padding,
+    input int    ifparr,
+    input int    ofparr,
+    input int    oftile,
+    input int    if_zp,
+    input int    fl_zp,
+    input int    abort_cycles,
+    input int    abort_packets
+  );
+    int align_w;
+    int iftiles;
+    int ifparr_tail;
+    int ofparr_tail;
+    int total_oftiles;
+    int oftiles_tail;
+    int wp;
+    int normal_burst;
+    int bias_block_real;
+    int bias_tail_real;
+    int bias_burst;
+    int bias_tail_burst;
+    int bias_h0_lanes;
+    int bias_lane0;
+    int bias_tail_full_tile;
+    int bias_tail_mod;
+    int bias_tail_lane0;
+    int watchdog;
+    begin
+      $display("\n========== RUN %s : EXPECT RESET ABORT ==========" , tc_name);
+
+      if (stride > 7)
+        $fatal(1, "%s: invalid testcase, stride=%0d exceeds 3-bit field", tc_name, stride);
+      if (padding > 3)
+        $fatal(1, "%s: invalid testcase, padding=%0d exceeds 2-bit field", tc_name, padding);
+      if ((stride > kw) || (stride > kh))
+        $fatal(1, "%s: invalid testcase, stride=%0d > filter=(%0d,%0d)", tc_name, stride, kw, kh);
+      if ((padding >= kw) || (padding >= kh))
+        $fatal(1, "%s: invalid testcase, padding=%0d must be < filter=(%0d,%0d)", tc_name, padding, kw, kh);
+      if ((w + 2 * padding < kw) || (h + 2 * padding < kh))
+        $fatal(1, "%s: invalid testcase, padded ifmap smaller than filter", tc_name);
+      if ((abort_cycles <= 0) && (abort_packets <= 0))
+        $fatal(1, "%s: invalid reset-abort testcase, need abort_cycles>0 or abort_packets>0", tc_name);
+
+      clear_all_memories();
+
+      current_if_base   = 0;
+      current_flt_base  = 8192;
+      current_bias_base = 32768;
+      current_w         = w;
+      current_h         = h;
+      current_ci        = ci;
+      current_co        = co;
+      current_kw        = kw;
+      current_kh        = kh;
+      current_stride    = stride;
+      current_padding   = padding;
+      current_ifparr    = ifparr;
+      current_ofparr    = ofparr;
+      current_oftile    = oftile;
+      current_ifc_zp    = if_zp;
+      current_fltc_zp   = fl_zp;
+      current_mult      = 3;
+      current_mult_shift = 2;
+      current_alphamult = 1;
+      current_alphamult_shift = 3;
+      current_zpy       = 0;
+      current_qmin      = -128;
+      current_qmax      = 127;
+      current_is_leaky_relu = co % 2;
+
+      fill_ifmap_external_memory(current_if_base, w, h, ci);
+      fill_filter_external_memory(current_flt_base, kw, kh, ci, co, ifparr, ofparr);
+      fill_bias_external_memory(current_bias_base, co, ofparr, oftile);
+      build_expected_output();
+      $display("%s: exp_pkt_count=%0d exp_out_count=%0d. This case will be reset before compare.",
+         tc_name, exp_pkt_count, exp_out_count);
+
+      align_w       = align_even(w);
+      iftiles       = ceil_div(ci, ifparr);
+      ifparr_tail   = ((ci % ifparr) == 0) ? ifparr : (ci % ifparr);
+      ofparr_tail   = ((co % ofparr) == 0) ? ofparr : (co % ofparr);
+      total_oftiles = ceil_div(co, ofparr);
+      oftiles_tail  = ((total_oftiles % oftile) == 0) ? oftile : (total_oftiles % oftile);
+      wp            = ((w + 2 * padding - kh) / stride) * stride + kh - 1;
+      normal_burst  = kw * kh;
+      bias_block_real      = ofparr * oftile;
+      bias_tail_real       = ((co % bias_block_real) == 0) ? bias_block_real : (co % bias_block_real);
+      bias_burst           = ((co / bias_block_real) == 0) ? bias_tail_real : bias_block_real;
+      bias_tail_burst      = bias_tail_real;
+      bias_h0_lanes        = ceil_div(ofparr, M);
+      
+      bias_tail_full_tile  = bias_tail_real / ofparr;
+      bias_tail_mod        = bias_tail_real % ofparr;
+      bias_tail_lane0      = bias_tail_full_tile * bias_h0_lanes + ceil_div(bias_tail_mod, M);
+      bias_lane0           = ((co / bias_block_real) == 0) ? bias_tail_lane0 : bias_h0_lanes * oftile;
+
+      // Program IFBUF instruction fields
+      ifbuf_ins_ifbaddr_i      = current_if_base;
+      ifbuf_ins_ifwidth_i        = w[7:0];
+      ifbuf_ins_channel_i      = ci[10:0];
+      ifbuf_ins_ifparr_i       = ifparr[3:0];
+      ifbuf_ins_ifsize_i       = align_w * h;
+      ifbuf_ins_ifblock_i      = ceil_div(co, (ofparr*oftile));
+      ifbuf_ins_oftiles_i      = oftile[3:0];
+      ifbuf_ins_oftiles_tail_i = oftiles_tail[3:0];
+      ifbuf_ins_iftiles_i      = iftiles[6:0];
+      ifbuf_ins_wp_i           = wp[8:0];
+      ifbuf_ins_padding_i      = padding[1:0];
+      ifbuf_ins_ifc_zp_i       = current_ifc_zp[DATA_WIDTH-1:0];
+
+      // Program FLTBUF instruction fields
+      fltbuf_ins_fltbaddr_i      = current_flt_base;
+      fltbuf_ins_ifparr_i        = ifparr[3:0];
+      fltbuf_ins_ifparr_tail_i   = ifparr_tail[3:0];
+      fltbuf_ins_fltsize_i       = normal_burst;
+      fltbuf_ins_ifblock_i       = ceil_div(co, (ofparr*oftile));
+      fltbuf_ins_ofparr_i        = ofparr[4:0];
+      fltbuf_ins_ofparr_tail_i   = ofparr_tail[4:0];
+      fltbuf_ins_oftiles_i       = oftile;
+      fltbuf_ins_oftiles_tail_i  = oftiles_tail[3:0];
+      fltbuf_ins_iftiles_i       = iftiles[6:0];
+
+      // Program BIAS instruction fields. burstlen includes optional dummy;
+      // lane0 counts only real head0 bias values.
+      bias_ins_bias_baddr_i           = current_bias_base;
+      bias_ins_ofwidth_i              = ((w + 2 * padding - kw) / stride + 1);
+      bias_ins_ofchannel_i            = co[10:0];
+      bias_ins_burstlen_i             = bias_burst[4:0];
+      bias_ins_burstlen_tail_i        = bias_tail_burst[4:0];
+      bias_ins_burstlen_lane0_i       = bias_lane0[4:0];
+      bias_ins_burstlen_tail_lane0_i  = bias_tail_lane0[4:0];
+
+      // Program COMPUTATION instruction fields
+      comp_ins_hf_i         = kh[3:0];
+      comp_ins_stride_i     = stride[2:0];
+      comp_ins_padding_i    = padding[1:0];
+      comp_ins_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
+      comp_ins_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
+      comp_ins_ofwidth_i    = ((w + 2 * padding - kw) / stride + 1);
+      comp_ins_mult_i       = current_mult;
+      comp_ins_mult_shift_i = current_mult_shift[5:0];
+      comp_ins_alphamult_i  = current_alphamult;
+      comp_ins_alphamult_shift_i = current_alphamult_shift[5:0];
+      comp_ins_zpy_i        = current_zpy[7:0];
+      comp_ins_qmin_i       = current_qmin[7:0];
+      comp_ins_qmax_i       = current_qmax[7:0];
+      comp_ins_is_leaky_ReLU_i = current_is_leaky_relu[0];
+
+      fork
+        if_dma_agent();
+        flt_dma_agent();
+        bias_dma_agent();
+        collect_outputs(exp_pkt_count, exp_out_count);
+      join_none
+
+      issue_instructions();
+
+      if (abort_packets > 0) begin
+        watchdog = 0;
+        while ((act_pkt_count < abort_packets) && (watchdog < abort_cycles)) begin
+          @(posedge clk);
+          watchdog = watchdog + 1;
+        end
+        if (act_pkt_count < abort_packets) begin
+          $display("[RST-ABORT][WARN] %s: only collected %0d/%0d packets before watchdog=%0d, reset anyway.",
+                   tc_name, act_pkt_count, abort_packets, abort_cycles);
+        end
+      end else begin
+        repeat (abort_cycles) @(posedge clk);
+      end
+
+      if (act_pkt_count >= exp_pkt_count) begin
+        $fatal(1, "%s: abort point is too late; testcase completed before reset. act_pkt_count=%0d exp_pkt_count=%0d",
+               tc_name, act_pkt_count, exp_pkt_count);
+      end
+
+      $display("[RST-ABORT] %s: assert reset mid-run at act_pkt_count=%0d/%0d",
+               tc_name, act_pkt_count, exp_pkt_count);
+
+      // Assert reset while DMA agents/collector are still alive, so DUT sees an abrupt in-flight reset.
+      rst_n = 1'b0;
+      repeat (2) @(posedge clk);
+
+      // Stop the old run's DMA agents and collector. The next run_case() starts fresh agents.
+      disable fork;
+
+      // Hold all TB-driven interfaces idle during the rest of reset.
+      ifbuf_ins_vld_i = 1'b0;
+      fltbuf_ins_vld_i = 1'b0;
+      bias_ins_vld_i = 1'b0;
+      ifbuf_dma_rdycfg_i = 1'b0;
+      fltbuf_dma_rdycfg_i = 1'b0;
+      bias_dma_rdycfg_i = 1'b0;
+      ifbuf_dma_vld_i = 1'b0;
+      fltbuf_dma_vld_i = 1'b0;
+      bias_dma_vld_i = 1'b0;
+      ifbuf_dma_data_i = '0;
+      fltbuf_dma_data_i = '0;
+      bias_dma_data_i = '0;
+      ifbuf_dma_tlast_i = 1'b0;
+      fltbuf_dma_tlast_i = 1'b0;
+      bias_dma_tlast_i = 1'b0;
+      comp_ofbuf_rdy_i = '1;
+
+      repeat (6) @(posedge clk);
+      rst_n = 1'b1;
+      repeat (4) @(posedge clk);
+
+      $display("[RST-ABORT][PASS] %s: reset released. Next run_case is intentionally issued without another reset.", tc_name);
+    end
+  endtask
+
   // =========================================================
   // DUT
   // =========================================================
   wire [WIDTH-1:0]     fltbuf_comp_data_tb   [0:K*M-1];
   wire [WIDTH-1:0]     ifbuf_comp_data_tb    [0:K-1];
-  wire [ACC_WIDTH-1:0] ofbuf_comp_data_tb    [0:M-1];
+  wire [ACC_WIDTH-1:0] scale_comp_data_tb    [0:M-1];
   wire [WIDTH-1:0]     flt_cache_pe_data_tb  [0:K*M*12-1];
   wire [WIDTH-1:0]     if_cache_pe_data_tb   [0:K-1];
   genvar i;
@@ -793,8 +1335,8 @@ module CNN_accel_tb;
         assign flt_cache_pe_data_tb[i] =
             dut.u_computation.gen_comp_pu[0].comp_pu_inst.pe_fltc_data_i[(i+1)*WIDTH-1 -: WIDTH];
     end
-    for (i = 0; i < M; i = i + 1) begin : GEN_OFBUF_TAP
-          assign ofbuf_comp_data_tb[i] = comp_ofbuf_data_o[(i+1)*ACC_WIDTH-1 -: ACC_WIDTH];
+    for (i = 0; i < M; i = i + 1) begin : GEN_scale_TAP
+          assign scale_comp_data_tb[i] = comp_ofbuf_data_o[(i+1)*ACC_WIDTH-1 -: ACC_WIDTH];
       end
   endgenerate
   CNN_accel #(
@@ -808,7 +1350,7 @@ module CNN_accel_tb;
 
     .ifbuf_ins_vld_i(ifbuf_ins_vld_i),
     .ifbuf_ins_ifbaddr_i(ifbuf_ins_ifbaddr_i),
-    .ifbuf_ins_width_i(ifbuf_ins_width_i),
+    .ifbuf_ins_ifwidth_i(ifbuf_ins_ifwidth_i),
     .ifbuf_ins_channel_i(ifbuf_ins_channel_i),
     .ifbuf_ins_ifparr_i(ifbuf_ins_ifparr_i),
     .ifbuf_ins_ifsize_i(ifbuf_ins_ifsize_i),
@@ -834,11 +1376,30 @@ module CNN_accel_tb;
     .fltbuf_ins_iftiles_i(fltbuf_ins_iftiles_i),
     .fltbuf_ins_rdy_o(fltbuf_ins_rdy_o),
 
+    .bias_ins_vld_i(bias_ins_vld_i),
+    .bias_ins_rdy_o(bias_ins_rdy_o),
+    .bias_ins_bias_baddr_i(bias_ins_bias_baddr_i),
+    .bias_ins_ofwidth_i(bias_ins_ofwidth_i),
+    .bias_ins_ofchannel_i(bias_ins_ofchannel_i),
+    .bias_ins_burstlen_i(bias_ins_burstlen_i),
+    .bias_ins_burstlen_tail_i(bias_ins_burstlen_tail_i),
+    .bias_ins_burstlen_lane0_i(bias_ins_burstlen_lane0_i),
+    .bias_ins_burstlen_tail_lane0_i(bias_ins_burstlen_tail_lane0_i),
+
     .comp_ins_hf_i(comp_ins_hf_i),
     .comp_ins_stride_i(comp_ins_stride_i),
     .comp_ins_padding_i(comp_ins_padding_i),
     .comp_ins_ifc_zp_i(comp_ins_ifc_zp_i),
     .comp_ins_fltc_zp_i(comp_ins_fltc_zp_i),
+    .comp_ins_ofwidth_i(comp_ins_ofwidth_i),
+    .comp_ins_mult_i(comp_ins_mult_i),
+    .comp_ins_mult_shift_i(comp_ins_mult_shift_i),
+    .comp_ins_alphamult_i(comp_ins_alphamult_i),
+    .comp_ins_alphamult_shift_i(comp_ins_alphamult_shift_i),
+    .comp_ins_zpy_i(comp_ins_zpy_i),
+    .comp_ins_qmin_i(comp_ins_qmin_i),
+    .comp_ins_qmax_i(comp_ins_qmax_i),
+    .comp_ins_is_leaky_ReLU_i(comp_ins_is_leaky_ReLU_i),
 
     .ifbuf_dma_rdycfg_i(ifbuf_dma_rdycfg_i),
     .ifbuf_dma_vld_i(ifbuf_dma_vld_i),
@@ -857,6 +1418,15 @@ module CNN_accel_tb;
     .fltbuf_dma_burst_o(fltbuf_dma_burst_o),
     .fltbuf_dma_baddr_o(fltbuf_dma_baddr_o),
     .fltbuf_dma_rdy_o(fltbuf_dma_rdy_o),
+
+    .bias_dma_rdycfg_i(bias_dma_rdycfg_i),
+    .bias_dma_vldcfg_o(bias_dma_vldcfg_o),
+    .bias_dma_burst_o(bias_dma_burst_o),
+    .bias_dma_baddr_o(bias_dma_baddr_o),
+    .bias_dma_vld_i(bias_dma_vld_i),
+    .bias_dma_data_i(bias_dma_data_i),
+    .bias_dma_tlast_i(bias_dma_tlast_i),
+    .bias_dma_rdy_o(bias_dma_rdy_o),
 
     .comp_ofbuf_rdy_i(comp_ofbuf_rdy_i),
     .comp_ofbuf_vld_o(comp_ofbuf_vld_o),
@@ -878,8 +1448,9 @@ module CNN_accel_tb;
 
     ifbuf_ins_vld_i = 1'b0;
     fltbuf_ins_vld_i = 1'b0;
+    bias_ins_vld_i = 1'b0;
     ifbuf_ins_ifbaddr_i = '0;
-    ifbuf_ins_width_i = '0;
+    ifbuf_ins_ifwidth_i = '0;
     ifbuf_ins_channel_i = '0;
     ifbuf_ins_ifparr_i = '0;
     ifbuf_ins_ifsize_i = '0;
@@ -890,6 +1461,14 @@ module CNN_accel_tb;
     ifbuf_ins_wp_i = '0;
     ifbuf_ins_padding_i = '0;
     ifbuf_ins_ifc_zp_i = '0;
+
+    bias_ins_bias_baddr_i = '0;
+    bias_ins_ofwidth_i = '0;
+    bias_ins_ofchannel_i = '0;
+    bias_ins_burstlen_i = '0;
+    bias_ins_burstlen_tail_i = '0;
+    bias_ins_burstlen_lane0_i = '0;
+    bias_ins_burstlen_tail_lane0_i = '0;
 
     fltbuf_ins_fltbaddr_i = '0;
     fltbuf_ins_ifparr_i = '0;
@@ -907,15 +1486,28 @@ module CNN_accel_tb;
     comp_ins_padding_i = '0;
     comp_ins_ifc_zp_i = '0;
     comp_ins_fltc_zp_i = '0;
+    comp_ins_ofwidth_i = '0;
+    comp_ins_mult_i = '0;
+    comp_ins_mult_shift_i = '0;
+    comp_ins_alphamult_i = '0;
+    comp_ins_alphamult_shift_i = '0;
+    comp_ins_zpy_i = '0;
+    comp_ins_qmin_i = -128;
+    comp_ins_qmax_i = 127;
+    comp_ins_is_leaky_ReLU_i = 1'b0;
 
     ifbuf_dma_rdycfg_i = 1'b0;
     fltbuf_dma_rdycfg_i = 1'b0;
+    bias_dma_rdycfg_i = 1'b0;
     ifbuf_dma_vld_i = 1'b0;
     fltbuf_dma_vld_i = 1'b0;
+    bias_dma_vld_i = 1'b0;
     ifbuf_dma_data_i = '0;
     fltbuf_dma_data_i = '0;
+    bias_dma_data_i = '0;
     ifbuf_dma_tlast_i = 1'b0;
     fltbuf_dma_tlast_i = 1'b0;
+    bias_dma_tlast_i = 1'b0;
     comp_ofbuf_rdy_i = '1;
 
     clear_all_memories();
@@ -923,7 +1515,7 @@ module CNN_accel_tb;
     //tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,zp,zp
     
     // 1) Ifmap kích thước chẵn, burst filter chẵn
-    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2
+    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
     run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
@@ -939,11 +1531,11 @@ module CNN_accel_tb;
     run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
 
     // 5) 1x1 pointwise, 2 block output-channel, test ofparr_tail
-    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=3, oftile=1
+    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=4, oftile=1
     run_case("TC4_pointwise_ofparr_tail_2block", 11, 11, 3, 5, 1, 1, 1, 0, 2, 4, 1, 3, 3);
 
     // 6) 1x1 pointwise, gop du output-channel vao 1 block, test oftiles_tail = 2
-    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=3, oftile=2
+    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=4, oftile=2
     run_case("TC5_pointwise_oftile_tail", 11, 11, 3, 5, 1, 1, 1, 0, 2, 4, 2, 3, 1);
 
     // 7) Kernel lon 5x5, stride=3 (< filter), padding=1, test ifparr/ofparr tail dong thoi
@@ -969,7 +1561,28 @@ module CNN_accel_tb;
     // 12) Ket hop stride = filter va padding < filter, sat hon voi CNN thuc te
     // ifmap 11x11, Ci=3, Co=4, kernel 3x3, stride=3, padding=2, ifparr=1, ofparr=2, oftile=2
     run_case("TC11_stride_eq_filter_pad_lt_filter", 11, 11, 3, 4, 3, 3, 3, 2, 1, 2, 2, 3, 5);
-    $display("\nAll requested environment-only testcases completed.");
+
+    // =====================================================
+    // Reset-abort fault-tolerance checks
+    // Muc tieu: reset dot ngot khi case chua xong, sau do chay ngay case tiep theo
+    // KHONG goi apply_reset() them lan nua. Neu state noi bo/DMA/FSM chua duoc reset sach,
+    // cac RECOVER case ben duoi se timeout hoac mismatch.
+    // =====================================================
+
+    // A) Reset rat som sau khi issue instruction: cover loi FSM/DMA config dang bat dau.
+    run_case_abort_reset("RST_ABORT_A_early_TC2", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5, 35, 0);
+    run_case("RST_RECOVER_A_next_no_extra_reset_TC3", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
+
+    // B) Reset giua compute sau mot khoang clock: cover loi partial-sum/cache dang co du lieu cu.
+    run_case_abort_reset("RST_ABORT_B_mid_compute_TC6", 22, 22, 5, 7, 5, 5, 3, 1, 2, 3, 1, 3, 2, 2200, 11);
+    run_case("RST_RECOVER_B_next_no_extra_reset_TC7", 9, 9, 4, 6, 1, 1, 1, 0, 2, 4, 2, 2, 3);
+
+    // C) Reset sau khi da co output packet dau tien nhung chua complete: cover loi output/scale pipeline.
+    // abort_cycles o day la watchdog toi da de doi packet dau tien.
+    run_case_abort_reset("RST_ABORT_C_after_first_output_TC9", 13, 13, 3, 5, 7, 7, 2, 3, 3, 2, 2, 1, 3, 10000, 20);
+    run_case("RST_RECOVER_C_next_no_extra_reset_TC10", 11, 11, 3, 3, 5, 5, 1, 0, 2, 2, 1, 1, 2);
+
+    $display("\nAll requested environment-only and reset-abort testcases completed.");
     $finish;
   end
   initial begin

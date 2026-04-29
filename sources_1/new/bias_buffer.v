@@ -1,0 +1,330 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 04/23/2026 02:58:08 PM
+// Design Name: 
+// Module Name: bias_buffer
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
+module bias_buffer #(
+    parameter   DATA_WIDTH = 32,
+    parameter   M = 2
+)(
+    input                           clk,
+    input                           rst_n,
+    
+    input                           bias_ins_vld_i,
+    output                          bias_ins_rdy_o,
+    input           [31:0]          bias_ins_bias_baddr_i,
+    input           [7:0]           bias_ins_ofwidth_i,
+    input           [10:0]          bias_ins_ofchannel_i,
+    input           [4:0]           bias_ins_burstlen_i,
+    input           [4:0]           bias_ins_burstlen_tail_i,
+    input           [4:0]           bias_ins_burstlen_lane0_i,
+    input           [4:0]           bias_ins_burstlen_tail_lane0_i,
+
+    input                           bias_dma_rdycfg_i,
+    output                          bias_dma_vldcfg_o,
+    output          [4:0]           bias_dma_burst_o, 
+    output          [31:0]          bias_dma_baddr_o,
+    input                           bias_dma_vld_i,
+    input   signed  [31:0]          bias_dma_data_i,
+    input                           bias_dma_tlast_i,
+    output                          bias_dma_rdy_o,
+    
+    input     [M-1:0]               bias_scale_rdy_i,
+    output    [M*DATA_WIDTH-1:0]    bias_scale_data_o,
+    output    [M-1:0]               bias_scale_vld_o
+    
+    );
+
+    reg         [31:0]          bias_ins_bias_baddr_reg;
+    reg         [7:0]           bias_ins_ifwidth_reg;
+    reg         [10:0]          bias_ins_ofchannel_reg;
+    reg         [4:0]           bias_ins_burstlen_reg;
+    reg         [4:0]           bias_ins_burstlen_tail_reg;
+    reg         [4:0]           bias_ins_burstlen_lane0_reg;
+    reg         [4:0]           bias_ins_burstlen_lane1_reg;
+    reg         [4:0]           bias_ins_burstlen_tail_lane0_reg;
+    reg         [4:0]           bias_ins_burstlen_tail_lane1_reg;
+
+    reg                         ins_rdy_dly;
+    reg                         ins_rdy_dly_2;
+    reg         [4:0]           burst_length;
+    reg         [4:0]           burst_length_real;
+    reg         [31:0]          base_addr;
+    reg         [10:0]          ch_cnt_nxt_swp;
+    reg                         is_tail_cfg;
+    reg                         is_tail_read;
+    reg                         is_tail_write;
+    reg                         vldcfg;
+    reg                         ins_rdy;
+
+    reg         [4:0]           count_bias;
+    reg                         is_lane_1;
+    reg                         done_write;
+    reg                         id;
+    reg         [4:0]           cnt_bias_rd1;
+    reg         [4:0]           cnt_bias_rd2;
+    reg         [7:0]           cnt_height_rd1;
+    reg         [7:0]           cnt_height_rd2;
+    wire                        cnt_height_rd1_en;
+    wire                        cnt_height_rd2_en;
+    wire                        swap_en;
+    //-------------------------------------------CONFIG------------------------------------------------
+    assign bias_ins_rdy_o = ins_rdy;
+    assign bias_dma_vldcfg_o = vldcfg;
+    assign bias_dma_burst_o = burst_length;
+    assign bias_dma_baddr_o = base_addr;
+    assign bias_dma_rdy_o = 1'b1;
+    always @(posedge clk) begin
+        if(bias_ins_rdy_o) begin
+            bias_ins_bias_baddr_reg             <= bias_ins_bias_baddr_i;
+            bias_ins_ifwidth_reg                <= bias_ins_ofwidth_i;
+            bias_ins_ofchannel_reg              <= bias_ins_ofchannel_i;
+            bias_ins_burstlen_reg               <= bias_ins_burstlen_i;
+            bias_ins_burstlen_tail_reg          <= bias_ins_burstlen_tail_i;
+            bias_ins_burstlen_lane0_reg         <= bias_ins_burstlen_lane0_i;
+            bias_ins_burstlen_lane1_reg         <= bias_ins_burstlen_i - bias_ins_burstlen_lane0_i;
+            bias_ins_burstlen_tail_lane0_reg    <= bias_ins_burstlen_tail_lane0_i;
+            bias_ins_burstlen_tail_lane1_reg    <= bias_ins_burstlen_tail_i - bias_ins_burstlen_tail_lane0_i;
+            
+        end
+        ins_rdy_dly                         <= bias_ins_rdy_o && bias_ins_vld_i;
+        ins_rdy_dly_2                       <= ins_rdy_dly;
+    end
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            id <= 0;
+        end else if(swap_en) begin
+            id <= ~id;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(swap_en || ins_rdy_dly) begin
+            burst_length        <= (ins_rdy_dly || !is_tail_cfg) ? 
+                                    bias_ins_burstlen_reg + bias_ins_burstlen_reg[0] : 
+                                    bias_ins_burstlen_tail_reg + bias_ins_burstlen_tail_reg[0];
+            burst_length_real   <= (ins_rdy_dly || !is_tail_cfg) ? 
+                                    bias_ins_burstlen_reg : 
+                                    bias_ins_burstlen_tail_reg;
+            base_addr           <= ins_rdy_dly ? bias_ins_bias_baddr_reg : (burst_length + base_addr);
+        end
+    end
+    always @(posedge clk) begin
+        if((bias_dma_rdycfg_i && bias_dma_vldcfg_o) || ins_rdy_dly) begin
+            ch_cnt_nxt_swp  <= ins_rdy_dly ? bias_ins_burstlen_reg : ch_cnt_nxt_swp + bias_ins_burstlen_reg;
+        end
+    end
+    always @(posedge clk) begin
+        if(bias_ins_rdy_o) begin
+            is_tail_cfg   <= 0;
+        end else if((bias_dma_rdycfg_i && bias_dma_vldcfg_o) || ins_rdy_dly) begin
+            is_tail_cfg   <= ins_rdy_dly ? !(bias_ins_burstlen_reg < bias_ins_ofchannel_reg) : !((ch_cnt_nxt_swp + bias_ins_burstlen_reg) < bias_ins_ofchannel_reg);
+        end
+    end
+    always @(posedge clk) begin
+        if(bias_ins_rdy_o) begin
+            is_tail_write <= 0;
+        end else if(swap_en || ins_rdy_dly_2) begin
+            is_tail_write <= is_tail_cfg;
+        end
+    end
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            vldcfg <= 0;
+        end if(bias_dma_rdycfg_i && bias_dma_vldcfg_o || ins_rdy) begin
+            vldcfg <= 0;
+        end else if((!is_tail_write && swap_en) || ins_rdy_dly) begin
+            vldcfg <= 1;
+        end
+    end
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            ins_rdy <= 1;
+        end else if(is_tail_write && swap_en) begin
+            ins_rdy <= 1;
+        end else if(bias_ins_vld_i) begin
+            ins_rdy <= 0;
+        end
+    end
+    //-------------------------------------------WRITE CONTROL------------------------------------------------
+    assign swap_en = done_write && !(bias_scale_vld_o[1] || bias_scale_vld_o[0]);
+    always @(posedge clk) begin
+        if(bias_dma_tlast_i) begin
+            done_write <= 1;
+        end else if(swap_en || ins_rdy_dly) begin
+            done_write <= 0;
+        end
+    end
+    always @(posedge clk) begin
+        if(bias_dma_tlast_i || ins_rdy_dly) begin
+            count_bias <= 0;
+        end else if(bias_dma_vld_i) begin
+            count_bias <= count_bias + 1;
+        end
+    end
+    always @(posedge clk) begin
+        if(bias_dma_tlast_i || ins_rdy_dly) begin
+            is_lane_1 <= 0;
+        end else if(bias_dma_vld_i && ((count_bias + 1) == bias_ins_burstlen_lane0_reg || ((count_bias + 1) == bias_ins_burstlen_tail_lane0_reg && is_tail_write))) begin
+            is_lane_1 <= 1;
+        end
+    end
+    ping_pong_bias #(
+        .WIDTH(DATA_WIDTH)
+    ) pp_bram1 (
+        .clk(clk),
+        .rst_n(rst_n),
+        .id_i(id),
+        .wr_en(bias_dma_vld_i && !is_lane_1 && (!bias_dma_tlast_i || !burst_length_real[0])),
+        .rd_en(bias_scale_rdy_i[0]),
+        .is_wr_back(cnt_height_rd1 != bias_ins_ifwidth_reg - 1),
+        .clr_i(1'b0),
+        .data_i(bias_dma_data_i),
+        .data_o(bias_scale_data_o[DATA_WIDTH-1:0]),
+        .vld_o(bias_scale_vld_o[0])
+    );
+    ping_pong_bias #(
+        .WIDTH(DATA_WIDTH)
+    ) pp_bram2 (
+        .clk(clk),
+        .rst_n(rst_n),
+        .id_i(id),
+        .wr_en(bias_dma_vld_i && is_lane_1 && (!bias_dma_tlast_i || !burst_length_real[0])),
+        .rd_en(bias_scale_rdy_i[1]),
+        .is_wr_back(cnt_height_rd2 != bias_ins_ifwidth_reg - 1),
+        .clr_i(1'b0),
+        .data_i(bias_dma_data_i),
+        .data_o(bias_scale_data_o[2*DATA_WIDTH-1:DATA_WIDTH]),
+        .vld_o(bias_scale_vld_o[1])
+    );
+    //-------------------------------------------READ & CLEAR CONTROL------------------------------------------------
+    assign cnt_height_rd1_en = bias_scale_rdy_i[0] && bias_scale_vld_o[0] && ((cnt_bias_rd1 == bias_ins_burstlen_lane0_reg - 1) || is_tail_read && (cnt_bias_rd1 == bias_ins_burstlen_tail_lane0_reg - 1));
+    assign cnt_height_rd2_en = bias_scale_rdy_i[1] && bias_scale_vld_o[1] && ((cnt_bias_rd2 == bias_ins_burstlen_lane1_reg - 1) || is_tail_read && (cnt_bias_rd2 == bias_ins_burstlen_tail_lane1_reg - 1));
+    always @(posedge clk) begin
+        if(swap_en) begin
+            is_tail_read <= is_tail_write;
+        end
+    end
+    always @(posedge clk) begin
+        if(swap_en) begin
+            cnt_bias_rd1 <= 0;
+        end else if(bias_scale_rdy_i[0] && bias_scale_vld_o[0]) begin
+            cnt_bias_rd1 <= ((cnt_bias_rd1 == bias_ins_burstlen_lane0_reg - 1) || is_tail_read && (cnt_bias_rd1 == bias_ins_burstlen_tail_lane0_reg - 1)) 
+            ? 0 : cnt_bias_rd1 + 1;
+        end
+    end
+    always @(posedge clk) begin
+        if(swap_en) begin
+            cnt_bias_rd2 <= 0;
+        end else if(bias_scale_rdy_i[1] && bias_scale_vld_o[1]) begin
+            cnt_bias_rd2 <= ((cnt_bias_rd2 == bias_ins_burstlen_lane1_reg - 1) || is_tail_read && (cnt_bias_rd2 == bias_ins_burstlen_tail_lane1_reg - 1)) 
+            ? 0 : cnt_bias_rd2 + 1;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(swap_en) begin
+            cnt_height_rd1 <= 0;
+        end else if(cnt_height_rd1_en) begin
+            cnt_height_rd1 <= (cnt_height_rd1 == bias_ins_ifwidth_reg - 1) ? 0 : cnt_height_rd1 + 1;
+        end
+    end
+    always @(posedge clk) begin
+        if(swap_en) begin
+            cnt_height_rd2 <= 0;
+        end else if(cnt_height_rd2_en) begin
+            cnt_height_rd2 <= (cnt_height_rd2 == bias_ins_ifwidth_reg - 1) ? 0 : cnt_height_rd2 + 1;
+        end
+    end
+endmodule
+
+module ping_pong_bias #(
+    parameter WIDTH = 32
+)(
+    input               clk,
+    input               rst_n,
+    input               id_i,
+    input               wr_en,
+    input               rd_en,
+    input               is_wr_back,
+    input               clr_i,
+    input   [WIDTH-1:0] data_i,
+    output  [WIDTH-1:0] data_o,
+    output              vld_o
+    );
+    wire [WIDTH-1:0]    data_o1, data_o2;
+    wire [WIDTH-1:0]    data_i1, data_i2;
+    wire                wr_en1, wr_en2;
+    wire                rd_en1, rd_en2;
+    wire                clr1, clr2;
+    wire                empty1, empty2;
+
+    assign rd_en1   = rd_en & ~id_i;
+    assign rd_en2   = rd_en & id_i;
+    assign clr1     = clr_i & ~id_i;
+    assign clr2     = clr_i & id_i;
+    assign wr_en1   = wr_en & id_i; // Cho phep ghi vao fifo1 khi id_i=1
+    assign wr_en2   = wr_en & ~id_i;  // Cho phep ghi vao fifo2 khi id_i=0
+    assign data_i1  = data_i; // Du lieu vao fifo1 la data_i khi ghi, la data_o1 khi doc
+    assign data_i2  = data_i; // Du lieu vao fifo2 la data_i khi ghi, la data_o2 khi doc
+    assign data_o   = id_i ? data_o2 : data_o1;
+    assign vld_o    = id_i ? !empty2 : !empty1;
+    
+    fifo #(
+       .DATA_WIDTH(WIDTH),
+       .FF_TYPE(0),
+       .FF_NUM(2),
+       .FIFO_DEPTH(8)
+       ) bias_fifo1 (
+        .clk(clk),
+        .data_i(rd_en1 && !empty1 ? data_o1 : data_i1),
+        .data_o(data_o1),
+        .rd_valid_i(rd_en1),
+        .wr_valid_i(wr_en1 || rd_en1 && !empty1 && is_wr_back),
+        .clr_rd_i(1'b0),
+        .clr_ff_i(clr1),
+        .empty_o(empty1),
+        .full_o(),
+        .almost_empty_o(),
+        .almost_full_o(),
+        .counter(),
+        .rst_n(rst_n)
+    );
+    fifo #(
+       .DATA_WIDTH(WIDTH),
+       .FF_TYPE(0),
+       .FF_NUM(2),
+       .FIFO_DEPTH(8)
+       ) bias_fifo2 (
+        .clk(clk),
+        .data_i(rd_en2 && !empty2 ? data_o2 : data_i2),
+        .data_o(data_o2),
+        .rd_valid_i(rd_en2),
+        .wr_valid_i(wr_en2 || rd_en2 && !empty2 && is_wr_back),
+        .clr_rd_i(1'b0),
+        .clr_ff_i(clr2),
+        .empty_o(empty2),
+        .full_o(),
+        .almost_empty_o(),
+        .almost_full_o(),
+        .counter(),
+        .rst_n(rst_n)
+    );
+endmodule

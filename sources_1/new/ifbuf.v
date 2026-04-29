@@ -31,7 +31,7 @@ module ifbuf #(
     // Giao tiếp Instruction
     input                           ifbuf_ins_vld_i,
     input       [31:0]              ifbuf_ins_ifbaddr_i,
-    input       [7:0]               ifbuf_ins_width_i,
+    input       [7:0]               ifbuf_ins_ifwidth_i,
     input       [10:0]              ifbuf_ins_channel_i,
     input       [3:0]               ifbuf_ins_ifparr_i,
     input       [15:0]              ifbuf_ins_ifsize_i,
@@ -140,7 +140,7 @@ module ifbuf #(
     assign width_align          = ifbuf_ins_width_reg + ifbuf_ins_width_reg[0];
 
     always @(posedge clk) begin
-        if (ifbuf_ins_vld_i && ifbuf_ins_rdy_o) begin
+        if (ifbuf_ins_rdy_o) begin
             ifbuf_ins_oftiles_reg   <= ifbuf_ins_oftiles_i;
             ifbuf_ins_iftiles_reg   <= ifbuf_ins_iftiles_i;
             ifbuf_ins_wp_reg        <= ifbuf_ins_wp_i;
@@ -152,9 +152,9 @@ module ifbuf #(
 
     always @(posedge clk) begin
         ifbuf_dma_burst_o       <= width_align;
-        if(ifbuf_ins_vld_i && ifbuf_ins_rdy_o) begin
+        if(ifbuf_ins_rdy_o) begin
             ifbuf_ins_ifbaddr_reg   <= ifbuf_ins_ifbaddr_i;
-            ifbuf_ins_width_reg     <= ifbuf_ins_width_i;
+            ifbuf_ins_width_reg     <= ifbuf_ins_ifwidth_i;
             ifbuf_ins_channel_reg   <= ifbuf_ins_channel_i;
             ifbuf_ins_ifsize_reg    <= ifbuf_ins_ifsize_i;
             ifbuf_ins_ifblock_reg   <= ifbuf_ins_ifblock_i;

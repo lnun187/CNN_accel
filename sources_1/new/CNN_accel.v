@@ -40,7 +40,7 @@ module CNN_accel#(
     // =========================================================
     input               ifbuf_ins_vld_i,
     input  [31:0]       ifbuf_ins_ifbaddr_i, //base address for ifmap
-    input  [7:0]        ifbuf_ins_width_i, //width and height of ifmap channel
+    input  [7:0]        ifbuf_ins_ifwidth_i, //width and height of ifmap channel
     input  [10:0]       ifbuf_ins_channel_i, //total ifmap channel
     input  [3:0]        ifbuf_ins_ifparr_i, //count of parrallel ifmap channel
     input  [15:0]       ifbuf_ins_ifsize_i, //width da duoc align (so chan) * height
@@ -74,6 +74,18 @@ module CNN_accel#(
     output              fltbuf_ins_rdy_o,
 
     // =========================================================
+    // BIAS BUF instruction interface
+    // =========================================================
+    input                           bias_ins_vld_i,
+    output                          bias_ins_rdy_o,
+    input           [31:0]          bias_ins_bias_baddr_i,
+    input           [7:0]           bias_ins_ofwidth_i,//width of ofmap
+    input           [10:0]          bias_ins_ofchannel_i,//total ofmap channel
+    input           [4:0]           bias_ins_burstlen_i,//equal iftile * ofparr
+    input           [4:0]           bias_ins_burstlen_tail_i,//equal ofchannel % (iftile * ofparr) == 0 ? iftile * ofparr : ofchannel % (iftile * ofparr) 
+    input           [4:0]           bias_ins_burstlen_lane0_i,//equal ceil(burstlen / 2)
+    input           [4:0]           bias_ins_burstlen_tail_lane0_i,//equal ceil(burstlen_tail / 2)
+    // =========================================================
     // COMPUTATION instruction interface
     // =========================================================
     input  [3:0]                comp_ins_hf_i, //height of channel of filter
@@ -81,7 +93,15 @@ module CNN_accel#(
     input  [1:0]                comp_ins_padding_i,
     input  [DATA_WIDTH-1:0]     comp_ins_ifc_zp_i, //zero point of ifmap
     input  [DATA_WIDTH-1:0]     comp_ins_fltc_zp_i, //zero point of filter
-
+    input           [7:0]       comp_ins_ofwidth_i,
+    input   signed  [31:0]      comp_ins_mult_i,
+    input           [5:0]       comp_ins_mult_shift_i,
+    input   signed  [31:0]      comp_ins_alphamult_i,
+    input           [5:0]       comp_ins_alphamult_shift_i,
+    input   signed  [7:0]       comp_ins_zpy_i,
+    input   signed  [7:0]       comp_ins_qmin_i,
+    input   signed  [7:0]       comp_ins_qmax_i,
+    input                       comp_ins_is_leaky_ReLU_i,
     // =========================================================
     // IFBUF DMA side
     // =========================================================
@@ -107,17 +127,28 @@ module CNN_accel#(
     output                  fltbuf_dma_rdy_o,
 
     // =========================================================
-    // Toward OFBUF (not implemented in the uploaded RTL set)
+    // BIAS BUF DMA side
+    // =========================================================
+    input                           bias_dma_rdycfg_i,
+    output                          bias_dma_vldcfg_o,
+    output          [4:0]           bias_dma_burst_o, 
+    output          [31:0]          bias_dma_baddr_o,
+    input                           bias_dma_vld_i,
+    input   signed  [31:0]          bias_dma_data_i,
+    input                           bias_dma_tlast_i,
+    output                          bias_dma_rdy_o,
+    // =========================================================
+    // Toward scale (not implemented in the uploaded RTL set)
     // =========================================================
     input  [M-1:0]            comp_ofbuf_rdy_i,
     output [M-1:0]            comp_ofbuf_vld_o,
-    output [M*ACC_WIDTH-1:0]  comp_ofbuf_data_o,
+    output [M*DATA_WIDTH-1:0]  comp_ofbuf_data_o,
 
     // =========================================================
     // Optional debug / status
     // =========================================================
     output                    comp_pa_done_compute_o,
-    output                    ifbuf_comp_end_layer_o,
+    output                    ifbuf_comp_end_layer_o, 
     output                    fltbuf_comp_donepass_o
 );
 
@@ -150,7 +181,7 @@ module CNN_accel#(
 
     wire [M-1:0]            comp_ofbuf_vld_w;
     wire [M-1:0]            comp_ofbuf_rdy_w;
-    wire [M*ACC_WIDTH-1:0]  comp_ofbuf_data_w;
+    wire [M*DATA_WIDTH-1:0]  comp_ofbuf_data_w;
 
     reg [3:0]               comp_ins_hf_reg; //height of channel of filter
     reg [2:0]               comp_ins_stride_reg;
@@ -189,7 +220,7 @@ module CNN_accel#(
         .ifbuf_ins_ifparr_i(ifbuf_ins_ifparr_i),
         .ifbuf_ins_ifsize_i(ifbuf_ins_ifsize_i),
         .ifbuf_ins_channel_i(ifbuf_ins_channel_i),
-        .ifbuf_ins_width_i(ifbuf_ins_width_i),
+        .ifbuf_ins_ifwidth_i(ifbuf_ins_ifwidth_i),
         .ifbuf_ins_ifblock_i(ifbuf_ins_ifblock_i),
         .ifbuf_ins_oftiles_i(ifbuf_ins_oftiles_i),
         .ifbuf_ins_oftiles_tail_i(ifbuf_ins_oftiles_tail_i),
@@ -275,7 +306,7 @@ module CNN_accel#(
         .fltbuf_ins_oftiles_tail_i(fltbuf_ins_oftiles_tail_i),
         .fltbuf_ins_iftiles_i(fltbuf_ins_iftiles_i),
         .fltbuf_ins_rdy_o(fltbuf_ins_rdy_o),
-        .fltbuf_ins_height_i(ifbuf_ins_width_i),
+        .fltbuf_ins_height_i(ifbuf_ins_ifwidth_i),
         .zp(comp_ins_fltc_zp_i),
 
         .fltbuf_dma_rdycfg_i(fltbuf_dma_rdycfg_i),
@@ -292,7 +323,43 @@ module CNN_accel#(
         .fltbuf_comp_data_o(fltbuf_comp_data_w),
         .fltbuf_comp_donepass_o(fltbuf_comp_donepass_w)
     );
+    // =========================================================
+    // BIAS BUF
+    // =========================================================
+    wire [M-1:0] comp_bias_rdy_w;
+    wire [M-1:0] comp_bias_vld_w;
+    wire signed [M*ACC_WIDTH-1:0] comp_bias_data_w;
 
+    bias_buffer #(
+        .DATA_WIDTH(32)
+    ) u_bias_buf (
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .bias_ins_vld_i(bias_ins_vld_i),
+        .bias_ins_rdy_o(bias_ins_rdy_o),
+        .bias_ins_bias_baddr_i(bias_ins_bias_baddr_i),
+        .bias_ins_ofwidth_i(bias_ins_ofwidth_i),
+        .bias_ins_ofchannel_i(bias_ins_ofchannel_i),
+        .bias_ins_burstlen_i(bias_ins_burstlen_i),
+        .bias_ins_burstlen_tail_i(bias_ins_burstlen_tail_i),
+        .bias_ins_burstlen_lane0_i(bias_ins_burstlen_lane0_i),
+        .bias_ins_burstlen_tail_lane0_i(bias_ins_burstlen_tail_lane0_i),
+
+        .bias_dma_rdycfg_i(bias_dma_rdycfg_i),
+        .bias_dma_vldcfg_o(bias_dma_vldcfg_o),
+        .bias_dma_burst_o(bias_dma_burst_o), 
+        .bias_dma_baddr_o(bias_dma_baddr_o),
+        .bias_dma_vld_i(bias_dma_vld_i),
+        .bias_dma_data_i(bias_dma_data_i),
+        .bias_dma_tlast_i(bias_dma_tlast_i),
+        .bias_dma_rdy_o(bias_dma_rdy_o),
+        
+        .bias_scale_rdy_i(comp_bias_rdy_w),
+        .bias_scale_data_o(comp_bias_data_w),
+        .bias_scale_vld_o(comp_bias_vld_w)
+        
+        );
     // =========================================================
     // COMPUTATION
     // =========================================================
@@ -314,6 +381,15 @@ module CNN_accel#(
         .comp_ins_padding_i(comp_ins_padding_reg),
         .comp_ins_ifc_zp_i(comp_ins_ifc_zp_reg),
         .comp_ins_fltc_zp_i(comp_ins_fltc_zp_reg),
+        .comp_ins_ofwidth_i(comp_ins_ofwidth_i),
+        .comp_ins_mult_i(comp_ins_mult_i),
+        .comp_ins_mult_shift_i(comp_ins_mult_shift_i),
+        .comp_ins_alphamult_i(comp_ins_alphamult_i),
+        .comp_ins_alphamult_shift_i(comp_ins_alphamult_shift_i),
+        .comp_ins_zpy_i(comp_ins_zpy_i),
+        .comp_ins_qmin_i(comp_ins_qmin_i),
+        .comp_ins_qmax_i(comp_ins_qmax_i),
+        .comp_ins_is_leaky_ReLU_i(comp_ins_is_leaky_ReLU_i),
 
         .comp_ifbuf_vld_i(ifbuf_comp_vld_buf_w),
         .comp_ifbuf_data_i(ifbuf_comp_data_buf_w),
@@ -330,6 +406,10 @@ module CNN_accel#(
         .comp_fltbuf_done_pass_i(fltbuf_comp_donepass_w),
         .comp_fltbuf_rdy_o(comp_fltbuf_rdy_w),
 
+        .comp_bias_data_i(comp_bias_data_w),
+        .comp_bias_vld_i(comp_bias_vld_w),
+        .comp_bias_rdy_o(comp_bias_rdy_w),
+
         .comp_ofbuf_rdy_i(comp_ofbuf_rdy_w),
         .comp_ofbuf_vld_o(comp_ofbuf_vld_w),
         .comp_ofbuf_data_o(comp_ofbuf_data_w),
@@ -338,19 +418,19 @@ module CNN_accel#(
 
     genvar gi;
     generate
-        for (gi = 0; gi < M; gi = gi + 1) begin : gen_ofbuf_skid
+        for (gi = 0; gi < M; gi = gi + 1) begin : gen_ofbuf
             skid_buffer #(
                 .SBUF_TYPE(0),
-                .DATA_WIDTH(ACC_WIDTH)
+                .DATA_WIDTH(DATA_WIDTH)
             ) u_skid_ofbuf (
                 .clk(clk),
                 .rst_n(rst_n),
 
-                .bwd_data_i (comp_ofbuf_data_w[gi*ACC_WIDTH +: ACC_WIDTH]),
+                .bwd_data_i (comp_ofbuf_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
                 .bwd_valid_i(comp_ofbuf_vld_w[gi]),
                 .fwd_ready_i(comp_ofbuf_rdy_i[gi]),
 
-                .fwd_data_o (comp_ofbuf_data_o[gi*ACC_WIDTH +: ACC_WIDTH]),
+                .fwd_data_o (comp_ofbuf_data_o[gi*DATA_WIDTH +: DATA_WIDTH]),
                 .bwd_ready_o(comp_ofbuf_rdy_w[gi]),
                 .fwd_valid_o(comp_ofbuf_vld_o[gi])
             );

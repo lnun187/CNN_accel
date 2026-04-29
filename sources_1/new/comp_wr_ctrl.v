@@ -40,9 +40,9 @@ module comp_wr_ctrl#(
 
     input                           cwc_pu_swap_en_i,
     
-    input                           cwc_ofbuf_rdy_i,
-    output                          cwc_ofbuf_vld_o,
-    output  [WIDTH-1:0]             cwc_ofbuf_data_o,
+    input                           cwc_scale_rdy_i,
+    output                          cwc_scale_vld_o,
+    output  [WIDTH-1:0]             cwc_scale_data_o,
     output                          cwc_pu_done_compute_o
     );
     
@@ -70,14 +70,14 @@ module comp_wr_ctrl#(
         .signal_i(end_layer && !(|cwc_pp_vld_i)),
         .signal_o(cwc_pu_done_compute_o)
     );
-    assign cwc_pp_rdy_o         = {PE_PER_PU{cwc_ofbuf_rdy_i && cwc_ofbuf_vld_o}} & (1'b1 << id);
+    assign cwc_pp_rdy_o         = {PE_PER_PU{cwc_scale_rdy_i && cwc_scale_vld_o}} & (1'b1 << id);
     assign end_data_id          = |cwc_pp_end_data_i;
     assign vld_id               = (id < PE_PER_PU) ? cwc_pp_vld_i[id] && !pp_clear_reg[id]: 1'b0;
-    assign cwc_ofbuf_vld_o      = vld_id;
+    assign cwc_scale_vld_o      = vld_id;
     assign cwc_pp_pe_is_read_o  = {PE_PER_PU{~end_layer}};
     assign next_id_sum          = {1'b0, id} + {1'b0, cwc_ins_hf_i};
     assign vld_id_nxt           = (next_id_sum < PE_PER_PU) ? cwc_pp_vld_i[next_id_sum] && !pp_clear_reg[next_id_sum]: 1'b0;
-    assign cwc_ofbuf_data_o     = (id < PE_PER_PU) ? cwc_pp_data_i[id*WIDTH +: WIDTH] : {WIDTH{1'b0}};
+    assign cwc_scale_data_o     = (id < PE_PER_PU) ? cwc_pp_data_i[id*WIDTH +: WIDTH] : {WIDTH{1'b0}};
     assign is_id_nxt_vld        = vld_id_nxt;
     assign is_add_cwc_ins_padding_i_data = end_layer && !cwc_pu_swap_en_i;
     assign id_nxt               = is_id_nxt_vld ? (id + cwc_ins_hf_i) : (is_add_cwc_ins_padding_i_data ? (id % cwc_ins_hf_i - (cwc_ins_stride_i - cwc_ins_stride_i_count)) : (cwc_ins_hf_i - 1));
@@ -99,7 +99,7 @@ module comp_wr_ctrl#(
             if(cwc_pu_swap_en_i) begin
                 id          <= cwc_ins_hf_i - 1;
             end 
-            else if(!vld_id || end_data_id && vld_id && cwc_ofbuf_rdy_i) begin
+            else if(!vld_id || end_data_id && vld_id && cwc_scale_rdy_i) begin
                 id          <= id_nxt;
             end
         end

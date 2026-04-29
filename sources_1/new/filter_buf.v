@@ -165,7 +165,7 @@ module filter_buf #(
     assign oftiles_cfg_cnt_en   = fltbuf_dma_vldcfg_o && fltbuf_dma_rdycfg_i;
     assign ifblock_cfg_cnt_en   = iftiles_cfg_cnt_en && (iftiles_cfg_cnt == iftiles_reg - 1);
     always @(posedge clk) begin
-        if(fltbuf_ins_rdy_o && fltbuf_ins_vld_i) begin
+        if(fltbuf_ins_rdy_o) begin
             fltbaddr_reg    <= fltbuf_ins_fltbaddr_i;
             ifparr_reg      <= fltbuf_ins_ifparr_i;
             ifparr_tail_reg <= fltbuf_ins_ifparr_tail_i;
@@ -190,7 +190,7 @@ module filter_buf #(
         end
     end
     always @(posedge clk) begin
-        if(fltbuf_ins_rdy_o && fltbuf_ins_vld_i) begin
+        if(fltbuf_ins_rdy_o) begin
             fltbuf_dma_baddr_o <= fltbuf_ins_fltbaddr_i;
         end else if(fltbuf_dma_vldcfg_o && fltbuf_dma_rdycfg_i) begin
             fltbuf_dma_baddr_o <= fltbuf_dma_baddr_o + fltbuf_dma_burst_o;
