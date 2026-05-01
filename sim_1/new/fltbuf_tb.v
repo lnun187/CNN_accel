@@ -12,22 +12,22 @@ module fltbuf_tb;
   reg clk;
   reg rst_n;
 
-  reg         fltbuf_ins_vld_i;
-  reg [31:0]  fltbuf_ins_fltbaddr_i;
-  reg [8:0]   fltbuf_ins_width_i;
-  reg [10:0]  fltbuf_ins_channel_i;
-  reg [3:0]   fltbuf_ins_ifparr_i;
-  reg [3:0]   fltbuf_ins_ifparr_tail_i;
-  reg [6:0]   fltbuf_ins_fltsize_i;
-  reg [6:0]   fltbuf_ins_ifblock_i;
-  reg [4:0]   fltbuf_ins_ofparr_i;
-  reg [4:0]   fltbuf_ins_ofparr_tail_i;
-  reg [3:0]   fltbuf_ins_oftiles_i;
-  reg [3:0]   fltbuf_ins_oftiles_tail_i;
-  reg [6:0]   fltbuf_ins_iftiles_i;
-  reg [8:0]   fltbuf_ins_wp_i;
-  reg [1:0]   fltbuf_ins_padding_i;
-  reg [7:0]   fltbuf_ins_ifc_zp_i;
+  reg         fltbuf_inf_vld_i;
+  reg [31:0]  fltbuf_inf_fltbaddr_i;
+  reg [8:0]   fltbuf_inf_width_i;
+  reg [10:0]  fltbuf_inf_channel_i;
+  reg [3:0]   fltbuf_inf_ifparr_i;
+  reg [3:0]   fltbuf_inf_ifparr_tail_i;
+  reg [6:0]   fltbuf_inf_fltsize_i;
+  reg [6:0]   fltbuf_inf_ifblock_i;
+  reg [4:0]   fltbuf_inf_ofparr_i;
+  reg [4:0]   fltbuf_inf_ofparr_tail_i;
+  reg [3:0]   fltbuf_inf_oftiles_i;
+  reg [3:0]   fltbuf_inf_oftiles_tail_i;
+  reg [6:0]   fltbuf_inf_iftiles_i;
+  reg [8:0]   fltbuf_inf_wp_i;
+  reg [1:0]   fltbuf_inf_padding_i;
+  reg [7:0]   fltbuf_inf_ifc_zp_i;
   reg         fltbuf_ifbuf_end_layer_i;
 
   reg         fltbuf_dma_rdycfg_i;
@@ -36,7 +36,7 @@ module fltbuf_tb;
   reg         fltbuf_dma_tlast_i;
   reg         fltbuf_comp_rdy_i;
 
-  wire           fltbuf_ins_rdy_o;
+  wire           fltbuf_inf_rdy_o;
   wire           fltbuf_dma_vldcfg_o;
   wire [9:0]     fltbuf_dma_burst_o;
   wire [31:0]    fltbuf_dma_baddr_o;
@@ -111,7 +111,7 @@ module fltbuf_tb;
   //     sau do len 1 lai neu pass tiep theo cua block da load xong
   //   - donepass du het so pass cua 1 block thi comp_rdy giu 0 cho den khi
   //     nhan fltbuf_ifbuf_end_layer_i de mo block tiep theo
-  //   - ins_rdy chi len 1 sau khi da gui xong toan bo pass cua 1 layer
+  //   - inf_rdy chi len 1 sau khi da gui xong toan bo pass cua 1 layer
   //     va da nhan fltbuf_ifbuf_end_layer_i o cuoi layer
   //   - comp checker sample o negedge clk de tranh bat som 1 beat
   // ==========================================================================
@@ -152,23 +152,23 @@ module fltbuf_tb;
   ) dut (
     .clk(clk),
     .rst_n(rst_n),
-    .fltbuf_ins_vld_i(fltbuf_ins_vld_i),
-    .fltbuf_ins_fltbaddr_i(fltbuf_ins_fltbaddr_i),
-    .fltbuf_ins_width_i(fltbuf_ins_width_i),
-    .fltbuf_ins_channel_i(fltbuf_ins_channel_i),
-    .fltbuf_ins_ifparr_i(fltbuf_ins_ifparr_i),
-    .fltbuf_ins_ifparr_tail_i(fltbuf_ins_ifparr_tail_i),
-    .fltbuf_ins_fltsize_i(fltbuf_ins_fltsize_i),
-    .fltbuf_ins_ifblock_i(fltbuf_ins_ifblock_i),
-    .fltbuf_ins_ofparr_i(fltbuf_ins_ofparr_i),
-    .fltbuf_ins_ofparr_tail_i(fltbuf_ins_ofparr_tail_i),
-    .fltbuf_ins_oftiles_i(fltbuf_ins_oftiles_i),
-    .fltbuf_ins_oftiles_tail_i(fltbuf_ins_oftiles_tail_i),
-    .fltbuf_ins_iftiles_i(fltbuf_ins_iftiles_i),
-    .fltbuf_ins_wp_i(fltbuf_ins_wp_i),
-    .fltbuf_ins_padding_i(fltbuf_ins_padding_i),
-    .fltbuf_ins_ifc_zp_i(fltbuf_ins_ifc_zp_i),
-    .fltbuf_ins_rdy_o(fltbuf_ins_rdy_o),
+    .fltbuf_inf_vld_i(fltbuf_inf_vld_i),
+    .fltbuf_inf_fltbaddr_i(fltbuf_inf_fltbaddr_i),
+    .fltbuf_inf_width_i(fltbuf_inf_width_i),
+    .fltbuf_inf_channel_i(fltbuf_inf_channel_i),
+    .fltbuf_inf_ifparr_i(fltbuf_inf_ifparr_i),
+    .fltbuf_inf_ifparr_tail_i(fltbuf_inf_ifparr_tail_i),
+    .fltbuf_inf_fltsize_i(fltbuf_inf_fltsize_i),
+    .fltbuf_inf_ifblock_i(fltbuf_inf_ifblock_i),
+    .fltbuf_inf_ofparr_i(fltbuf_inf_ofparr_i),
+    .fltbuf_inf_ofparr_tail_i(fltbuf_inf_ofparr_tail_i),
+    .fltbuf_inf_oftiles_i(fltbuf_inf_oftiles_i),
+    .fltbuf_inf_oftiles_tail_i(fltbuf_inf_oftiles_tail_i),
+    .fltbuf_inf_iftiles_i(fltbuf_inf_iftiles_i),
+    .fltbuf_inf_wp_i(fltbuf_inf_wp_i),
+    .fltbuf_inf_padding_i(fltbuf_inf_padding_i),
+    .fltbuf_inf_ifc_zp_i(fltbuf_inf_ifc_zp_i),
+    .fltbuf_inf_rdy_o(fltbuf_inf_rdy_o),
     .fltbuf_ifbuf_end_layer_i(fltbuf_ifbuf_end_layer_i),
     .fltbuf_dma_rdycfg_i(fltbuf_dma_rdycfg_i),
     .fltbuf_dma_vld_i(fltbuf_dma_vld_i),
@@ -696,22 +696,22 @@ module fltbuf_tb;
   // ==========================================================================
   task clear_inputs;
     begin
-      fltbuf_ins_vld_i          = 1'b0;
-      fltbuf_ins_fltbaddr_i     = 32'd0;
-      fltbuf_ins_width_i        = 9'd0;
-      fltbuf_ins_channel_i      = 11'd0;
-      fltbuf_ins_ifparr_i       = 4'd0;
-      fltbuf_ins_ifparr_tail_i  = 4'd0;
-      fltbuf_ins_fltsize_i      = 7'd0;
-      fltbuf_ins_ifblock_i      = 7'd0;
-      fltbuf_ins_ofparr_i       = 5'd0;
-      fltbuf_ins_ofparr_tail_i  = 5'd0;
-      fltbuf_ins_oftiles_i      = 4'd0;
-      fltbuf_ins_oftiles_tail_i = 4'd0;
-      fltbuf_ins_iftiles_i      = 7'd0;
-      fltbuf_ins_wp_i           = 9'd0;
-      fltbuf_ins_padding_i      = 2'd0;
-      fltbuf_ins_ifc_zp_i       = 8'd0;
+      fltbuf_inf_vld_i          = 1'b0;
+      fltbuf_inf_fltbaddr_i     = 32'd0;
+      fltbuf_inf_width_i        = 9'd0;
+      fltbuf_inf_channel_i      = 11'd0;
+      fltbuf_inf_ifparr_i       = 4'd0;
+      fltbuf_inf_ifparr_tail_i  = 4'd0;
+      fltbuf_inf_fltsize_i      = 7'd0;
+      fltbuf_inf_ifblock_i      = 7'd0;
+      fltbuf_inf_ofparr_i       = 5'd0;
+      fltbuf_inf_ofparr_tail_i  = 5'd0;
+      fltbuf_inf_oftiles_i      = 4'd0;
+      fltbuf_inf_oftiles_tail_i = 4'd0;
+      fltbuf_inf_iftiles_i      = 7'd0;
+      fltbuf_inf_wp_i           = 9'd0;
+      fltbuf_inf_padding_i      = 2'd0;
+      fltbuf_inf_ifc_zp_i       = 8'd0;
       fltbuf_ifbuf_end_layer_i       = 1'b0;
       dma_rdycfg_default        = 1'b1;
       fltbuf_dma_vld_i          = 1'b0;
@@ -899,7 +899,7 @@ module fltbuf_tb;
     end
   endtask
 
-  task send_instruction;
+  task send_inftruction;
     input [31:0] base_addr;
     input [3:0]  ifparr;
     input [3:0]  ifparr_tail;
@@ -912,32 +912,32 @@ module fltbuf_tb;
     input [6:0]  iftiles;
     begin
       @(posedge clk);
-      while (!fltbuf_ins_rdy_o) @(posedge clk);
+      while (!fltbuf_inf_rdy_o) @(posedge clk);
 
-      fltbuf_ins_vld_i          <= 1'b1;
-      fltbuf_ins_fltbaddr_i     <= base_addr;
-      fltbuf_ins_width_i        <= 9'd0;
-      fltbuf_ins_channel_i      <= 11'd0;
-      fltbuf_ins_ifparr_i       <= ifparr;
-      fltbuf_ins_ifparr_tail_i  <= ifparr_tail;
-      fltbuf_ins_fltsize_i      <= fltsize;
-      fltbuf_ins_ifblock_i      <= ifblock;
-      fltbuf_ins_ofparr_i       <= ofparr;
-      fltbuf_ins_ofparr_tail_i  <= ofparr_tail;
-      fltbuf_ins_oftiles_i      <= oftiles;
-      fltbuf_ins_oftiles_tail_i <= oftiles_tail;
-      fltbuf_ins_iftiles_i      <= iftiles;
-      fltbuf_ins_wp_i           <= 9'd0;
-      fltbuf_ins_padding_i      <= 2'd0;
-      fltbuf_ins_ifc_zp_i       <= 8'd0;
+      fltbuf_inf_vld_i          <= 1'b1;
+      fltbuf_inf_fltbaddr_i     <= base_addr;
+      fltbuf_inf_width_i        <= 9'd0;
+      fltbuf_inf_channel_i      <= 11'd0;
+      fltbuf_inf_ifparr_i       <= ifparr;
+      fltbuf_inf_ifparr_tail_i  <= ifparr_tail;
+      fltbuf_inf_fltsize_i      <= fltsize;
+      fltbuf_inf_ifblock_i      <= ifblock;
+      fltbuf_inf_ofparr_i       <= ofparr;
+      fltbuf_inf_ofparr_tail_i  <= ofparr_tail;
+      fltbuf_inf_oftiles_i      <= oftiles;
+      fltbuf_inf_oftiles_tail_i <= oftiles_tail;
+      fltbuf_inf_iftiles_i      <= iftiles;
+      fltbuf_inf_wp_i           <= 9'd0;
+      fltbuf_inf_padding_i      <= 2'd0;
+      fltbuf_inf_ifc_zp_i       <= 8'd0;
 
       @(posedge clk);
-      if (!(fltbuf_ins_rdy_o && fltbuf_ins_vld_i)) begin
+      if (!(fltbuf_inf_rdy_o && fltbuf_inf_vld_i)) begin
         err_count = err_count + 1;
-        $error("Instruction was not accepted when expected");
+        $error("inftruction was not accepted when expected");
       end
       accept_cycle     = cycle_ctr;
-      fltbuf_ins_vld_i <= 1'b0;
+      fltbuf_inf_vld_i <= 1'b0;
     end
   endtask
 
@@ -1047,17 +1047,17 @@ module fltbuf_tb;
         end
       end
 
-      if (fltbuf_ins_rdy_o !== 1'b1)
+      if (fltbuf_inf_rdy_o !== 1'b1)
         pulse_ifbuf_change();
 
       timeout = 0;
-      while (!fltbuf_ins_rdy_o && (timeout < 80)) begin
+      while (!fltbuf_inf_rdy_o && (timeout < 80)) begin
         @(posedge clk);
         timeout = timeout + 1;
       end
-      if (!fltbuf_ins_rdy_o) begin
+      if (!fltbuf_inf_rdy_o) begin
         err_count = err_count + 1;
-        $error("fltbuf_ins_rdy_o did not return to 1 after finishing full layer + fltbuf_ifbuf_end_layer_i");
+        $error("fltbuf_inf_rdy_o did not return to 1 after finishing full layer + fltbuf_ifbuf_end_layer_i");
       end
     end
   endtask
@@ -1096,7 +1096,7 @@ module fltbuf_tb;
       check_addr_chain      = 1'b0;
       checking_en           = 1'b1;
 
-      send_instruction(base_addr, ifparr, ifparr_tail, fltsize, ifblock, ofparr, ofparr_tail, oftiles, oftiles_tail, iftiles);
+      send_inftruction(base_addr, ifparr, ifparr_tail, fltsize, ifblock, ofparr, ofparr_tail, oftiles, oftiles_tail, iftiles);
 
       target_words = 0;
       for (grp = 0; grp < num_groups; grp = grp + 1) begin
@@ -1191,7 +1191,7 @@ module fltbuf_tb;
     begin
       $display("\n[TEST 3] Check comp_vld_o/comp_data_o voi dma_data_i = filter*10000 + channel*100 + elem_idx");
       $display("         Thu tu mong doi: (f0,f3) elem0..8 -> (f1,f4) elem0..8 -> (f2,f5) elem0..8");
-      $display("         fltbuf_ifbuf_end_layer_i chi duoc pulse giua cac block, con ins_rdy chi len sau full layer + change");
+      $display("         fltbuf_ifbuf_end_layer_i chi duoc pulse giua cac block, con inf_rdy chi len sau full layer + change");
       comp_check_en     = 1'b1;
       cfg_bp_en         = 1'b0;
       dma_rdycfg_default = 1'b1;
@@ -1220,7 +1220,7 @@ module fltbuf_tb;
       comp_block_beats      = 0;
       comp_donepass_count   = 0;
 
-      send_instruction(
+      send_inftruction(
         COMPCHK_BASE_ADDR,
         COMPCHK_IFPARR,
         COMPCHK_IFPARR_T,

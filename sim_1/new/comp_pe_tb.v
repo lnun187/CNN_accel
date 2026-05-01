@@ -52,7 +52,7 @@ module comp_pe_tb;
     wire wr_o;
     wire [WIDTH-1:0] data_o;
 
-    // Instantiate the Unit Under Test (UUT)
+    // inftantiate the Unit Under Test (UUT)
     comp_pe #(
         .ID(ID),
         .WIDTH(WIDTH)

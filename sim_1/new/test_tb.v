@@ -28,26 +28,26 @@ module test_tb;
     reg clk;
     reg rst_n;
 
-    // Giao tiếp Instruction
-    reg         ifbuf_ins_vld_i;
-    reg [31:0]  ifbuf_ins_ifbaddr_i;
-    reg [8:0]   ifbuf_ins_width_i;
-    reg [10:0]  ifbuf_ins_channel_i; 
-    reg [8:0]   ifbuf_ins_ifsize_i;  
-    reg [10:0]  ifbuf_ins_ifblock_i; 
-    reg [10:0]  ifbuf_ins_oftiles_i; 
-    reg [10:0]  ifbuf_ins_iftiles_i; 
-    reg [8:0]   ifbuf_ins_wp_i;      
-    reg [7:0]   ifbuf_ins_ifc_zp_i;
-    reg [1:0]   ifbuf_ins_padding_i;
-    wire        ifbuf_ins_rdy_o;
+    // Giao tiếp inftruction
+    reg         ifbuf_inf_vld_i;
+    reg [31:0]  ifbuf_inf_ifbaddr_i;
+    reg [8:0]   ifbuf_inf_width_i;
+    reg [10:0]  ifbuf_inf_channel_i; 
+    reg [8:0]   ifbuf_inf_ifsize_i;  
+    reg [10:0]  ifbuf_inf_ifblock_i; 
+    reg [10:0]  ifbuf_inf_oftiles_i; 
+    reg [10:0]  ifbuf_inf_iftiles_i; 
+    reg [8:0]   ifbuf_inf_wp_i;      
+    reg [7:0]   ifbuf_inf_ifc_zp_i;
+    reg [1:0]   ifbuf_inf_padding_i;
+    wire        ifbuf_inf_rdy_o;
 
-    reg         comp_ins_dw_i;
-    reg [3:0]   comp_ins_hf_i;
-    reg [1:0]   comp_ins_stride_i;
-    reg [1:0]   comp_ins_padding_i;
-    reg [7:0]   comp_ins_ifc_zp_i_comp;
-    reg [7:0]   comp_ins_fltc_zp_i;
+    reg         comp_inf_dw_i;
+    reg [3:0]   comp_inf_hf_i;
+    reg [1:0]   comp_inf_stride_i;
+    reg [1:0]   comp_inf_padding_i;
+    reg [7:0]   comp_inf_ifc_zp_i_comp;
+    reg [7:0]   comp_inf_fltc_zp_i;
 
     // Giao tiếp DMA
     reg                  ifbuf_dma_rdycfg_i;
@@ -74,7 +74,7 @@ module test_tb;
     integer toggle_done;
 
     // ==========================================
-    // 3. DUT INSTANTIATION
+    // 3. DUT infTANTIATION
     // ==========================================
     test #(
         .DATA_WIDTH(DATA_WIDTH), .K(K), .IFBUF_DEPTH(IFBUF_DEPTH),
@@ -82,16 +82,16 @@ module test_tb;
         .M(M), .PPDEPTH(PPDEPTH), .FIFO_DEPTH(FIFO_DEPTH)
     ) uut (
         .clk(clk), .rst_n(rst_n),
-        .ifbuf_ins_vld_i(ifbuf_ins_vld_i), .ifbuf_ins_ifbaddr_i(ifbuf_ins_ifbaddr_i),
-        .ifbuf_ins_width_i(ifbuf_ins_width_i), .ifbuf_ins_channel_i(ifbuf_ins_channel_i),
-        .ifbuf_ins_ifsize_i(ifbuf_ins_ifsize_i), .ifbuf_ins_ifblock_i(ifbuf_ins_ifblock_i),
-        .ifbuf_ins_oftiles_i(ifbuf_ins_oftiles_i), .ifbuf_ins_iftiles_i(ifbuf_ins_iftiles_i),
-        .ifbuf_ins_wp_i(ifbuf_ins_wp_i), .ifbuf_ins_ifc_zp_i(ifbuf_ins_ifc_zp_i),
-        .ifbuf_ins_padding_i(ifbuf_ins_padding_i), .ifbuf_ins_rdy_o(ifbuf_ins_rdy_o),
+        .ifbuf_inf_vld_i(ifbuf_inf_vld_i), .ifbuf_inf_ifbaddr_i(ifbuf_inf_ifbaddr_i),
+        .ifbuf_inf_width_i(ifbuf_inf_width_i), .ifbuf_inf_channel_i(ifbuf_inf_channel_i),
+        .ifbuf_inf_ifsize_i(ifbuf_inf_ifsize_i), .ifbuf_inf_ifblock_i(ifbuf_inf_ifblock_i),
+        .ifbuf_inf_oftiles_i(ifbuf_inf_oftiles_i), .ifbuf_inf_iftiles_i(ifbuf_inf_iftiles_i),
+        .ifbuf_inf_wp_i(ifbuf_inf_wp_i), .ifbuf_inf_ifc_zp_i(ifbuf_inf_ifc_zp_i),
+        .ifbuf_inf_padding_i(ifbuf_inf_padding_i), .ifbuf_inf_rdy_o(ifbuf_inf_rdy_o),
         
-        .comp_ins_dw_i(comp_ins_dw_i), .comp_ins_hf_i(comp_ins_hf_i),
-        .comp_ins_stride_i(comp_ins_stride_i), .comp_ins_padding_i(comp_ins_padding_i),
-        .comp_ins_ifc_zp_i(comp_ins_ifc_zp_i_comp), .comp_ins_fltc_zp_i(comp_ins_fltc_zp_i),
+        .comp_inf_dw_i(comp_inf_dw_i), .comp_inf_hf_i(comp_inf_hf_i),
+        .comp_inf_stride_i(comp_inf_stride_i), .comp_inf_padding_i(comp_inf_padding_i),
+        .comp_inf_ifc_zp_i(comp_inf_ifc_zp_i_comp), .comp_inf_fltc_zp_i(comp_inf_fltc_zp_i),
         
         .ifbuf_dma_rdycfg_i(ifbuf_dma_rdycfg_i), .ifbuf_dma_vld_i(ifbuf_dma_vld_i),
         .ifbuf_dma_data_i(ifbuf_dma_data_i), .ifbuf_dma_tlast_i(ifbuf_dma_tlast_i),
@@ -183,13 +183,13 @@ module test_tb;
 
     initial begin
         rst_n = 0;
-        ifbuf_ins_vld_i = 0; ifbuf_ins_ifbaddr_i = 0; ifbuf_ins_width_i = 0;
-        ifbuf_ins_channel_i = 0; ifbuf_ins_ifsize_i = 0; ifbuf_ins_ifblock_i = 0;
-        ifbuf_ins_oftiles_i = 0; ifbuf_ins_iftiles_i = 0; ifbuf_ins_wp_i = 0;
-        ifbuf_ins_ifc_zp_i = 0; ifbuf_ins_padding_i = 0;
+        ifbuf_inf_vld_i = 0; ifbuf_inf_ifbaddr_i = 0; ifbuf_inf_width_i = 0;
+        ifbuf_inf_channel_i = 0; ifbuf_inf_ifsize_i = 0; ifbuf_inf_ifblock_i = 0;
+        ifbuf_inf_oftiles_i = 0; ifbuf_inf_iftiles_i = 0; ifbuf_inf_wp_i = 0;
+        ifbuf_inf_ifc_zp_i = 0; ifbuf_inf_padding_i = 0;
 
-        comp_ins_dw_i = 0; comp_ins_hf_i = 0; comp_ins_stride_i = 0;
-        comp_ins_padding_i = 0; comp_ins_ifc_zp_i_comp = 0; comp_ins_fltc_zp_i = 0;
+        comp_inf_dw_i = 0; comp_inf_hf_i = 0; comp_inf_stride_i = 0;
+        comp_inf_padding_i = 0; comp_inf_ifc_zp_i_comp = 0; comp_inf_fltc_zp_i = 0;
 
         comp_fltbuf_vld_i = 0; comp_fltbuf_data_i = 0; comp_fltbuf_done_pass_i = 0;
         
@@ -203,35 +203,35 @@ module test_tb;
     end
 
     // ==========================================
-    // 6. CẤU HÌNH INSTRUCTION
+    // 6. CẤU HÌNH infTRUCTION
     // ==========================================
-    task setup_instructions;
+    task setup_inftructions;
         begin
-            comp_ins_dw_i = 0;
-            comp_ins_hf_i = 3;       
-            comp_ins_stride_i = 1;   
-            comp_ins_padding_i = 1;  
-            comp_ins_ifc_zp_i_comp = 0;
-            comp_ins_fltc_zp_i = 0;
+            comp_inf_dw_i = 0;
+            comp_inf_hf_i = 3;       
+            comp_inf_stride_i = 1;   
+            comp_inf_padding_i = 1;  
+            comp_inf_ifc_zp_i_comp = 0;
+            comp_inf_fltc_zp_i = 0;
 
-            ifbuf_ins_ifbaddr_i = 32'h1000; // Map với địa chỉ init_memory
-            ifbuf_ins_width_i   = 13;   
-            ifbuf_ins_ifblock_i = 1;   
-            ifbuf_ins_channel_i = 1;    
+            ifbuf_inf_ifbaddr_i = 32'h1000; // Map với địa chỉ init_memory
+            ifbuf_inf_width_i   = 13;   
+            ifbuf_inf_ifblock_i = 1;   
+            ifbuf_inf_channel_i = 1;    
             
             // Ifsize = Height * Aligned_Width = 13 * 14 = 182
-            ifbuf_ins_ifsize_i  = 182;  
+            ifbuf_inf_ifsize_i  = 182;  
             
-            ifbuf_ins_oftiles_i = 4;    
-            ifbuf_ins_iftiles_i = 1;    
+            ifbuf_inf_oftiles_i = 4;    
+            ifbuf_inf_iftiles_i = 1;    
             
-            ifbuf_ins_padding_i = 1;
-            ifbuf_ins_wp_i      = 14;   
+            ifbuf_inf_padding_i = 1;
+            ifbuf_inf_wp_i      = 14;   
             
-            ifbuf_ins_vld_i = 1'b1;
+            ifbuf_inf_vld_i = 1'b1;
             @(posedge clk);
-            while (!ifbuf_ins_rdy_o) @(posedge clk);
-            ifbuf_ins_vld_i = 1'b0;
+            while (!ifbuf_inf_rdy_o) @(posedge clk);
+            ifbuf_inf_vld_i = 1'b0;
             @(posedge clk);
         end
     endtask
@@ -247,7 +247,7 @@ module test_tb;
         reg [DATA_WIDTH-1:0] temp_val;
         reg [K*M-1:0] temp_vld;
         begin
-            total = comp_ins_hf_i * comp_ins_hf_i;
+            total = comp_inf_hf_i * comp_inf_hf_i;
             for(j = 0; j < num_chans; j = j + 1) begin 
                 for(n = 0; n < num_filter; n = n + 1) begin
                     for(i = 0; i < total; i = i + 1) begin
@@ -293,8 +293,8 @@ module test_tb;
             // 1. Khởi tạo dữ liệu vào bộ nhớ
             init_memory(32'h1000, 13, 13, 1);
             
-            // 2. Chốt Instruction
-            setup_instructions();
+            // 2. Chốt inftruction
+            setup_inftructions();
             
             $display("[%0t] Khởi động tiến trình xử lý Layer...", $time);
             // Kích hoạt nạp Filter. Nhờ tín hiệu DMA config từ DUT, Ifmap sẽ tự động chạy song song.

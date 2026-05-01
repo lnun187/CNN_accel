@@ -43,7 +43,7 @@ module ping_pong_fifo_tb;
     wire empty_o;
     wire end_data_o;
 
-    // Instantiate the Device Under Test (DUT)
+    // inftantiate the Device Under Test (DUT)
     pu_ping_pong_fifo #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)

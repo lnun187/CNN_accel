@@ -16,9 +16,9 @@ module ifmap_cache_tb;
     reg clk;
     reg rst_n;
 
-    // INSTRUCTION
-    reg [3:0] ifc_ins_hf_i;
-    reg [1:0] ifc_ins_stride_i;
+    // infTRUCTION
+    reg [3:0] ifc_inf_hf_i;
+    reg [1:0] ifc_inf_stride_i;
 
     // IFMAP BUFFER (INPUT)
     reg [K*DATA_WIDTH-1:0] ifc_ifbuf_data_i;
@@ -39,7 +39,7 @@ module ifmap_cache_tb;
     wire ifc_pu_end_layer_o;
 
     // ==========================================
-    // 3. DUT INSTANTIATION
+    // 3. DUT infTANTIATION
     // ==========================================
     ifmap_cache #(
         .DATA_WIDTH(DATA_WIDTH),
@@ -48,8 +48,8 @@ module ifmap_cache_tb;
     ) uut (
         .clk(clk),
         .rst_n(rst_n),
-        .ifc_ins_hf_i(ifc_ins_hf_i),
-        .ifc_ins_stride_i(ifc_ins_stride_i),
+        .ifc_inf_hf_i(ifc_inf_hf_i),
+        .ifc_inf_stride_i(ifc_inf_stride_i),
         .ifc_ifbuf_data_i(ifc_ifbuf_data_i),
         .ifc_ifbuf_tlast_i(ifc_ifbuf_tlast_i),
         .ifc_ifbuf_end_row_circle_i(ifc_ifbuf_end_row_circle_i),
@@ -78,8 +78,8 @@ module ifmap_cache_tb;
     initial begin
         // Initialize signals
         rst_n = 0;
-        ifc_ins_hf_i = 0;
-        ifc_ins_stride_i = 0;
+        ifc_inf_hf_i = 0;
+        ifc_inf_stride_i = 0;
         
         ifc_ifbuf_vld_i = 0;
         ifc_ifbuf_data_i = 0;
@@ -128,9 +128,9 @@ module ifmap_cache_tb;
             $display(">>> Start Layer: W=%0d, P=%0d, S=%0d, K=%0d | Output Width=%0d, Pos_last=%0d", 
                      W, P, S, K_filter, O_val, Pos_last);
 
-            // Cập nhật tín hiệu instruction
-            ifc_ins_hf_i = K_filter[3:0];
-            ifc_ins_stride_i = S[1:0];
+            // Cập nhật tín hiệu inftruction
+            ifc_inf_hf_i = K_filter[3:0];
+            ifc_inf_stride_i = S[1:0];
             @(posedge clk); 
 
             // Bật Valid xuyên suốt quá trình truyền

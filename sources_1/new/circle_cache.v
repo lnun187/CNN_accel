@@ -29,7 +29,7 @@ module circle_cache #(
     input              wr_en,
     input              rd_en,
     input              clr,
-    input  [3:0]       ins_hf_i,
+    input  [3:0]       inf_hf_i,
     input  [WIDTH-1:0] zp,
     input  [WIDTH-1:0] din,
     output [WIDTH-1:0] dout,
@@ -51,7 +51,7 @@ module circle_cache #(
     wire [3:0]      rd_ptr_next;
     wire [3:0]      wr_ptr_next;
 
-    assign rd_ptr_next = (rd_ptr >= ins_hf_i - 4'd1) ? 4'd0 : (rd_ptr + 4'd1);
+    assign rd_ptr_next = (rd_ptr >= inf_hf_i - 4'd1) ? 4'd0 : (rd_ptr + 4'd1);
     assign wr_ptr_next = wr_ptr + 4'd1;
 
     // ==========================================

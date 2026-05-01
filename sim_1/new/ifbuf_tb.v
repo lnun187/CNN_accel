@@ -31,22 +31,22 @@ module ifbuf_tb();
     reg         clk;
     reg         rst_n;
 
-    // Các tín hiệu Instruction Input
-    reg         ifbuf_ins_vld_i;
-    reg  [31:0] ifbuf_ins_ifbaddr_i;
-    reg  [8:0]  ifbuf_ins_width_i;
-    reg  [10:0] ifbuf_ins_channel_i;
-    reg  [3:0]  ifbuf_ins_ifparr_i;
-    reg  [3:0]  ifbuf_ins_ifparr_tail_i;
-    reg  [7:0]  ifbuf_ins_ifsize_i;
-    reg  [6:0]  ifbuf_ins_ifblock_i;
-    reg  [3:0]  ifbuf_ins_oftiles_i;
-    reg  [3:0]  ifbuf_ins_oftiles_tail_i;
-    reg  [6:0]  ifbuf_ins_iftiles_i;
-    reg  [8:0]  ifbuf_ins_wp_i;
-    reg  [1:0]  ifbuf_ins_padding_i;
-    reg  [7:0]  ifbuf_ins_ifc_zp_i;
-    wire        ifbuf_ins_rdy_o;
+    // Các tín hiệu inftruction Input
+    reg         ifbuf_inf_vld_i;
+    reg  [31:0] ifbuf_inf_ifbaddr_i;
+    reg  [8:0]  ifbuf_inf_width_i;
+    reg  [10:0] ifbuf_inf_channel_i;
+    reg  [3:0]  ifbuf_inf_ifparr_i;
+    reg  [3:0]  ifbuf_inf_ifparr_tail_i;
+    reg  [7:0]  ifbuf_inf_ifsize_i;
+    reg  [6:0]  ifbuf_inf_ifblock_i;
+    reg  [3:0]  ifbuf_inf_oftiles_i;
+    reg  [3:0]  ifbuf_inf_oftiles_tail_i;
+    reg  [6:0]  ifbuf_inf_iftiles_i;
+    reg  [8:0]  ifbuf_inf_wp_i;
+    reg  [1:0]  ifbuf_inf_padding_i;
+    reg  [7:0]  ifbuf_inf_ifc_zp_i;
+    wire        ifbuf_inf_rdy_o;
 
     // Các tín hiệu giao tiếp DMA (từ giả lập Memory/DMA tới DUT)
     reg         ifbuf_dma_rdycfg_i;
@@ -95,22 +95,22 @@ module ifbuf_tb();
         .clk                    (clk),
         .rst_n                  (rst_n),
         
-        // Giao tiếp Instruction
-        .ifbuf_ins_vld_i        (ifbuf_ins_vld_i),
-        .ifbuf_ins_ifbaddr_i    (ifbuf_ins_ifbaddr_i),
-        .ifbuf_ins_width_i      (ifbuf_ins_width_i),
-        .ifbuf_ins_channel_i    (ifbuf_ins_channel_i),
-        .ifbuf_ins_ifparr_i     (ifbuf_ins_ifparr_i),
-        .ifbuf_ins_ifparr_tail_i(ifbuf_ins_ifparr_tail_i),
-        .ifbuf_ins_ifsize_i     (ifbuf_ins_ifsize_i),
-        .ifbuf_ins_ifblock_i    (ifbuf_ins_ifblock_i),
-        .ifbuf_ins_oftiles_i    (ifbuf_ins_oftiles_i),
-        .ifbuf_ins_oftiles_tail_i(ifbuf_ins_oftiles_tail_i),
-        .ifbuf_ins_iftiles_i    (ifbuf_ins_iftiles_i),
-        .ifbuf_ins_wp_i         (ifbuf_ins_wp_i),
-        .ifbuf_ins_padding_i    (ifbuf_ins_padding_i),
-        .ifbuf_ins_ifc_zp_i     (ifbuf_ins_ifc_zp_i),
-        .ifbuf_ins_rdy_o        (ifbuf_ins_rdy_o),
+        // Giao tiếp inftruction
+        .ifbuf_inf_vld_i        (ifbuf_inf_vld_i),
+        .ifbuf_inf_ifbaddr_i    (ifbuf_inf_ifbaddr_i),
+        .ifbuf_inf_width_i      (ifbuf_inf_width_i),
+        .ifbuf_inf_channel_i    (ifbuf_inf_channel_i),
+        .ifbuf_inf_ifparr_i     (ifbuf_inf_ifparr_i),
+        .ifbuf_inf_ifparr_tail_i(ifbuf_inf_ifparr_tail_i),
+        .ifbuf_inf_ifsize_i     (ifbuf_inf_ifsize_i),
+        .ifbuf_inf_ifblock_i    (ifbuf_inf_ifblock_i),
+        .ifbuf_inf_oftiles_i    (ifbuf_inf_oftiles_i),
+        .ifbuf_inf_oftiles_tail_i(ifbuf_inf_oftiles_tail_i),
+        .ifbuf_inf_iftiles_i    (ifbuf_inf_iftiles_i),
+        .ifbuf_inf_wp_i         (ifbuf_inf_wp_i),
+        .ifbuf_inf_padding_i    (ifbuf_inf_padding_i),
+        .ifbuf_inf_ifc_zp_i     (ifbuf_inf_ifc_zp_i),
+        .ifbuf_inf_rdy_o        (ifbuf_inf_rdy_o),
 
         // Tín hiệu DMA
         .ifbuf_dma_rdycfg_i     (ifbuf_dma_rdycfg_i),
@@ -238,21 +238,21 @@ module ifbuf_tb();
         // Init signals
         rst_n               = 0;
         
-        // Cấu hình Ins
-        ifbuf_ins_vld_i     = 0;
-        ifbuf_ins_ifbaddr_i = 0;
-        ifbuf_ins_width_i   = 0;
-        ifbuf_ins_channel_i = 0;
-        ifbuf_ins_ifparr_i = 0;
-        ifbuf_ins_ifparr_tail_i = 0;
-        ifbuf_ins_ifsize_i  = 0;
-        ifbuf_ins_ifblock_i = 0;
-        ifbuf_ins_oftiles_i = 0;
-        ifbuf_ins_oftiles_tail_i = 0;
-        ifbuf_ins_iftiles_i = 0;
-        ifbuf_ins_wp_i      = 0;
-        ifbuf_ins_padding_i = 0;
-        ifbuf_ins_ifc_zp_i = 0;
+        // Cấu hình inf
+        ifbuf_inf_vld_i     = 0;
+        ifbuf_inf_ifbaddr_i = 0;
+        ifbuf_inf_width_i   = 0;
+        ifbuf_inf_channel_i = 0;
+        ifbuf_inf_ifparr_i = 0;
+        ifbuf_inf_ifparr_tail_i = 0;
+        ifbuf_inf_ifsize_i  = 0;
+        ifbuf_inf_ifblock_i = 0;
+        ifbuf_inf_oftiles_i = 0;
+        ifbuf_inf_oftiles_tail_i = 0;
+        ifbuf_inf_iftiles_i = 0;
+        ifbuf_inf_wp_i      = 0;
+        ifbuf_inf_padding_i = 0;
+        ifbuf_inf_ifc_zp_i = 0;
 
         // Reset
         #20 rst_n = 1;
@@ -265,29 +265,29 @@ module ifbuf_tb();
         // Khởi tạo bộ nhớ tại địa chỉ base = 32'h1000
         init_memory(32'h1000, TEST_WIDTH, TEST_WIDTH, TEST_CHANNEL);
 
-        // Chờ DUT rảnh rỗi và bắn Instruction vào
-        wait(ifbuf_ins_rdy_o);
+        // Chờ DUT rảnh rỗi và bắn inftruction vào
+        wait(ifbuf_inf_rdy_o);
         @(posedge clk);
-        ifbuf_ins_vld_i     <= 1;
-        ifbuf_ins_ifbaddr_i <= 32'h1000;
-        ifbuf_ins_width_i   <= TEST_WIDTH;
-        ifbuf_ins_channel_i <= TEST_CHANNEL;
-        ifbuf_ins_ifparr_i  <= TEST_IFPARR[3:0];
-        ifbuf_ins_ifparr_tail_i <= TEST_IFPARR_TAIL[3:0];
-        ifbuf_ins_ifsize_i  <= TEST_IFSIZE[7:0]; 
-        ifbuf_ins_ifblock_i <= TEST_BLOCK;
+        ifbuf_inf_vld_i     <= 1;
+        ifbuf_inf_ifbaddr_i <= 32'h1000;
+        ifbuf_inf_width_i   <= TEST_WIDTH;
+        ifbuf_inf_channel_i <= TEST_CHANNEL;
+        ifbuf_inf_ifparr_i  <= TEST_IFPARR[3:0];
+        ifbuf_inf_ifparr_tail_i <= TEST_IFPARR_TAIL[3:0];
+        ifbuf_inf_ifsize_i  <= TEST_IFSIZE[7:0]; 
+        ifbuf_inf_ifblock_i <= TEST_BLOCK;
         
         // Thêm các thông số mới cho ifbuf
-        ifbuf_ins_oftiles_i <= TEST_OFTILES[3:0];
-        ifbuf_ins_oftiles_tail_i <= TEST_OFTILES_TAIL[3:0];
-        ifbuf_ins_iftiles_i <= TEST_IFTILES[6:0];
-        ifbuf_ins_wp_i      <= TEST_WP;
-        ifbuf_ins_padding_i <= TEST_PADDING;
-        ifbuf_ins_ifc_zp_i <= TEST_IFC_ZP[7:0];
+        ifbuf_inf_oftiles_i <= TEST_OFTILES[3:0];
+        ifbuf_inf_oftiles_tail_i <= TEST_OFTILES_TAIL[3:0];
+        ifbuf_inf_iftiles_i <= TEST_IFTILES[6:0];
+        ifbuf_inf_wp_i      <= TEST_WP;
+        ifbuf_inf_padding_i <= TEST_PADDING;
+        ifbuf_inf_ifc_zp_i <= TEST_IFC_ZP[7:0];
 
         // Kéo vld xuống sau 1 clock
         @(posedge clk);
-        ifbuf_ins_vld_i     <= 0;
+        ifbuf_inf_vld_i     <= 0;
 
         // Chạy một khoảng thời gian để quan sát tín hiệu trên waveform
         #20000;

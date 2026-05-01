@@ -31,34 +31,36 @@ module comp_pu #(
     input                   clk,
     input                   rst_n,
 
-    //from instruction
-    input   [3:0]           pu_ins_hf_i,
-    input   [2:0]           pu_ins_stride_i,
-    input   [1:0]           pu_ins_padding_i,
-    input   [WIDTH-1:0]     pu_ins_ifc_zp_i,
-    input   [WIDTH-1:0]     pu_ins_fltc_zp_i,
+    //from inftruction
+    input           [3:0]           pu_inf_hf_i,
+    input           [2:0]           pu_inf_stride_i,
+    input           [1:0]           pu_inf_padding_i,
+    input   signed  [WIDTH-1:0]     pu_inf_ifc_zp_i,
+    input   signed  [WIDTH-1:0]     pu_inf_fltc_zp_i,
     //from ifmap cache
-    input                   pu_ifc_end_row_circle_i,
-    input                   pu_ifc_end_row_i,
-    input                   pu_ifc_end_depth_i,
-    input                   pu_ifc_end_layer_i,
-    input                   pu_ifc_vld_i,
-    input   [K*WIDTH-1:0]   pu_ifc_data_i,
-    output                  pu_ifc_rdy_o,
+    input                           pu_ifc_end_row_circle_i,
+    input                           pu_ifc_end_row_i,
+    input                           pu_ifc_end_depth_i,
+    input                           pu_ifc_end_layer_i,
+    input                           pu_ifc_end_layer_real_i,
+    input                           pu_ifc_vld_i,
+    input           [K*WIDTH-1:0]   pu_ifc_data_i,
+    output                          pu_ifc_rdy_o,
     //from and to filter buf
-    input   [K-1:0]         pu_fltbuf_vld_i,
-    input   [K*WIDTH-1:0]   pu_fltbuf_data_i,
-    input                   pu_fltbuf_done_pass_i,
-    output                  pu_fltbuf_rdy_o,
-    output                  pu_comp_vld_o,
-    input                   pu_comp_vld_i,
+    input           [K-1:0]         pu_fltbuf_vld_i,
+    input           [K*WIDTH-1:0]   pu_fltbuf_data_i,
+    input                           pu_fltbuf_done_pass_i,
+    output                          pu_fltbuf_rdy_o,
+    output                          pu_comp_vld_o,
+    input                           pu_comp_vld_i,
     //from and to scale
-    input                   pu_swap_fltc_i,
-    output                  pu_swap_fltc_o,
-    input                   pu_scale_rdy_i,
-    output                  pu_scale_vld_o,
-    output  [ACC_WIDTH-1:0] pu_scale_data_o,
-    output                  pu_pa_done_compute_o
+    input                           pu_swap_fltc_i,
+    output                          pu_swap_fltc_o,
+    input                           pu_scale_rdy_i,
+    output                          pu_scale_vld_o,
+    output          [ACC_WIDTH-1:0] pu_scale_data_o,
+    output                          pu_pa_done_compute_o,
+    output                          pu_pa_done_compute_layer_o
     );
 
     wire                            clr_ch_flt;
@@ -68,7 +70,7 @@ module comp_pu #(
     wire    [K-1:0]                     fltc_fltbuf_vld_i;
     wire    [K*WIDTH-1:0]               fltc_fltbuf_data_i;
     wire    [K-1:0]                     fltc_fltbuf_rdy_o;
-    wire    [3:0]                       fltc_ins_hf_i;
+    wire    [3:0]                       fltc_inf_hf_i;
     wire                                fltc_fltbuf_done_pass_i;
     wire                                fltc_pe_rdy_i;
     wire                                fltc_pu_clr_ch_flt_i;
@@ -76,10 +78,11 @@ module comp_pu #(
     reg     [PE_PER_PU-1:0]             fltc_pe_vld_o;
     wire    [K*PE_PER_PU*WIDTH-1:0]     fltc_pe_data_o;
 
-    wire    [3:0]                       pe_ins_hf_i;
+    wire    [3:0]                       pe_inf_hf_i;
     wire                                pe_ifc_end_row_circle_i;
     wire                                pe_ifc_end_depth_i;
     wire                                pe_ifc_end_layer_i;
+    wire                                pe_ifc_end_layer_real_i;
     wire                                pe_ifc_vld_i;
     wire    [K*WIDTH-1:0]               pe_ifc_data_i;
     wire    [PE_PER_PU-1:0]             pe_fltc_vld_i;
@@ -91,8 +94,8 @@ module comp_pu #(
     wire    [PE_PER_PU-1:0]             pe_pp_cur_rd_o;
     wire    [PE_PER_PU-1:0]             pe_pp_wr_o;
     wire    [PE_PER_PU*ACC_WIDTH-1:0]   pe_pp_data_o;
-    wire    [WIDTH-1:0]                 pe_ifc_zp_i;
-    wire    [WIDTH-1:0]                 pe_fltc_zp_i;
+    wire    signed  [WIDTH-1:0]         pe_ifc_zp_i;
+    wire    signed  [WIDTH-1:0]         pe_fltc_zp_i;
 
     wire                                pp_pu_id_i;
     wire    [PE_PER_PU-1:0]             pp_pe_wr_en_i;
@@ -105,12 +108,14 @@ module comp_pu #(
     wire    [ACC_WIDTH*PE_PER_PU-1:0]   pp_pe_cwc_data_b_o;
     wire    [PE_PER_PU-1:0]             pp_cwc_end_data_o;
     wire    [PE_PER_PU-1:0]             pe_cwc_end_layer_o;
+    wire    [PE_PER_PU-1:0]             pe_cwc_end_layer_real_o;
     wire    [PE_PER_PU-1:0]             pe_cwc_swap_en_o;
 
-    wire    [3:0]                       cwc_ins_hf_i;
-    wire    [2:0]                       cwc_ins_stride_i;
-    wire    [1:0]                       cwc_ins_padding_i;
+    wire    [3:0]                       cwc_inf_hf_i;
+    wire    [2:0]                       cwc_inf_stride_i;
+    wire    [1:0]                       cwc_inf_padding_i;
     wire                                cwc_pe_end_layer_nxt_i;
+    wire                                cwc_pe_end_layer_real_nxt_i;
     wire    [ACC_WIDTH*PE_PER_PU-1:0]   cwc_pp_data_i;
     wire    [PE_PER_PU-1:0]             cwc_pp_vld_i;
     wire    [K-1:0]                     swap_fltc_o;
@@ -124,19 +129,20 @@ module comp_pu #(
     wire                                cwc_scale_vld_o;
     wire    [ACC_WIDTH-1:0]             cwc_scale_data_o;
     wire                                cwc_pu_done_compute_o;
+    wire                                cwc_pu_done_compute_layer_o;
 
-    reg     [3:0]                       pu_ins_hf_reg;
-    reg     [2:0]                       pu_ins_stride_reg;
-    reg     [1:0]                       pu_ins_padding_reg;
-    reg     [WIDTH-1:0]                 pu_ins_ifc_zp_reg;
-    reg     [WIDTH-1:0]                 pu_ins_fltc_zp_reg;
+    reg     [3:0]                       pu_inf_hf_reg;
+    reg     [2:0]                       pu_inf_stride_reg;
+    reg     [1:0]                       pu_inf_padding_reg;
+    reg     [WIDTH-1:0]                 pu_inf_ifc_zp_reg;
+    reg     [WIDTH-1:0]                 pu_inf_fltc_zp_reg;
 
     always @(posedge clk) begin
-        pu_ins_hf_reg       <= pu_ins_hf_i;
-        pu_ins_stride_reg   <= pu_ins_stride_i;
-        pu_ins_padding_reg  <= pu_ins_padding_i;
-        pu_ins_ifc_zp_reg   <= pu_ins_ifc_zp_i;
-        pu_ins_fltc_zp_reg  <= pu_ins_fltc_zp_i;
+        pu_inf_hf_reg       <= pu_inf_hf_i;
+        pu_inf_stride_reg   <= pu_inf_stride_i;
+        pu_inf_padding_reg  <= pu_inf_padding_i;
+        pu_inf_ifc_zp_reg   <= pu_inf_ifc_zp_i;
+        pu_inf_fltc_zp_reg  <= pu_inf_fltc_zp_i;
     end
 
     assign clr_ch_flt               = pu_ifc_end_row_i && pe_ifc_fltc_rdy_o[0];
@@ -145,6 +151,7 @@ module comp_pu #(
     assign pu_scale_vld_o           = cwc_scale_vld_o;
     assign pu_scale_data_o          = cwc_scale_data_o;
     assign pu_pa_done_compute_o     = cwc_pu_done_compute_o;
+    assign pu_pa_done_compute_layer_o = cwc_pu_done_compute_layer_o;
     assign pu_swap_fltc_o           = swap_fltc_o[0];
     
     always @(posedge clk) begin
@@ -158,7 +165,7 @@ module comp_pu #(
     assign fltc_fltbuf_vld_i        = pu_fltbuf_vld_i;
     assign fltc_fltbuf_done_pass_i  = pu_fltbuf_done_pass_i;
     assign fltc_fltbuf_data_i       = pu_fltbuf_data_i;
-    assign fltc_ins_hf_i            = pu_ins_hf_reg;
+    assign fltc_inf_hf_i            = pu_inf_hf_reg;
     assign fltc_pu_clr_ch_flt_i     = clr_ch_flt;
     assign fltc_pe_rdy_i            = pe_ifc_fltc_rdy_o[0];
     
@@ -175,9 +182,9 @@ module comp_pu #(
             .fltc_fltbuf_vld_i          (fltc_fltbuf_vld_i[j]),
             .fltc_fltbuf_done_pass_i    (fltc_fltbuf_done_pass_i),
             .fltc_fltbuf_data_i         (fltc_fltbuf_data_i[j*WIDTH +: WIDTH]),
-            .zp                         (pu_ins_fltc_zp_reg),
+            .zp                         (pu_inf_fltc_zp_reg),
             .fltc_fltbuf_rdy_o          (fltc_fltbuf_rdy_o[j]),
-            .fltc_ins_hf_i              (fltc_ins_hf_i),
+            .fltc_inf_hf_i              (fltc_inf_hf_i),
             .swap_fltc_i                (pu_swap_fltc_i),
             .swap_fltc_o                (swap_fltc_o[j]),
             
@@ -197,12 +204,13 @@ module comp_pu #(
         end
     end
 
-    assign pe_ifc_zp_i                  = pu_ins_ifc_zp_reg;
-    assign pe_fltc_zp_i                 = pu_ins_fltc_zp_reg;
-    assign pe_ins_hf_i                  = pu_ins_hf_reg;
+    assign pe_ifc_zp_i                  = pu_inf_ifc_zp_reg;
+    assign pe_fltc_zp_i                 = pu_inf_fltc_zp_reg;
+    assign pe_inf_hf_i                  = pu_inf_hf_reg;
     assign pe_ifc_end_row_circle_i      = pu_ifc_end_row_circle_i;
     assign pe_ifc_end_depth_i           = pu_ifc_end_depth_i;
     assign pe_ifc_end_layer_i           = pu_ifc_end_layer_i;
+    assign pe_ifc_end_layer_real_i      = pu_ifc_end_layer_real_i;
     assign pe_ifc_vld_i                 = pu_ifc_vld_i;
     assign pe_ifc_data_i                = pu_ifc_data_i;
     assign pe_fltc_vld_i                = fltc_pe_vld_o;
@@ -246,11 +254,12 @@ module comp_pu #(
             ) comp_pe_uut (
                 .clk                        (clk),
                 .rst_n                      (rst_n),
-                .pe_ins_hf_i                (pe_ins_hf_i), 
+                .pe_inf_hf_i                (pe_inf_hf_i), 
 
                 .pe_ifc_end_row_circle_i    (pe_ifc_end_row_circle_i),
                 .pe_ifc_end_depth_i         (pe_ifc_end_depth_i),
                 .pe_ifc_end_layer_i         (pe_ifc_end_layer_i),
+                .pe_ifc_end_layer_real_i    (pe_ifc_end_layer_real_i),
                 .pe_ifc_vld_i               (pe_ifc_vld_i),
                 .pe_ifc_data_i              (pe_ifc_data_i),
                 .pe_ifc_zp_i                (pe_ifc_zp_i),
@@ -267,6 +276,7 @@ module comp_pu #(
                 .pe_pp_wr_o                 (pe_pp_wr_o[i]),
                 .pe_pp_data_o               (pe_pp_data_o[i*ACC_WIDTH +: ACC_WIDTH]),
                 .pe_cwc_end_layer_o         (pe_cwc_end_layer_o[i]),
+                .pe_cwc_end_layer_real_o    (pe_cwc_end_layer_real_o[i]),
                 .pe_cwc_swap_en_o           (pe_cwc_swap_en_o[i])
             );
 
@@ -292,10 +302,11 @@ module comp_pu #(
 
     
 
-    assign cwc_ins_hf_i             = pu_ins_hf_reg;
-    assign cwc_ins_stride_i         = pu_ins_stride_reg;
-    assign cwc_ins_padding_i        = pu_ins_padding_reg;
+    assign cwc_inf_hf_i             = pu_inf_hf_reg;
+    assign cwc_inf_stride_i         = pu_inf_stride_reg;
+    assign cwc_inf_padding_i        = pu_inf_padding_reg;
     assign cwc_pe_end_layer_nxt_i   = pe_cwc_end_layer_o[0];
+    assign cwc_pe_end_layer_real_nxt_i   = pe_cwc_end_layer_real_o[0];
     assign cwc_pp_data_i            = pp_pe_cwc_data_b_o;
     assign cwc_pp_vld_i             = pp_pe_vld_o;
     assign cwc_pp_end_data_i        = pp_cwc_end_data_o;
@@ -308,10 +319,11 @@ module comp_pu #(
     ) cwc_uut (
         .clk                        (clk),
         .rst_n                      (rst_n),
-        .cwc_ins_hf_i               (cwc_ins_hf_i),
-        .cwc_ins_stride_i           (cwc_ins_stride_i),
-        .cwc_ins_padding_i          (cwc_ins_padding_i),
+        .cwc_inf_hf_i               (cwc_inf_hf_i),
+        .cwc_inf_stride_i           (cwc_inf_stride_i),
+        .cwc_inf_padding_i          (cwc_inf_padding_i),
         .cwc_pe_end_layer_nxt_i     (cwc_pe_end_layer_nxt_i),
+        .cwc_pe_end_layer_real_nxt_i(cwc_pe_end_layer_real_nxt_i),
         
         .cwc_pp_data_i              (cwc_pp_data_i),
         .cwc_pp_vld_i               (cwc_pp_vld_i),
@@ -324,7 +336,8 @@ module comp_pu #(
         .cwc_scale_rdy_i            (cwc_scale_rdy_i),
         .cwc_scale_vld_o            (cwc_scale_vld_o),
         .cwc_scale_data_o           (cwc_scale_data_o),
-        .cwc_pu_done_compute_o      (cwc_pu_done_compute_o)
+        .cwc_pu_done_compute_o      (cwc_pu_done_compute_o),
+        .cwc_pu_done_compute_layer_o(cwc_pu_done_compute_layer_o)
     );
 // =========================================================================
     // Lint Warning Suppression (Dummy Sink)
@@ -336,6 +349,7 @@ module comp_pu #(
         1'b0,                                                               // Pad to ensure reduction AND works cleanly
         fltc_fltbuf_rdy_o[K-1:1],                                           // Unused bits 1 to K-1
         pe_cwc_end_layer_o[PE_PER_PU-1:1],                                  // Unused bits 1 to PE_PER_PU-1
+        pe_cwc_end_layer_real_o[PE_PER_PU-1:1],
         pe_cwc_swap_en_o[PE_PER_PU-1:1],                                    // Unused bits 1 to PE_PER_PU-1
         pe_ifc_fltc_rdy_o[PE_PER_PU-1:1],                                   // Unused bits 1 to PE_PER_PU-1
         pe_pp_pre_data_i[PE_PER_PU*ACC_WIDTH-1 : (PE_PER_PU-1)*ACC_WIDTH],  // Unused bits from the final PE 

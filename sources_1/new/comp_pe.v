@@ -9,11 +9,12 @@ module comp_pe#(
     input                           clk,
     input                           rst_n,
 
-    input       [3:0]               pe_ins_hf_i,
+    input       [3:0]               pe_inf_hf_i,
 
     input                           pe_ifc_end_row_circle_i,
     input                           pe_ifc_end_depth_i,
     input                           pe_ifc_end_layer_i,
+    input                           pe_ifc_end_layer_real_i,
     input                           pe_ifc_vld_i,
     input       [K*WIDTH-1:0]       pe_ifc_data_i,
     // Các input lượng tử hóa: signed int8
@@ -32,6 +33,7 @@ module comp_pe#(
     output  reg                     pe_pp_wr_o,
     output signed [ACC_WIDTH-1:0]   pe_pp_data_o,
     output  reg                     pe_cwc_end_layer_o,
+    output  reg                     pe_cwc_end_layer_real_o,
     output                          pe_cwc_swap_en_o
 );
     localparam STAGES = $clog2(2*K) + 1; //current design has 6 STAGES (+ 1 STAGE at data_out)
@@ -43,6 +45,7 @@ module comp_pe#(
     reg                             end_row;
     reg         [STAGES - 1 : 0]    end_depth;
     reg         [STAGES - 1 : 0]    end_layer;
+    reg         [STAGES - 1 : 0]    end_layer_real;
     reg         [STAGES - 1 : 0]    data_vld;
     reg signed [ACC_WIDTH-1:0]      pp_data [0:STAGES - 3];
     reg                             is_row_0;
@@ -88,6 +91,7 @@ module comp_pe#(
             pe_pp_cur_rd_o      <= 0;
             pe_pp_wr_o          <= 0;
             pe_cwc_end_layer_o  <= 0;
+            pe_cwc_end_layer_real_o  <= 0;
         end else begin
             if(end_depth[STAGES-1] && pe_pp_vld_i)  en_compute <= 0; //nếu hàng cuối cùng và chưa trống thì không hút nữa
             else if(!pe_pp_vld_i)                   en_compute <= 1;
@@ -96,9 +100,9 @@ module comp_pe#(
 
             swap_en <= !pe_pp_vld_i && (end_depth[STAGES-1] || !en_compute);
 
-            if(data_vld[0] && en_compute) count_rd <= (count_rd == pe_ins_hf_i - 1) ? 0 : count_rd + 1;
+            if(data_vld[0] && en_compute) count_rd <= (count_rd == pe_inf_hf_i - 1) ? 0 : count_rd + 1;
 
-            if(data_vld[STAGES-1] && en_compute) count_wr <= (count_wr == pe_ins_hf_i - 1) ? 0 : count_wr + 1;
+            if(data_vld[STAGES-1] && en_compute) count_wr <= (count_wr == pe_inf_hf_i - 1) ? 0 : count_wr + 1;
 
             if(end_layer[0]) is_row_0 <= 1'b1;
             else if(end_row) is_row_0 <= 0;
@@ -106,12 +110,14 @@ module comp_pe#(
             if(end_depth[0]) is_channel_0 <= 1'b1;
             else if(end_row) is_channel_0 <= 0;
 
-            pe_pp_pre_rd_o  <= !is_row_0 && is_channel_0 && !(|count_rd) && data_vld[0] && |(ID % pe_ins_hf_i) && en_compute;
+            pe_pp_pre_rd_o  <= !is_row_0 && is_channel_0 && !(|count_rd) && data_vld[0] && |(ID % pe_inf_hf_i) && en_compute;
             pe_pp_cur_rd_o  <= !is_channel_0 && !(|count_rd) && data_vld[0] && en_compute;
-            pe_pp_wr_o      <= (count_wr == pe_ins_hf_i - 1) && data_vld[STAGES-1] && en_compute;
+            pe_pp_wr_o      <= (count_wr == pe_inf_hf_i - 1) && data_vld[STAGES-1] && en_compute;
 
             if(swap_en)                     pe_cwc_end_layer_o <= 0;
             else if(end_layer[STAGES-1])    pe_cwc_end_layer_o <= 1;
+            if(swap_en)                     pe_cwc_end_layer_real_o <= 0;
+            else if(end_layer_real[STAGES-1])    pe_cwc_end_layer_real_o <= 1;
         end
     end
 
@@ -123,15 +129,18 @@ module comp_pe#(
             end_row                 <= 0;
             end_depth[STAGES-1:0]   <= 0;
             end_layer[STAGES-1:0]   <= 0;
+            end_layer_real[STAGES-1:0]   <= 0;
             data_vld[STAGES-1:0]    <= 0;
         end else if(en_compute) begin
             end_row         <= pe_ifc_end_row_circle_i;
             end_depth[0]    <= pe_ifc_end_depth_i;
             end_layer[0]    <= pe_ifc_end_layer_i;
+            end_layer_real[0]    <= pe_ifc_end_layer_real_i;
             data_vld[0]     <= pe_ifc_fltc_rdy_o;
             for (stage = 1; stage < STAGES; stage = stage + 1) begin
                 end_depth[stage]    <= end_depth[stage-1];
                 end_layer[stage]    <= end_layer[stage-1];
+                end_layer_real[stage]    <= end_layer_real[stage-1];
                 data_vld[stage]     <= data_vld[stage-1];
             end
         end
@@ -200,7 +209,7 @@ module comp_pe#(
 
     always @(posedge clk) begin
         if(en_compute) begin
-            add_data <= ((count_wr == pe_ins_hf_i - 1) ||
+            add_data <= ((count_wr == pe_inf_hf_i - 1) ||
                         ((count_wr == 0) && data_vld[STAGES-2] && !data_vld[STAGES-1]))
                         ? $signed(pp_data[STAGES-4])
                         : ($signed(add_data) + $signed(sum_pipe[STAGES-2][0]));

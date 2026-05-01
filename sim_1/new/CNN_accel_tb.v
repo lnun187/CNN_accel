@@ -44,58 +44,60 @@ module CNN_accel_tb;
   // =========================================================
   // DUT inputs / outputs
   // =========================================================
-  logic        ifbuf_ins_vld_i;
-  logic [31:0] ifbuf_ins_ifbaddr_i;
-  logic [7:0]  ifbuf_ins_ifwidth_i;
-  logic [10:0] ifbuf_ins_channel_i;
-  logic [3:0]  ifbuf_ins_ifparr_i;
-  logic [15:0]  ifbuf_ins_ifsize_i;
-  logic [6:0]  ifbuf_ins_ifblock_i;
-  logic [3:0]  ifbuf_ins_oftiles_i;
-  logic [3:0]  ifbuf_ins_oftiles_tail_i;
-  logic [6:0]  ifbuf_ins_iftiles_i;
-  logic [8:0]  ifbuf_ins_wp_i;
-  logic [1:0]  ifbuf_ins_padding_i;
-  logic [DATA_WIDTH-1:0]  ifbuf_ins_ifc_zp_i;
-  wire         ifbuf_ins_rdy_o;
+  logic        ifbuf_inf_vld_i;
+  logic [31:0] ifbuf_inf_ifbaddr_i;
+  logic [7:0]  ifbuf_inf_ifwidth_i;
+  logic [10:0] ifbuf_inf_channel_i;
+  logic [3:0]  ifbuf_inf_ifparr_i;
+  logic [15:0]  ifbuf_inf_ifsize_i;
+  logic [6:0]  ifbuf_inf_ifblock_i;
+  logic [3:0]  ifbuf_inf_oftiles_i;
+  logic [3:0]  ifbuf_inf_oftiles_tail_i;
+  logic [6:0]  ifbuf_inf_iftiles_i;
+  logic [8:0]  ifbuf_inf_wp_i;
+  logic [1:0]  ifbuf_inf_padding_i;
+  logic [DATA_WIDTH-1:0]  ifbuf_inf_ifc_zp_i;
+  wire         ifbuf_inf_rdy_o;
 
-  logic        fltbuf_ins_vld_i;
-  logic [31:0] fltbuf_ins_fltbaddr_i;
-  logic [3:0]  fltbuf_ins_ifparr_i;
-  logic [3:0]  fltbuf_ins_ifparr_tail_i;
-  logic [6:0]  fltbuf_ins_fltsize_i;
-  logic [6:0]  fltbuf_ins_ifblock_i;
-  logic [4:0]  fltbuf_ins_ofparr_i;
-  logic [4:0]  fltbuf_ins_ofparr_tail_i;
-  logic [3:0]  fltbuf_ins_oftiles_i;
-  logic [3:0]  fltbuf_ins_oftiles_tail_i;
-  logic [6:0]  fltbuf_ins_iftiles_i;
-  wire         fltbuf_ins_rdy_o;
+  logic        fltbuf_inf_vld_i;
+  logic [23:0] fltbuf_inf_fltbaddr_i;
+  logic [3:0]  fltbuf_inf_ifparr_i;
+  logic [3:0]  fltbuf_inf_ifparr_tail_i;
+  logic [6:0]  fltbuf_inf_fltsize_i;
+  logic [6:0]  fltbuf_inf_ifblock_i;
+  logic [4:0]  fltbuf_inf_ofparr_i;
+  logic [4:0]  fltbuf_inf_ofparr_tail_i;
+  logic [3:0]  fltbuf_inf_oftiles_i;
+  logic [3:0]  fltbuf_inf_oftiles_tail_i;
+  logic [6:0]  fltbuf_inf_iftiles_i;
+  wire         fltbuf_inf_rdy_o;
 
-  logic        bias_ins_vld_i;
-  wire         bias_ins_rdy_o;
-  logic [31:0] bias_ins_bias_baddr_i;
-  logic [7:0]  bias_ins_ofwidth_i;
-  logic [10:0] bias_ins_ofchannel_i;
-  logic [4:0]  bias_ins_burstlen_i;
-  logic [4:0]  bias_ins_burstlen_tail_i;
-  logic [4:0]  bias_ins_burstlen_lane0_i;
-  logic [4:0]  bias_ins_burstlen_tail_lane0_i;
+  logic        bias_inf_vld_i;
+  wire         bias_inf_rdy_o;
+  logic [23:0] bias_inf_bias_baddr_i;
+  logic [7:0]  bias_inf_ofwidth_i;
+  logic [10:0] bias_inf_ofchannel_i;
+  logic [4:0]  bias_inf_burstlen_i;
+  logic [4:0]  bias_inf_burstlen_tail_i;
+  logic [4:0]  bias_inf_burstlen_lane0_i;
+  logic [4:0]  bias_inf_burstlen_tail_lane0_i;
 
-  logic [3:0]  comp_ins_hf_i;
-  logic [2:0]  comp_ins_stride_i;
-  logic [1:0]  comp_ins_padding_i;
-  logic [DATA_WIDTH-1:0]  comp_ins_ifc_zp_i;
-  logic [DATA_WIDTH-1:0]  comp_ins_fltc_zp_i;
-  logic [7:0]  comp_ins_ofwidth_i;
-  logic signed [31:0] comp_ins_mult_i;
-  logic [5:0]  comp_ins_mult_shift_i;
-  logic signed [31:0] comp_ins_alphamult_i;
-  logic [5:0]  comp_ins_alphamult_shift_i;
-  logic signed [7:0] comp_ins_zpy_i;
-  logic signed [7:0] comp_ins_qmin_i;
-  logic signed [7:0] comp_ins_qmax_i;
-  logic        comp_ins_is_leaky_ReLU_i;
+  logic        comp_inf_vld_i;
+  wire         comp_inf_rdy_o;
+  logic [3:0]  comp_inf_hf_i;
+  logic [2:0]  comp_inf_stride_i;
+  logic [1:0]  comp_inf_padding_i;
+  logic signed [DATA_WIDTH-1:0]  comp_inf_ifc_zp_i;
+  logic signed [DATA_WIDTH-1:0]  comp_inf_fltc_zp_i;
+  logic [7:0]  comp_inf_ofwidth_i;
+  logic signed [31:0] comp_inf_mult_i;
+  logic [5:0]  comp_inf_mult_shift_i;
+  logic signed [31:0] comp_inf_alphamult_i;
+  logic [5:0]  comp_inf_alphamult_shift_i;
+  logic signed [7:0] comp_inf_zpy_i;
+  logic signed [7:0] comp_inf_qmin_i;
+  logic signed [7:0] comp_inf_qmax_i;
+  logic        comp_inf_is_leaky_ReLU_i;
 
   logic                  ifbuf_dma_rdycfg_i;
   logic                  ifbuf_dma_vld_i;
@@ -103,7 +105,7 @@ module CNN_accel_tb;
   logic                  ifbuf_dma_tlast_i;
   wire                   ifbuf_dma_vldcfg_o;
   wire [8:0]             ifbuf_dma_burst_o;
-  wire [31:0]            ifbuf_dma_baddr_o;
+  wire [23:0]            ifbuf_dma_baddr_o;
   wire                   ifbuf_dma_rdy_o;
 
   logic                  fltbuf_dma_rdycfg_i;
@@ -112,13 +114,13 @@ module CNN_accel_tb;
   logic                  fltbuf_dma_tlast_i;
   wire                   fltbuf_dma_vldcfg_o;
   wire [9:0]             fltbuf_dma_burst_o;
-  wire [31:0]            fltbuf_dma_baddr_o;
+  wire [23:0]            fltbuf_dma_baddr_o;
   wire                   fltbuf_dma_rdy_o;
 
   logic                  bias_dma_rdycfg_i;
   wire                   bias_dma_vldcfg_o;
   wire [8:0]             bias_dma_burst_o;
-  wire [31:0]            bias_dma_baddr_o;
+  wire [23:0]            bias_dma_baddr_o;
   logic                  bias_dma_vld_i;
   logic signed [31:0]    bias_dma_data_i;
   logic                  bias_dma_tlast_i;
@@ -319,9 +321,10 @@ module CNN_accel_tb;
   task automatic apply_reset();
     begin
       rst_n = 1'b0;
-      ifbuf_ins_vld_i = 1'b0;
-      fltbuf_ins_vld_i = 1'b0;
-      bias_ins_vld_i = 1'b0;
+      ifbuf_inf_vld_i = 1'b0;
+      fltbuf_inf_vld_i = 1'b0;
+      bias_inf_vld_i = 1'b0;
+      comp_inf_vld_i = 1'b0;
       ifbuf_dma_vld_i = 1'b0;
       fltbuf_dma_vld_i = 1'b0;
       bias_dma_vld_i = 1'b0;
@@ -872,17 +875,19 @@ module CNN_accel_tb;
          act_pkt_count, act_out_count, comp_ofbuf_vld_o & comp_ofbuf_rdy_i);
   endtask
 
-  task automatic issue_instructions();
+  task automatic issue_inftructions();
     begin
-      wait (ifbuf_ins_rdy_o === 1'b1 && fltbuf_ins_rdy_o === 1'b1 && bias_ins_rdy_o === 1'b1);
+      wait (ifbuf_inf_rdy_o === 1'b1 && fltbuf_inf_rdy_o === 1'b1 && bias_inf_rdy_o === 1'b1 && comp_inf_rdy_o === 1'b1 );
       @(posedge clk);
-      ifbuf_ins_vld_i  <= 1'b1;
-      fltbuf_ins_vld_i <= 1'b1;
-      bias_ins_vld_i   <= 1'b1;
+      ifbuf_inf_vld_i  <= 1'b1;
+      fltbuf_inf_vld_i <= 1'b1;
+      bias_inf_vld_i   <= 1'b1;
+      comp_inf_vld_i   <= 1'b1;
       @(posedge clk);
-      ifbuf_ins_vld_i  <= 1'b0;
-      fltbuf_ins_vld_i <= 1'b0;
-      bias_ins_vld_i   <= 1'b0;
+      ifbuf_inf_vld_i  <= 1'b0;
+      fltbuf_inf_vld_i <= 1'b0;
+      bias_inf_vld_i   <= 1'b0;
+      comp_inf_vld_i   <= 1'b0;
     end
   endtask
 
@@ -1015,57 +1020,57 @@ module CNN_accel_tb;
       bias_tail_lane0      = bias_tail_full_tile * bias_h0_lanes + ceil_div(bias_tail_mod, M);
       bias_lane0           = ((co < bias_block_real)) ? bias_tail_lane0 : bias_h0_lanes * oftile;
 
-      // Program IFBUF instruction fields
-      ifbuf_ins_ifbaddr_i      = current_if_base;
-      ifbuf_ins_ifwidth_i        = w[7:0];
-      ifbuf_ins_channel_i      = ci[10:0];
-      ifbuf_ins_ifparr_i       = ifparr[3:0];
-      ifbuf_ins_ifsize_i       = align_w * h;
-      ifbuf_ins_ifblock_i      = ceil_div(co, (ofparr*oftile));
-      ifbuf_ins_oftiles_i      = oftile[3:0];
-      ifbuf_ins_oftiles_tail_i = oftiles_tail[3:0];
-      ifbuf_ins_iftiles_i      = iftiles[6:0];
-      ifbuf_ins_wp_i           = wp[8:0];
-      ifbuf_ins_padding_i      = padding[1:0];
-      ifbuf_ins_ifc_zp_i       = current_ifc_zp[DATA_WIDTH-1:0];
+      // Program IFBUF inftruction fields
+      ifbuf_inf_ifbaddr_i      = current_if_base;
+      ifbuf_inf_ifwidth_i        = w[7:0];
+      ifbuf_inf_channel_i      = ci[10:0];
+      ifbuf_inf_ifparr_i       = ifparr[3:0];
+      ifbuf_inf_ifsize_i       = align_w * h;
+      ifbuf_inf_ifblock_i      = ceil_div(co, (ofparr*oftile));
+      ifbuf_inf_oftiles_i      = oftile[3:0];
+      ifbuf_inf_oftiles_tail_i = oftiles_tail[3:0];
+      ifbuf_inf_iftiles_i      = iftiles[6:0];
+      ifbuf_inf_wp_i           = wp[8:0];
+      ifbuf_inf_padding_i      = padding[1:0];
+      ifbuf_inf_ifc_zp_i       = current_ifc_zp[DATA_WIDTH-1:0];
 
-      // Program FLTBUF instruction fields
-      fltbuf_ins_fltbaddr_i      = current_flt_base;
-      fltbuf_ins_ifparr_i        = ifparr[3:0];
-      fltbuf_ins_ifparr_tail_i   = ifparr_tail[3:0];
-      fltbuf_ins_fltsize_i       = normal_burst;
-      fltbuf_ins_ifblock_i       = ceil_div(co, (ofparr*oftile));
-      fltbuf_ins_ofparr_i        = ofparr[4:0];
-      fltbuf_ins_ofparr_tail_i   = ofparr_tail[4:0];
-      fltbuf_ins_oftiles_i       = oftile;
-      fltbuf_ins_oftiles_tail_i  = oftiles_tail[3:0];
-      fltbuf_ins_iftiles_i       = iftiles[6:0];
+      // Program FLTBUF inftruction fields
+      fltbuf_inf_fltbaddr_i      = current_flt_base;
+      fltbuf_inf_ifparr_i        = ifparr[3:0];
+      fltbuf_inf_ifparr_tail_i   = ifparr_tail[3:0];
+      fltbuf_inf_fltsize_i       = normal_burst;
+      fltbuf_inf_ifblock_i       = ceil_div(co, (ofparr*oftile));
+      fltbuf_inf_ofparr_i        = ofparr[4:0];
+      fltbuf_inf_ofparr_tail_i   = ofparr_tail[4:0];
+      fltbuf_inf_oftiles_i       = oftile;
+      fltbuf_inf_oftiles_tail_i  = oftiles_tail[3:0];
+      fltbuf_inf_iftiles_i       = iftiles[6:0];
 
-      // Program BIAS instruction fields. burstlen includes optional dummy;
+      // Program BIAS inftruction fields. burstlen includes optional dummy;
       // lane0 counts only real head0 bias values.
-      bias_ins_bias_baddr_i           = current_bias_base;
-      bias_ins_ofwidth_i              = ((w + 2 * padding - kw) / stride + 1);
-      bias_ins_ofchannel_i            = co[10:0];
-      bias_ins_burstlen_i             = bias_burst[4:0];
-      bias_ins_burstlen_tail_i        = bias_tail_burst[4:0];
-      bias_ins_burstlen_lane0_i       = bias_lane0[4:0];
-      bias_ins_burstlen_tail_lane0_i  = bias_tail_lane0[4:0];
+      bias_inf_bias_baddr_i           = current_bias_base;
+      bias_inf_ofwidth_i              = ((w + 2 * padding - kw) / stride + 1);
+      bias_inf_ofchannel_i            = co[10:0];
+      bias_inf_burstlen_i             = bias_burst[4:0];
+      bias_inf_burstlen_tail_i        = bias_tail_burst[4:0];
+      bias_inf_burstlen_lane0_i       = bias_lane0[4:0];
+      bias_inf_burstlen_tail_lane0_i  = bias_tail_lane0[4:0];
 
-      // Program COMPUTATION instruction fields
-      comp_ins_hf_i         = kh[3:0];
-      comp_ins_stride_i     = stride[2:0];
-      comp_ins_padding_i    = padding[1:0];
-      comp_ins_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
-      comp_ins_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
-      comp_ins_ofwidth_i    = ((w + 2 * padding - kw) / stride + 1);
-      comp_ins_mult_i       = current_mult;
-      comp_ins_mult_shift_i = current_mult_shift[5:0];
-      comp_ins_alphamult_i  = current_alphamult;
-      comp_ins_alphamult_shift_i = current_alphamult_shift[5:0];
-      comp_ins_zpy_i        = current_zpy[7:0];
-      comp_ins_qmin_i       = current_qmin[7:0];
-      comp_ins_qmax_i       = current_qmax[7:0];
-      comp_ins_is_leaky_ReLU_i = current_is_leaky_relu[0];
+      // Program COMPUTATION inftruction fields
+      comp_inf_hf_i         = kh[3:0];
+      comp_inf_stride_i     = stride[2:0];
+      comp_inf_padding_i    = padding[1:0];
+      comp_inf_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
+      comp_inf_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
+      comp_inf_ofwidth_i    = ((w + 2 * padding - kw) / stride + 1);
+      comp_inf_mult_i       = current_mult;
+      comp_inf_mult_shift_i = current_mult_shift[5:0];
+      comp_inf_alphamult_i  = current_alphamult;
+      comp_inf_alphamult_shift_i = current_alphamult_shift[5:0];
+      comp_inf_zpy_i        = current_zpy[7:0];
+      comp_inf_qmin_i       = current_qmin[7:0];
+      comp_inf_qmax_i       = current_qmax[7:0];
+      comp_inf_is_leaky_ReLU_i = current_is_leaky_relu[0];
 
       fork
         if_dma_agent();
@@ -1074,7 +1079,7 @@ module CNN_accel_tb;
         collect_outputs(exp_pkt_count, exp_out_count);
       join_none
 
-      issue_instructions();
+      issue_inftructions();
       wait (act_pkt_count == exp_pkt_count);
       repeat (20) @(posedge clk);
       compare_outputs(tc_name);
@@ -1090,7 +1095,7 @@ module CNN_accel_tb;
   // Reset-abort fault-injection run case
   // =========================================================
   // abort_packets > 0 : cho DUT chay den khi da thu du so packet nay roi reset.
-  // abort_packets == 0: reset sau abort_cycles clock ke tu luc issue instruction.
+  // abort_packets == 0: reset sau abort_cycles clock ke tu luc issue inftruction.
   // Sau khi task nay release reset, TB KHONG goi apply_reset() nua; run_case tiep theo
   // se duoc issue truc tiep de kiem tra DUT/agent co recover sach hay khong.
   task automatic run_case_abort_reset(
@@ -1198,57 +1203,57 @@ module CNN_accel_tb;
       bias_tail_lane0      = bias_tail_full_tile * bias_h0_lanes + ceil_div(bias_tail_mod, M);
       bias_lane0           = ((co / bias_block_real) == 0) ? bias_tail_lane0 : bias_h0_lanes * oftile;
 
-      // Program IFBUF instruction fields
-      ifbuf_ins_ifbaddr_i      = current_if_base;
-      ifbuf_ins_ifwidth_i        = w[7:0];
-      ifbuf_ins_channel_i      = ci[10:0];
-      ifbuf_ins_ifparr_i       = ifparr[3:0];
-      ifbuf_ins_ifsize_i       = align_w * h;
-      ifbuf_ins_ifblock_i      = ceil_div(co, (ofparr*oftile));
-      ifbuf_ins_oftiles_i      = oftile[3:0];
-      ifbuf_ins_oftiles_tail_i = oftiles_tail[3:0];
-      ifbuf_ins_iftiles_i      = iftiles[6:0];
-      ifbuf_ins_wp_i           = wp[8:0];
-      ifbuf_ins_padding_i      = padding[1:0];
-      ifbuf_ins_ifc_zp_i       = current_ifc_zp[DATA_WIDTH-1:0];
+      // Program IFBUF inftruction fields
+      ifbuf_inf_ifbaddr_i      = current_if_base;
+      ifbuf_inf_ifwidth_i        = w[7:0];
+      ifbuf_inf_channel_i      = ci[10:0];
+      ifbuf_inf_ifparr_i       = ifparr[3:0];
+      ifbuf_inf_ifsize_i       = align_w * h;
+      ifbuf_inf_ifblock_i      = ceil_div(co, (ofparr*oftile));
+      ifbuf_inf_oftiles_i      = oftile[3:0];
+      ifbuf_inf_oftiles_tail_i = oftiles_tail[3:0];
+      ifbuf_inf_iftiles_i      = iftiles[6:0];
+      ifbuf_inf_wp_i           = wp[8:0];
+      ifbuf_inf_padding_i      = padding[1:0];
+      ifbuf_inf_ifc_zp_i       = current_ifc_zp[DATA_WIDTH-1:0];
 
-      // Program FLTBUF instruction fields
-      fltbuf_ins_fltbaddr_i      = current_flt_base;
-      fltbuf_ins_ifparr_i        = ifparr[3:0];
-      fltbuf_ins_ifparr_tail_i   = ifparr_tail[3:0];
-      fltbuf_ins_fltsize_i       = normal_burst;
-      fltbuf_ins_ifblock_i       = ceil_div(co, (ofparr*oftile));
-      fltbuf_ins_ofparr_i        = ofparr[4:0];
-      fltbuf_ins_ofparr_tail_i   = ofparr_tail[4:0];
-      fltbuf_ins_oftiles_i       = oftile;
-      fltbuf_ins_oftiles_tail_i  = oftiles_tail[3:0];
-      fltbuf_ins_iftiles_i       = iftiles[6:0];
+      // Program FLTBUF inftruction fields
+      fltbuf_inf_fltbaddr_i      = current_flt_base;
+      fltbuf_inf_ifparr_i        = ifparr[3:0];
+      fltbuf_inf_ifparr_tail_i   = ifparr_tail[3:0];
+      fltbuf_inf_fltsize_i       = normal_burst;
+      fltbuf_inf_ifblock_i       = ceil_div(co, (ofparr*oftile));
+      fltbuf_inf_ofparr_i        = ofparr[4:0];
+      fltbuf_inf_ofparr_tail_i   = ofparr_tail[4:0];
+      fltbuf_inf_oftiles_i       = oftile;
+      fltbuf_inf_oftiles_tail_i  = oftiles_tail[3:0];
+      fltbuf_inf_iftiles_i       = iftiles[6:0];
 
-      // Program BIAS instruction fields. burstlen includes optional dummy;
+      // Program BIAS inftruction fields. burstlen includes optional dummy;
       // lane0 counts only real head0 bias values.
-      bias_ins_bias_baddr_i           = current_bias_base;
-      bias_ins_ofwidth_i              = ((w + 2 * padding - kw) / stride + 1);
-      bias_ins_ofchannel_i            = co[10:0];
-      bias_ins_burstlen_i             = bias_burst[4:0];
-      bias_ins_burstlen_tail_i        = bias_tail_burst[4:0];
-      bias_ins_burstlen_lane0_i       = bias_lane0[4:0];
-      bias_ins_burstlen_tail_lane0_i  = bias_tail_lane0[4:0];
+      bias_inf_bias_baddr_i           = current_bias_base;
+      bias_inf_ofwidth_i              = ((w + 2 * padding - kw) / stride + 1);
+      bias_inf_ofchannel_i            = co[10:0];
+      bias_inf_burstlen_i             = bias_burst[4:0];
+      bias_inf_burstlen_tail_i        = bias_tail_burst[4:0];
+      bias_inf_burstlen_lane0_i       = bias_lane0[4:0];
+      bias_inf_burstlen_tail_lane0_i  = bias_tail_lane0[4:0];
 
-      // Program COMPUTATION instruction fields
-      comp_ins_hf_i         = kh[3:0];
-      comp_ins_stride_i     = stride[2:0];
-      comp_ins_padding_i    = padding[1:0];
-      comp_ins_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
-      comp_ins_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
-      comp_ins_ofwidth_i    = ((w + 2 * padding - kw) / stride + 1);
-      comp_ins_mult_i       = current_mult;
-      comp_ins_mult_shift_i = current_mult_shift[5:0];
-      comp_ins_alphamult_i  = current_alphamult;
-      comp_ins_alphamult_shift_i = current_alphamult_shift[5:0];
-      comp_ins_zpy_i        = current_zpy[7:0];
-      comp_ins_qmin_i       = current_qmin[7:0];
-      comp_ins_qmax_i       = current_qmax[7:0];
-      comp_ins_is_leaky_ReLU_i = current_is_leaky_relu[0];
+      // Program COMPUTATION inftruction fields
+      comp_inf_hf_i         = kh[3:0];
+      comp_inf_stride_i     = stride[2:0];
+      comp_inf_padding_i    = padding[1:0];
+      comp_inf_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
+      comp_inf_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
+      comp_inf_ofwidth_i    = ((w + 2 * padding - kw) / stride + 1);
+      comp_inf_mult_i       = current_mult;
+      comp_inf_mult_shift_i = current_mult_shift[5:0];
+      comp_inf_alphamult_i  = current_alphamult;
+      comp_inf_alphamult_shift_i = current_alphamult_shift[5:0];
+      comp_inf_zpy_i        = current_zpy[7:0];
+      comp_inf_qmin_i       = current_qmin[7:0];
+      comp_inf_qmax_i       = current_qmax[7:0];
+      comp_inf_is_leaky_ReLU_i = current_is_leaky_relu[0];
 
       fork
         if_dma_agent();
@@ -1257,7 +1262,7 @@ module CNN_accel_tb;
         collect_outputs(exp_pkt_count, exp_out_count);
       join_none
 
-      issue_instructions();
+      issue_inftructions();
 
       if (abort_packets > 0) begin
         watchdog = 0;
@@ -1289,9 +1294,10 @@ module CNN_accel_tb;
       disable fork;
 
       // Hold all TB-driven interfaces idle during the rest of reset.
-      ifbuf_ins_vld_i = 1'b0;
-      fltbuf_ins_vld_i = 1'b0;
-      bias_ins_vld_i = 1'b0;
+      ifbuf_inf_vld_i = 1'b0;
+      fltbuf_inf_vld_i = 1'b0;
+      bias_inf_vld_i = 1'b0;
+      comp_inf_vld_i = 1'b0;
       ifbuf_dma_rdycfg_i = 1'b0;
       fltbuf_dma_rdycfg_i = 1'b0;
       bias_dma_rdycfg_i = 1'b0;
@@ -1329,11 +1335,11 @@ module CNN_accel_tb;
       end
       for (i = 0; i < K; i = i + 1) begin : GEN_IFBUF_TAP
           assign ifbuf_comp_data_tb[i]  = dut.ifbuf_comp_data_w[(i+1)*WIDTH-1 -: WIDTH];
-          assign if_cache_pe_data_tb[i] = dut.u_computation.ifmap_cache_inst.ifc_pu_data_o[(i+1)*WIDTH-1 -: WIDTH];
+          assign if_cache_pe_data_tb[i] = dut.u_computation.ifmap_cache_inft.ifc_pu_data_o[(i+1)*WIDTH-1 -: WIDTH];
       end
     for (i = 0; i < K*M*12; i = i + 1) begin : GEN_FTC_TAP
         assign flt_cache_pe_data_tb[i] =
-            dut.u_computation.gen_comp_pu[0].comp_pu_inst.pe_fltc_data_i[(i+1)*WIDTH-1 -: WIDTH];
+            dut.u_computation.gen_comp_pu[0].comp_pu_inft.pe_fltc_data_i[(i+1)*WIDTH-1 -: WIDTH];
     end
     for (i = 0; i < M; i = i + 1) begin : GEN_scale_TAP
           assign scale_comp_data_tb[i] = comp_ofbuf_data_o[(i+1)*ACC_WIDTH-1 -: ACC_WIDTH];
@@ -1348,58 +1354,60 @@ module CNN_accel_tb;
     .clk(clk),
     .rst_n(rst_n),
 
-    .ifbuf_ins_vld_i(ifbuf_ins_vld_i),
-    .ifbuf_ins_ifbaddr_i(ifbuf_ins_ifbaddr_i),
-    .ifbuf_ins_ifwidth_i(ifbuf_ins_ifwidth_i),
-    .ifbuf_ins_channel_i(ifbuf_ins_channel_i),
-    .ifbuf_ins_ifparr_i(ifbuf_ins_ifparr_i),
-    .ifbuf_ins_ifsize_i(ifbuf_ins_ifsize_i),
-    .ifbuf_ins_ifblock_i(ifbuf_ins_ifblock_i),
-    .ifbuf_ins_oftiles_i(ifbuf_ins_oftiles_i),
-    .ifbuf_ins_oftiles_tail_i(ifbuf_ins_oftiles_tail_i),
-    .ifbuf_ins_iftiles_i(ifbuf_ins_iftiles_i),
-    .ifbuf_ins_wp_i(ifbuf_ins_wp_i),
-    .ifbuf_ins_padding_i(ifbuf_ins_padding_i),
-    .ifbuf_ins_ifc_zp_i(ifbuf_ins_ifc_zp_i),
-    .ifbuf_ins_rdy_o(ifbuf_ins_rdy_o),
+    .ifbuf_inf_vld_i(ifbuf_inf_vld_i),
+    .ifbuf_inf_ifbaddr_i(ifbuf_inf_ifbaddr_i),
+    .ifbuf_inf_ifwidth_i(ifbuf_inf_ifwidth_i),
+    .ifbuf_inf_channel_i(ifbuf_inf_channel_i),
+    .ifbuf_inf_ifparr_i(ifbuf_inf_ifparr_i),
+    .ifbuf_inf_ifsize_i(ifbuf_inf_ifsize_i),
+    .ifbuf_inf_ifblock_i(ifbuf_inf_ifblock_i),
+    .ifbuf_inf_oftiles_i(ifbuf_inf_oftiles_i),
+    .ifbuf_inf_oftiles_tail_i(ifbuf_inf_oftiles_tail_i),
+    .ifbuf_inf_iftiles_i(ifbuf_inf_iftiles_i),
+    .ifbuf_inf_wp_i(ifbuf_inf_wp_i),
+    .ifbuf_inf_padding_i(ifbuf_inf_padding_i),
+    .ifbuf_inf_ifc_zp_i(ifbuf_inf_ifc_zp_i),
+    .ifbuf_inf_rdy_o(ifbuf_inf_rdy_o),
 
-    .fltbuf_ins_vld_i(fltbuf_ins_vld_i),
-    .fltbuf_ins_fltbaddr_i(fltbuf_ins_fltbaddr_i),
-    .fltbuf_ins_ifparr_i(fltbuf_ins_ifparr_i),
-    .fltbuf_ins_ifparr_tail_i(fltbuf_ins_ifparr_tail_i),
-    .fltbuf_ins_fltsize_i(fltbuf_ins_fltsize_i),
-    .fltbuf_ins_ifblock_i(fltbuf_ins_ifblock_i),
-    .fltbuf_ins_ofparr_i(fltbuf_ins_ofparr_i),
-    .fltbuf_ins_ofparr_tail_i(fltbuf_ins_ofparr_tail_i),
-    .fltbuf_ins_oftiles_i(fltbuf_ins_oftiles_i),
-    .fltbuf_ins_oftiles_tail_i(fltbuf_ins_oftiles_tail_i),
-    .fltbuf_ins_iftiles_i(fltbuf_ins_iftiles_i),
-    .fltbuf_ins_rdy_o(fltbuf_ins_rdy_o),
+    .fltbuf_inf_vld_i(fltbuf_inf_vld_i),
+    .fltbuf_inf_fltbaddr_i(fltbuf_inf_fltbaddr_i),
+    .fltbuf_inf_ifparr_i(fltbuf_inf_ifparr_i),
+    .fltbuf_inf_ifparr_tail_i(fltbuf_inf_ifparr_tail_i),
+    .fltbuf_inf_fltsize_i(fltbuf_inf_fltsize_i),
+    .fltbuf_inf_ifblock_i(fltbuf_inf_ifblock_i),
+    .fltbuf_inf_ofparr_i(fltbuf_inf_ofparr_i),
+    .fltbuf_inf_ofparr_tail_i(fltbuf_inf_ofparr_tail_i),
+    .fltbuf_inf_oftiles_i(fltbuf_inf_oftiles_i),
+    .fltbuf_inf_oftiles_tail_i(fltbuf_inf_oftiles_tail_i),
+    .fltbuf_inf_iftiles_i(fltbuf_inf_iftiles_i),
+    .fltbuf_inf_rdy_o(fltbuf_inf_rdy_o),
 
-    .bias_ins_vld_i(bias_ins_vld_i),
-    .bias_ins_rdy_o(bias_ins_rdy_o),
-    .bias_ins_bias_baddr_i(bias_ins_bias_baddr_i),
-    .bias_ins_ofwidth_i(bias_ins_ofwidth_i),
-    .bias_ins_ofchannel_i(bias_ins_ofchannel_i),
-    .bias_ins_burstlen_i(bias_ins_burstlen_i),
-    .bias_ins_burstlen_tail_i(bias_ins_burstlen_tail_i),
-    .bias_ins_burstlen_lane0_i(bias_ins_burstlen_lane0_i),
-    .bias_ins_burstlen_tail_lane0_i(bias_ins_burstlen_tail_lane0_i),
+    .bias_inf_vld_i(bias_inf_vld_i),
+    .bias_inf_rdy_o(bias_inf_rdy_o),
+    .bias_inf_bias_baddr_i(bias_inf_bias_baddr_i),
+    .bias_inf_ofwidth_i(bias_inf_ofwidth_i),
+    .bias_inf_ofchannel_i(bias_inf_ofchannel_i),
+    .bias_inf_burstlen_i(bias_inf_burstlen_i),
+    .bias_inf_burstlen_tail_i(bias_inf_burstlen_tail_i),
+    .bias_inf_burstlen_lane0_i(bias_inf_burstlen_lane0_i),
+    .bias_inf_burstlen_tail_lane0_i(bias_inf_burstlen_tail_lane0_i),
 
-    .comp_ins_hf_i(comp_ins_hf_i),
-    .comp_ins_stride_i(comp_ins_stride_i),
-    .comp_ins_padding_i(comp_ins_padding_i),
-    .comp_ins_ifc_zp_i(comp_ins_ifc_zp_i),
-    .comp_ins_fltc_zp_i(comp_ins_fltc_zp_i),
-    .comp_ins_ofwidth_i(comp_ins_ofwidth_i),
-    .comp_ins_mult_i(comp_ins_mult_i),
-    .comp_ins_mult_shift_i(comp_ins_mult_shift_i),
-    .comp_ins_alphamult_i(comp_ins_alphamult_i),
-    .comp_ins_alphamult_shift_i(comp_ins_alphamult_shift_i),
-    .comp_ins_zpy_i(comp_ins_zpy_i),
-    .comp_ins_qmin_i(comp_ins_qmin_i),
-    .comp_ins_qmax_i(comp_ins_qmax_i),
-    .comp_ins_is_leaky_ReLU_i(comp_ins_is_leaky_ReLU_i),
+    .comp_inf_rdy_o(comp_inf_rdy_o),
+    .comp_inf_vld_i(comp_inf_vld_i),
+    .comp_inf_hf_i(comp_inf_hf_i),
+    .comp_inf_stride_i(comp_inf_stride_i),
+    .comp_inf_padding_i(comp_inf_padding_i),
+    .comp_inf_ifc_zp_i(comp_inf_ifc_zp_i),
+    .comp_inf_fltc_zp_i(comp_inf_fltc_zp_i),
+    .comp_inf_ofwidth_i(comp_inf_ofwidth_i),
+    .comp_inf_mult_i(comp_inf_mult_i),
+    .comp_inf_mult_shift_i(comp_inf_mult_shift_i),
+    .comp_inf_alphamult_i(comp_inf_alphamult_i),
+    .comp_inf_alphamult_shift_i(comp_inf_alphamult_shift_i),
+    .comp_inf_zpy_i(comp_inf_zpy_i),
+    .comp_inf_qmin_i(comp_inf_qmin_i),
+    .comp_inf_qmax_i(comp_inf_qmax_i),
+    .comp_inf_is_leaky_ReLU_i(comp_inf_is_leaky_ReLU_i),
 
     .ifbuf_dma_rdycfg_i(ifbuf_dma_rdycfg_i),
     .ifbuf_dma_vld_i(ifbuf_dma_vld_i),
@@ -1446,55 +1454,56 @@ module CNN_accel_tb;
     clk = 1'b0;
     rst_n = 1'b0;
 
-    ifbuf_ins_vld_i = 1'b0;
-    fltbuf_ins_vld_i = 1'b0;
-    bias_ins_vld_i = 1'b0;
-    ifbuf_ins_ifbaddr_i = '0;
-    ifbuf_ins_ifwidth_i = '0;
-    ifbuf_ins_channel_i = '0;
-    ifbuf_ins_ifparr_i = '0;
-    ifbuf_ins_ifsize_i = '0;
-    ifbuf_ins_ifblock_i = '0;
-    ifbuf_ins_oftiles_i = '0;
-    ifbuf_ins_oftiles_tail_i = '0;
-    ifbuf_ins_iftiles_i = '0;
-    ifbuf_ins_wp_i = '0;
-    ifbuf_ins_padding_i = '0;
-    ifbuf_ins_ifc_zp_i = '0;
+    ifbuf_inf_vld_i = 1'b0;
+    fltbuf_inf_vld_i = 1'b0;
+    bias_inf_vld_i = 1'b0;
+    comp_inf_vld_i = 1'b0;
+    ifbuf_inf_ifbaddr_i = '0;
+    ifbuf_inf_ifwidth_i = '0;
+    ifbuf_inf_channel_i = '0;
+    ifbuf_inf_ifparr_i = '0;
+    ifbuf_inf_ifsize_i = '0;
+    ifbuf_inf_ifblock_i = '0;
+    ifbuf_inf_oftiles_i = '0;
+    ifbuf_inf_oftiles_tail_i = '0;
+    ifbuf_inf_iftiles_i = '0;
+    ifbuf_inf_wp_i = '0;
+    ifbuf_inf_padding_i = '0;
+    ifbuf_inf_ifc_zp_i = '0;
 
-    bias_ins_bias_baddr_i = '0;
-    bias_ins_ofwidth_i = '0;
-    bias_ins_ofchannel_i = '0;
-    bias_ins_burstlen_i = '0;
-    bias_ins_burstlen_tail_i = '0;
-    bias_ins_burstlen_lane0_i = '0;
-    bias_ins_burstlen_tail_lane0_i = '0;
+    bias_inf_bias_baddr_i = '0;
+    bias_inf_ofwidth_i = '0;
+    bias_inf_ofchannel_i = '0;
+    bias_inf_burstlen_i = '0;
+    bias_inf_burstlen_tail_i = '0;
+    bias_inf_burstlen_lane0_i = '0;
+    bias_inf_burstlen_tail_lane0_i = '0;
 
-    fltbuf_ins_fltbaddr_i = '0;
-    fltbuf_ins_ifparr_i = '0;
-    fltbuf_ins_ifparr_tail_i = '0;
-    fltbuf_ins_fltsize_i = '0;
-    fltbuf_ins_ifblock_i = '0;
-    fltbuf_ins_ofparr_i = '0;
-    fltbuf_ins_ofparr_tail_i = '0;
-    fltbuf_ins_oftiles_i = '0;
-    fltbuf_ins_oftiles_tail_i = '0;
-    fltbuf_ins_iftiles_i = '0;
+    fltbuf_inf_fltbaddr_i = '0;
+    fltbuf_inf_ifparr_i = '0;
+    fltbuf_inf_ifparr_tail_i = '0;
+    fltbuf_inf_fltsize_i = '0;
+    fltbuf_inf_ifblock_i = '0;
+    fltbuf_inf_ofparr_i = '0;
+    fltbuf_inf_ofparr_tail_i = '0;
+    fltbuf_inf_oftiles_i = '0;
+    fltbuf_inf_oftiles_tail_i = '0;
+    fltbuf_inf_iftiles_i = '0;
 
-    comp_ins_hf_i = '0;
-    comp_ins_stride_i = '0;
-    comp_ins_padding_i = '0;
-    comp_ins_ifc_zp_i = '0;
-    comp_ins_fltc_zp_i = '0;
-    comp_ins_ofwidth_i = '0;
-    comp_ins_mult_i = '0;
-    comp_ins_mult_shift_i = '0;
-    comp_ins_alphamult_i = '0;
-    comp_ins_alphamult_shift_i = '0;
-    comp_ins_zpy_i = '0;
-    comp_ins_qmin_i = -128;
-    comp_ins_qmax_i = 127;
-    comp_ins_is_leaky_ReLU_i = 1'b0;
+    comp_inf_hf_i = '0;
+    comp_inf_stride_i = '0;
+    comp_inf_padding_i = '0;
+    comp_inf_ifc_zp_i = '0;
+    comp_inf_fltc_zp_i = '0;
+    comp_inf_ofwidth_i = '0;
+    comp_inf_mult_i = '0;
+    comp_inf_mult_shift_i = '0;
+    comp_inf_alphamult_i = '0;
+    comp_inf_alphamult_shift_i = '0;
+    comp_inf_zpy_i = '0;
+    comp_inf_qmin_i = -128;
+    comp_inf_qmax_i = 127;
+    comp_inf_is_leaky_ReLU_i = 1'b0;
 
     ifbuf_dma_rdycfg_i = 1'b0;
     fltbuf_dma_rdycfg_i = 1'b0;
@@ -1569,7 +1578,7 @@ module CNN_accel_tb;
     // cac RECOVER case ben duoi se timeout hoac mismatch.
     // =====================================================
 
-    // A) Reset rat som sau khi issue instruction: cover loi FSM/DMA config dang bat dau.
+    // A) Reset rat som sau khi issue inftruction: cover loi FSM/DMA config dang bat dau.
     run_case_abort_reset("RST_ABORT_A_early_TC2", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5, 35, 0);
     run_case("RST_RECOVER_A_next_no_extra_reset_TC3", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
 

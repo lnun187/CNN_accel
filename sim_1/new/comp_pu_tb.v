@@ -17,11 +17,11 @@ module comp_pu_tb;
     reg clk;
     reg rst_n;
 
-    // INSTRUCTION
-    reg pu_ins_dw_i;
-    reg [3:0] pu_ins_hf_i;
-    reg [1:0] pu_ins_stride_i;
-    reg [1:0] pu_ins_padding_i;
+    // infTRUCTION
+    reg pu_inf_dw_i;
+    reg [3:0] pu_inf_hf_i;
+    reg [1:0] pu_inf_stride_i;
+    reg [1:0] pu_inf_padding_i;
 
     // IFMAP CACHE
     reg pu_ifc_vld_i;
@@ -31,8 +31,8 @@ module comp_pu_tb;
     reg pu_ifc_end_depth_i;
     reg pu_ifc_end_height_i;
     reg pu_ifc_end_layer_i;
-    reg [7:0] pu_ins_ifc_zp_i;
-    reg [7:0] pu_ins_fltc_zp_i;
+    reg [7:0] pu_inf_ifc_zp_i;
+    reg [7:0] pu_inf_fltc_zp_i;
     wire pu_ifc_rdy_o;
 
     // FILTER BUFFER
@@ -51,7 +51,7 @@ module comp_pu_tb;
     integer toggle_done;
 
     // ==========================================
-    // 3. DUT INSTANTIATION
+    // 3. DUT infTANTIATION
     // ==========================================
     comp_pu #(
         .WIDTH(WIDTH),
@@ -62,10 +62,10 @@ module comp_pu_tb;
     ) uut (
         .clk(clk),
         .rst_n(rst_n),
-        .pu_ins_dw_i(pu_ins_dw_i),
-        .pu_ins_hf_i(pu_ins_hf_i),
-        .pu_ins_stride_i(pu_ins_stride_i),
-        .pu_ins_padding_i(pu_ins_padding_i),
+        .pu_inf_dw_i(pu_inf_dw_i),
+        .pu_inf_hf_i(pu_inf_hf_i),
+        .pu_inf_stride_i(pu_inf_stride_i),
+        .pu_inf_padding_i(pu_inf_padding_i),
         .pu_ifc_end_row_circle_i(pu_ifc_end_row_circle_i),
         .pu_ifc_end_row_i(pu_ifc_end_row_i),
         .pu_ifc_end_depth_i(pu_ifc_end_depth_i),
@@ -73,8 +73,8 @@ module comp_pu_tb;
         .pu_ifc_vld_i(pu_ifc_vld_i),
         .pu_ifc_data_i(pu_ifc_data_i),
         .pu_ifc_rdy_o(pu_ifc_rdy_o),
-        .pu_ins_ifc_zp_i(pu_ins_ifc_zp_i),   // Map Zero Point
-        .pu_ins_fltc_zp_i(pu_ins_fltc_zp_i), // Map Zero Point
+        .pu_inf_ifc_zp_i(pu_inf_ifc_zp_i),   // Map Zero Point
+        .pu_inf_fltc_zp_i(pu_inf_fltc_zp_i), // Map Zero Point
         .pu_fltbuf_vld_i(pu_fltbuf_vld_i),
         .pu_fltbuf_data_i(pu_fltbuf_data_i),
         .pu_fltbuf_done_pass_i(pu_fltbuf_done_pass_i),
@@ -99,8 +99,8 @@ module comp_pu_tb;
         pu_ifc_vld_i = 0;
         pu_fltbuf_vld_i = 0;
         pu_ofbuf_rdy_i = 1;
-        pu_ins_ifc_zp_i = 0;
-        pu_ins_fltc_zp_i = 0;
+        pu_inf_ifc_zp_i = 0;
+        pu_inf_fltc_zp_i = 0;
         // Initialize global variables to avoid 'x' state
         toggle_done = 0; 
 
@@ -122,7 +122,7 @@ module comp_pu_tb;
         integer j;
         reg [WIDTH-1:0] temp_val; // Biến tạm tránh lỗi bit-width
         begin
-            total = num_filter * pu_ins_hf_i * pu_ins_hf_i;
+            total = num_filter * pu_inf_hf_i * pu_inf_hf_i;
             for(j = 0; j < K; j = j + 1) begin
                 for(i = 0; i < total; i = i + 1) begin
                 
@@ -261,7 +261,7 @@ module comp_pu_tb;
                             row_data[5] = 5;
                             row_data[6] = 0;
 
-                            send_ifmap_row_auto(row_data, 7, pu_ins_hf_i, pu_ins_stride_i, pass, (ri == row - 1), (ci == channel - 1), 1);
+                            send_ifmap_row_auto(row_data, 7, pu_inf_hf_i, pu_inf_stride_i, pass, (ri == row - 1), (ci == channel - 1), 1);
                         end
                     end
                 end
@@ -288,50 +288,50 @@ module comp_pu_tb;
     // ==========================================
     task test_std_conv;
         begin
-            pu_ins_dw_i = 0;
-            pu_ins_hf_i = 3;
-            pu_ins_stride_i = 2;
-            pu_ins_padding_i = 1;
+            pu_inf_dw_i = 0;
+            pu_inf_hf_i = 3;
+            pu_inf_stride_i = 2;
+            pu_inf_padding_i = 1;
             run_layer(1, 2, 2, 2, 0);
         end
     endtask
 
     task test_multi_pass;
         begin
-            pu_ins_dw_i = 0;
-            pu_ins_hf_i = 3;
-            pu_ins_stride_i = 2;
-            pu_ins_padding_i = 1;
+            pu_inf_dw_i = 0;
+            pu_inf_hf_i = 3;
+            pu_inf_stride_i = 2;
+            pu_inf_padding_i = 1;
             run_layer(2, 1, 2, 2, 200);
         end
     endtask
 
     task test_depthwise;
         begin
-            pu_ins_dw_i = 1;
-            pu_ins_hf_i = 3;
-            pu_ins_stride_i = 1;
-            pu_ins_padding_i = 1;
+            pu_inf_dw_i = 1;
+            pu_inf_hf_i = 3;
+            pu_inf_stride_i = 1;
+            pu_inf_padding_i = 1;
             run_layer(1, 1, 3, 2, 400);
         end
     endtask
 
     task test_pointwise;
         begin
-            pu_ins_dw_i = 0;
-            pu_ins_hf_i = 1;
-            pu_ins_stride_i = 1;
-            pu_ins_padding_i = 0;
+            pu_inf_dw_i = 0;
+            pu_inf_hf_i = 1;
+            pu_inf_stride_i = 1;
+            pu_inf_padding_i = 0;
             run_layer(1, 4, 3, 2, 600);
         end
     endtask
 
     task test_large_filter;
         begin
-            pu_ins_dw_i = 0;
-            pu_ins_hf_i = 7;
-            pu_ins_stride_i = 2;
-            pu_ins_padding_i = 1;
+            pu_inf_dw_i = 0;
+            pu_inf_hf_i = 7;
+            pu_inf_stride_i = 2;
+            pu_inf_padding_i = 1;
             run_layer(2, 1, 2, 7, 800);
         end
     endtask

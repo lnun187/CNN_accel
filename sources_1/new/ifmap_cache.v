@@ -7,13 +7,14 @@ module ifmap_cache #(
 )(
     input                       clk,
     input                       rst_n,              
-    input  [3:0]                ifc_ins_hf_i,
-    input  [2:0]                ifc_ins_stride_i,
+    input  [3:0]                ifc_inf_hf_i,
+    input  [2:0]                ifc_inf_stride_i,
     input  [K*DATA_WIDTH-1:0]   ifc_ifbuf_data_i,
     input                       ifc_ifbuf_end_row_i,
     input                       ifc_ifbuf_end_row_circle_i,
     input                       ifc_ifbuf_end_depth_i,
     input                       ifc_ifbuf_end_layer_i,
+    input                       ifc_ifbuf_end_layer_real_i,
     input                       ifc_ifbuf_vld_i,
     output                      ifc_ifbuf_rdy_o,  
     
@@ -23,7 +24,8 @@ module ifmap_cache #(
     output                      ifc_pu_end_row_o,
     output                      ifc_pu_end_row_circle_o,
     output                      ifc_pu_end_depth_o,
-    output                      ifc_pu_end_layer_o
+    output                      ifc_pu_end_layer_o,
+    output                      ifc_pu_end_layer_real_o
 );
 
     // ==========================================
@@ -32,20 +34,20 @@ module ifmap_cache #(
     reg     [3:0]               prefill_cnt; 
     reg     [3:0]               window_cnt;  
     reg                         is_begin;
-    wire    [K*DATA_WIDTH + 3:0] fifo_dout;
+    wire    [K*DATA_WIDTH + 4:0] fifo_dout;
     wire                        fifo_wr_en;
     wire                        empty;
-    wire    [K*DATA_WIDTH + 3:0] fifo_din;
+    wire    [K*DATA_WIDTH + 4:0] fifo_din;
     reg                         window_active;              
-    wire    [K*DATA_WIDTH + 3:0] combined_data_in;
+    wire    [K*DATA_WIDTH + 4:0] combined_data_in;
     
     // Các tín hiệu Look-ahead
     wire    [3:0]               prefill_cnt_nxt;
     wire    [3:0]               window_cnt_nxt;
     wire                        window_active_nxt;
     
-    assign combined_data_in = {ifc_ifbuf_end_row_i, ifc_ifbuf_end_row_circle_i, ifc_ifbuf_end_depth_i, ifc_ifbuf_end_layer_i, ifc_ifbuf_data_i};
-    // assign window_active = (prefill_cnt == (|(ifc_ins_hf_i - ifc_ins_stride_i) ? (ifc_ins_hf_i - ifc_ins_stride_i) : 1));
+    assign combined_data_in = {ifc_ifbuf_end_layer_real_i, ifc_ifbuf_end_row_i, ifc_ifbuf_end_row_circle_i, ifc_ifbuf_end_depth_i, ifc_ifbuf_end_layer_i, ifc_ifbuf_data_i};
+    // assign window_active = (prefill_cnt == (|(ifc_inf_hf_i - ifc_inf_stride_i) ? (ifc_inf_hf_i - ifc_inf_stride_i) : 1));
 
     // ==========================================
     // 1. Logic Look-ahead (Tính toán chu kỳ tiếp theo)
@@ -54,14 +56,14 @@ module ifmap_cache #(
                              (!window_active && ifc_ifbuf_vld_i && ifc_ifbuf_rdy_o) ? prefill_cnt + 1'b1 :
                              prefill_cnt;
 
-    assign window_active_nxt = (prefill_cnt_nxt == (|(ifc_ins_hf_i - ifc_ins_stride_i) ? (ifc_ins_hf_i - ifc_ins_stride_i) : 1));
+    assign window_active_nxt = (prefill_cnt_nxt == (|(ifc_inf_hf_i - ifc_inf_stride_i) ? (ifc_inf_hf_i - ifc_inf_stride_i) : 1));
 
-    assign fifo_wr_en = ((prefill_cnt < (ifc_ins_hf_i - ifc_ins_stride_i) || (prefill_cnt < 1 && ifc_ins_hf_i == ifc_ins_stride_i)) && ifc_ifbuf_vld_i) || 
+    assign fifo_wr_en = ((prefill_cnt < (ifc_inf_hf_i - ifc_inf_stride_i) || (prefill_cnt < 1 && ifc_inf_hf_i == ifc_inf_stride_i)) && ifc_ifbuf_vld_i) || 
                         (window_active && ifc_pu_rdy_i);
 
     assign window_cnt_nxt = (ifc_ifbuf_end_row_i == 1'b1) ? 4'd0 :
                             (window_active && fifo_wr_en) ? 
-                                ((window_cnt == ifc_ins_hf_i - 1) ? 4'd0 : window_cnt + 1'b1) :
+                                ((window_cnt == ifc_inf_hf_i - 1) ? 4'd0 : window_cnt + 1'b1) :
                             window_cnt;
 
     // ==========================================
@@ -77,11 +79,11 @@ module ifmap_cache #(
             // Cập nhật counter
             prefill_cnt     <= prefill_cnt_nxt;
             window_cnt      <= window_cnt_nxt;
-            window_active   <= (prefill_cnt_nxt == (|(ifc_ins_hf_i - ifc_ins_stride_i) ? (ifc_ins_hf_i - ifc_ins_stride_i) : 1));
+            window_active   <= (prefill_cnt_nxt == (|(ifc_inf_hf_i - ifc_inf_stride_i) ? (ifc_inf_hf_i - ifc_inf_stride_i) : 1));
         end
     end
-    assign ifc_ifbuf_rdy_o  = (prefill_cnt < (ifc_ins_hf_i - ifc_ins_stride_i)) || (prefill_cnt < 1 && ifc_ins_hf_i == ifc_ins_stride_i) ||
-                               (window_active && (window_cnt_nxt < ifc_ins_stride_i) && ifc_pu_rdy_i);
+    assign ifc_ifbuf_rdy_o  = (prefill_cnt < (ifc_inf_hf_i - ifc_inf_stride_i)) || (prefill_cnt < 1 && ifc_inf_hf_i == ifc_inf_stride_i) ||
+                               (window_active && (window_cnt_nxt < ifc_inf_stride_i) && ifc_pu_rdy_i);
     // ==========================================
     // 3. Logic của thanh ghi đếm 'is_begin'
     // ==========================================
@@ -89,7 +91,7 @@ module ifmap_cache #(
         if (!rst_n) begin
             is_begin <= 0;
         end else begin
-            if ((prefill_cnt == (|(ifc_ins_hf_i - ifc_ins_stride_i) ? (ifc_ins_hf_i - ifc_ins_stride_i - 1) : 0)) && ifc_ifbuf_vld_i && ifc_ifbuf_rdy_o) begin
+            if ((prefill_cnt == (|(ifc_inf_hf_i - ifc_inf_stride_i) ? (ifc_inf_hf_i - ifc_inf_stride_i - 1) : 0)) && ifc_ifbuf_vld_i && ifc_ifbuf_rdy_o) begin
                 is_begin <= 1;
             end else if(fifo_dout[K*DATA_WIDTH + 3] && ifc_pu_rdy_i && ifc_pu_vld_o) begin
                 is_begin <= window_active;
@@ -100,16 +102,17 @@ module ifmap_cache #(
     // ==========================================
     // 4. Các tín hiệu ngõ ra khác
     // ==========================================
-    assign fifo_din                 = (window_active && (window_cnt >= ifc_ins_stride_i)) ? fifo_dout : combined_data_in;
+    assign fifo_din                 = (window_active && (window_cnt >= ifc_inf_stride_i)) ? fifo_dout : combined_data_in;
     assign ifc_pu_data_o            = fifo_dout[K*DATA_WIDTH - 1 : 0];
     assign ifc_pu_end_layer_o       = fifo_dout[K*DATA_WIDTH];
+    assign ifc_pu_end_layer_real_o  = fifo_dout[K*DATA_WIDTH + 4];
     assign ifc_pu_end_depth_o       = fifo_dout[K*DATA_WIDTH + 1];
     assign ifc_pu_end_row_circle_o  = fifo_dout[K*DATA_WIDTH + 2];
     assign ifc_pu_end_row_o         = fifo_dout[K*DATA_WIDTH + 3];
     assign ifc_pu_vld_o             = is_begin && ~empty;
     
        fifo #(
-       .DATA_WIDTH(K*DATA_WIDTH + 4),
+       .DATA_WIDTH(K*DATA_WIDTH + 5),
        .FF_TYPE(0),
        .FF_NUM(2),
        .FIFO_DEPTH(FIFO_DEPTH)

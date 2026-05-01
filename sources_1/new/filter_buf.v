@@ -30,20 +30,20 @@ module filter_buf #(
     input   clk,
     input   rst_n,
     
-    // Giao tiếp Instruction
-    input               fltbuf_ins_vld_i,
-    input       [31:0]  fltbuf_ins_fltbaddr_i,
-    input       [3:0]   fltbuf_ins_ifparr_i,
-    input       [3:0]   fltbuf_ins_ifparr_tail_i,
-    input       [6:0]   fltbuf_ins_fltsize_i,
-    input       [6:0]   fltbuf_ins_ifblock_i,
-    input       [4:0]   fltbuf_ins_ofparr_i,
-    input       [4:0]   fltbuf_ins_ofparr_tail_i,
-    input       [3:0]   fltbuf_ins_oftiles_i,
-    input       [3:0]   fltbuf_ins_oftiles_tail_i,
-    input       [6:0]   fltbuf_ins_iftiles_i,
-    input       [7:0]   fltbuf_ins_height_i,
-    output reg          fltbuf_ins_rdy_o,
+    // Giao tiếp inftruction
+    input               fltbuf_inf_vld_i,
+    input       [23:0]  fltbuf_inf_fltbaddr_i,
+    input       [3:0]   fltbuf_inf_ifparr_i,
+    input       [3:0]   fltbuf_inf_ifparr_tail_i,
+    input       [6:0]   fltbuf_inf_fltsize_i,
+    input       [6:0]   fltbuf_inf_ifblock_i,
+    input       [4:0]   fltbuf_inf_ofparr_i,
+    input       [4:0]   fltbuf_inf_ofparr_tail_i,
+    input       [3:0]   fltbuf_inf_oftiles_i,
+    input       [3:0]   fltbuf_inf_oftiles_tail_i,
+    input       [6:0]   fltbuf_inf_iftiles_i,
+    input       [7:0]   fltbuf_inf_height_i,
+    output reg          fltbuf_inf_rdy_o,
     input       [DATA_WIDTH-1:0] zp,
     // Tín hiệu DMA
     input               fltbuf_dma_rdycfg_i,
@@ -52,7 +52,7 @@ module filter_buf #(
     input               fltbuf_dma_tlast_i,
     output              fltbuf_dma_vldcfg_o,
     output reg  [9:0]   fltbuf_dma_burst_o, 
-    output reg  [31:0]  fltbuf_dma_baddr_o,
+    output reg  [23:0]  fltbuf_dma_baddr_o,
     output              fltbuf_dma_rdy_o,
 
     // Tín hiệu giao tiếp với khối khác
@@ -66,7 +66,7 @@ module filter_buf #(
     localparam VLDCFG = 2;
     reg [1:0]   STATE;
     reg [2:0]   count_cycle;
-    reg [31:0]  fltbaddr_reg;
+    reg [23:0]  fltbaddr_reg;
     reg [3:0]   ifparr_reg;
     reg [3:0]   ifparr_tail_reg;
     reg [6:0]   fltsize_reg;
@@ -165,18 +165,18 @@ module filter_buf #(
     assign oftiles_cfg_cnt_en   = fltbuf_dma_vldcfg_o && fltbuf_dma_rdycfg_i;
     assign ifblock_cfg_cnt_en   = iftiles_cfg_cnt_en && (iftiles_cfg_cnt == iftiles_reg - 1);
     always @(posedge clk) begin
-        if(fltbuf_ins_rdy_o) begin
-            fltbaddr_reg    <= fltbuf_ins_fltbaddr_i;
-            ifparr_reg      <= fltbuf_ins_ifparr_i;
-            ifparr_tail_reg <= fltbuf_ins_ifparr_tail_i;
-            fltsize_reg     <= fltbuf_ins_fltsize_i;
-            ifblock_reg     <= fltbuf_ins_ifblock_i;
-            ofparr_reg      <= fltbuf_ins_ofparr_i;
-            ofparr_tail_reg <= fltbuf_ins_ofparr_tail_i;
-            oftiles_reg     <= fltbuf_ins_oftiles_i;
-            oftiles_tail_reg <= fltbuf_ins_oftiles_tail_i;
-            iftiles_reg     <= fltbuf_ins_iftiles_i;
-            height_reg      <= fltbuf_ins_height_i;
+        if(fltbuf_inf_rdy_o) begin
+            fltbaddr_reg    <= fltbuf_inf_fltbaddr_i;
+            ifparr_reg      <= fltbuf_inf_ifparr_i;
+            ifparr_tail_reg <= fltbuf_inf_ifparr_tail_i;
+            fltsize_reg     <= fltbuf_inf_fltsize_i;
+            ifblock_reg     <= fltbuf_inf_ifblock_i;
+            ofparr_reg      <= fltbuf_inf_ofparr_i;
+            ofparr_tail_reg <= fltbuf_inf_ofparr_tail_i;
+            oftiles_reg     <= fltbuf_inf_oftiles_i;
+            oftiles_tail_reg <= fltbuf_inf_oftiles_tail_i;
+            iftiles_reg     <= fltbuf_inf_iftiles_i;
+            height_reg      <= fltbuf_inf_height_i;
         end
     end
     always @(posedge clk) begin
@@ -190,17 +190,17 @@ module filter_buf #(
         end
     end
     always @(posedge clk) begin
-        if(fltbuf_ins_rdy_o) begin
-            fltbuf_dma_baddr_o <= fltbuf_ins_fltbaddr_i;
+        if(fltbuf_inf_rdy_o) begin
+            fltbuf_dma_baddr_o <= fltbuf_inf_fltbaddr_i;
         end else if(fltbuf_dma_vldcfg_o && fltbuf_dma_rdycfg_i) begin
             fltbuf_dma_baddr_o <= fltbuf_dma_baddr_o + fltbuf_dma_burst_o;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) fltbuf_ins_rdy_o <= 1;
+        if(!rst_n) fltbuf_inf_rdy_o <= 1;
         else begin
-            if((ifblock_rd_cnt == ifblock_reg - 1) && end_layer) fltbuf_ins_rdy_o <= 1;
-            else if(fltbuf_ins_rdy_o && fltbuf_ins_vld_i) fltbuf_ins_rdy_o <= 0;
+            if((ifblock_rd_cnt == ifblock_reg - 1) && end_layer) fltbuf_inf_rdy_o <= 1;
+            else if(fltbuf_inf_rdy_o && fltbuf_inf_vld_i) fltbuf_inf_rdy_o <= 0;
         end
     end
     always @(posedge clk) begin
@@ -239,7 +239,7 @@ module filter_buf #(
         end else begin
             case (STATE)
                 IDLE: begin
-                    if(fltbuf_ins_rdy_o && fltbuf_ins_vld_i) STATE <= WAIT_6C;
+                    if(fltbuf_inf_rdy_o && fltbuf_inf_vld_i) STATE <= WAIT_6C;
                     count_cycle <= 0;
                     vldcfg <= 0;
                 end
@@ -267,7 +267,7 @@ module filter_buf #(
                     
                 end
                 default: begin
-                    if(fltbuf_ins_rdy_o && fltbuf_ins_vld_i) STATE <= WAIT_6C;
+                    if(fltbuf_inf_rdy_o && fltbuf_inf_vld_i) STATE <= WAIT_6C;
                     count_cycle <= 0;
                     vldcfg <= 0;
                 end
@@ -283,7 +283,7 @@ module filter_buf #(
     always @(posedge clk) begin
         if(!rst_n) last_ifblock_rd <= 1'b0;
         else begin
-            if(fltbuf_ins_rdy_o)        last_ifblock_rd <= 0;
+            if(fltbuf_inf_rdy_o)        last_ifblock_rd <= 0;
             else if(ifblock_reg == 1)   last_ifblock_rd <= (ifblock_rd_cnt == ifblock_reg - 1);
             else if(ifblock_rd_cnt_en && ifblock_rd_cnt == ifblock_reg - 2) last_ifblock_rd <= 1;
         end
@@ -514,7 +514,7 @@ module filter_buf #(
             fltbuf_cache #(
                 .WIDTH(DATA_WIDTH), 
                 .DEPTH(DEPTH)       // Bạn có thể map tham số DEPTH của filter_buf xuống đây
-            ) u_cache_inst (
+            ) u_cache_inft (
                 .clk(clk),
                 .rst_n(rst_n),
                 .wr_en(cache_wr_en[i]),

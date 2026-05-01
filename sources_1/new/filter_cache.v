@@ -34,7 +34,7 @@ module filter_cache #(
 
     input                   swap_fltc_i,
     output                  swap_fltc_o,
-    input   [3:0]           fltc_ins_hf_i,
+    input   [3:0]           fltc_inf_hf_i,
     input                   fltc_fltbuf_done_pass_i,
     input                   fltc_pe_rdy_i,
     input                   fltc_pu_clr_ch_flt_i,
@@ -72,7 +72,7 @@ module filter_cache #(
       end 
     end
     always @(*) begin
-        if (count_w == fltc_ins_hf_i - 1) begin
+        if (count_w == fltc_inf_hf_i - 1) begin
             count_w_nxt = 0;
         end else begin
             count_w_nxt = count_w + 1;
@@ -108,7 +108,7 @@ module filter_cache #(
             count_h <= 0;
         end else begin
             if(id_en) count_h <= 0;
-            else if (count_en && count_w == fltc_ins_hf_i - 1) begin
+            else if (count_en && count_w == fltc_inf_hf_i - 1) begin
                 count_h <= count_h_nxt; 
             end
         end 
@@ -119,11 +119,11 @@ module filter_cache #(
             pp_circle_reg #(
                 .WIDTH(WIDTH),
                 .DEPTH(DEPTH)
-            ) circle_reg_inst (
+            ) circle_reg_inft (
                 .clk(clk),
                 .rst_n(rst_n),
                 .id_i(id),
-                .ins_hf_i(fltc_ins_hf_i),
+                .inf_hf_i(fltc_inf_hf_i),
                 .wr_en(wr_en[i]),
                 .rd_en(rd_en[i]),
                 .clr_i(fltc_pu_clr_ch_flt_i),

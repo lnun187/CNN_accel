@@ -25,20 +25,20 @@ module ifbuf_mem_tb();
     reg         clk;
     reg         rst_n;
 
-    // Các tín hiệu Instruction Input (Đã update theo module mới)
-    reg         ifbuf_ins_vld_i;
-    reg  [31:0] ifbuf_ins_ifbaddr_i;
-    reg  [8:0]  ifbuf_ins_width_i;
-    reg  [10:0] ifbuf_ins_channel_i;
-    reg  [8:0]  ifbuf_ins_ifsize_i;
-    reg  [10:0] ifbuf_ins_ifblock_i;
+    // Các tín hiệu inftruction Input (Đã update theo module mới)
+    reg         ifbuf_inf_vld_i;
+    reg  [31:0] ifbuf_inf_ifbaddr_i;
+    reg  [8:0]  ifbuf_inf_width_i;
+    reg  [10:0] ifbuf_inf_channel_i;
+    reg  [8:0]  ifbuf_inf_ifsize_i;
+    reg  [10:0] ifbuf_inf_ifblock_i;
 
     // Các tín hiệu giao tiếp DMA
     reg         swap_en;
     reg         ifbuf_dma_rdycfg_i;
     wire        ifbuf_dma_vldcfg_o;
     wire [31:0] ifbuf_dma_baddr_o; // Đã sửa thành [31:0] cho khớp DUT
-    wire        ifbuf_ins_rdy_o;
+    wire        ifbuf_inf_rdy_o;
     wire [8:0]  ifbuf_dma_burst_o;
 
     // Các biến cho quá trình test
@@ -59,19 +59,19 @@ module ifbuf_mem_tb();
     ) dut (
         .clk                 (clk),
         .rst_n               (rst_n),
-        .ifbuf_ins_vld_i     (ifbuf_ins_vld_i),
-        .ifbuf_ins_ifbaddr_i (ifbuf_ins_ifbaddr_i),
-        .ifbuf_ins_width_i  (ifbuf_ins_width_i),
-        .ifbuf_ins_channel_i (ifbuf_ins_channel_i),
-        .ifbuf_ins_ifsize_i  (ifbuf_ins_ifsize_i),
-        .ifbuf_ins_ifblock_i (ifbuf_ins_ifblock_i),
+        .ifbuf_inf_vld_i     (ifbuf_inf_vld_i),
+        .ifbuf_inf_ifbaddr_i (ifbuf_inf_ifbaddr_i),
+        .ifbuf_inf_width_i  (ifbuf_inf_width_i),
+        .ifbuf_inf_channel_i (ifbuf_inf_channel_i),
+        .ifbuf_inf_ifsize_i  (ifbuf_inf_ifsize_i),
+        .ifbuf_inf_ifblock_i (ifbuf_inf_ifblock_i),
         
         .swap_en             (swap_en),
         .ifbuf_dma_rdycfg_i     (ifbuf_dma_rdycfg_i),
         .ifbuf_dma_vldcfg_o     (ifbuf_dma_vldcfg_o),
         .ifbuf_dma_baddr_o   (ifbuf_dma_baddr_o),
         
-        .ifbuf_ins_rdy_o     (ifbuf_ins_rdy_o),
+        .ifbuf_inf_rdy_o     (ifbuf_inf_rdy_o),
         .ifbuf_dma_burst_o   (ifbuf_dma_burst_o)
     );
 
@@ -187,12 +187,12 @@ module ifbuf_mem_tb();
     initial begin
         // Init signals
         rst_n               = 0;
-        ifbuf_ins_vld_i     = 0;
-        ifbuf_ins_ifbaddr_i = 0;
-        ifbuf_ins_width_i  = 0;
-        ifbuf_ins_channel_i = 0;
-        ifbuf_ins_ifsize_i  = 0;
-        ifbuf_ins_ifblock_i = 0;
+        ifbuf_inf_vld_i     = 0;
+        ifbuf_inf_ifbaddr_i = 0;
+        ifbuf_inf_width_i  = 0;
+        ifbuf_inf_channel_i = 0;
+        ifbuf_inf_ifsize_i  = 0;
+        ifbuf_inf_ifblock_i = 0;
 
         // Reset
         #20 rst_n = 1;
@@ -206,15 +206,15 @@ module ifbuf_mem_tb();
         // Khởi tạo bộ nhớ tại địa chỉ base = 32'h1000
         init_memory(32'h1000, TEST_WIDTH, TEST_WIDTH, TEST_CHANNEL);
 
-        // Chờ DUT rảnh rỗi và bắn Instruction vào
-        wait(ifbuf_ins_rdy_o);
+        // Chờ DUT rảnh rỗi và bắn inftruction vào
+        wait(ifbuf_inf_rdy_o);
         @(posedge clk);
-        ifbuf_ins_vld_i     <= 1;
-        ifbuf_ins_ifbaddr_i <= 32'h1000;
-        ifbuf_ins_width_i  <= TEST_WIDTH;
-        ifbuf_ins_channel_i <= TEST_CHANNEL;
-        ifbuf_ins_ifsize_i  <= TEST_IFSIZE[8:0]; 
-        ifbuf_ins_ifblock_i <= TEST_BLOCK;
+        ifbuf_inf_vld_i     <= 1;
+        ifbuf_inf_ifbaddr_i <= 32'h1000;
+        ifbuf_inf_width_i  <= TEST_WIDTH;
+        ifbuf_inf_channel_i <= TEST_CHANNEL;
+        ifbuf_inf_ifsize_i  <= TEST_IFSIZE[8:0]; 
+        ifbuf_inf_ifblock_i <= TEST_BLOCK;
         
 
         // Chạy thêm một khoảng thời gian để quan sát tín hiệu trên waveform

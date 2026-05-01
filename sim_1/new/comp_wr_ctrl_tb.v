@@ -14,10 +14,10 @@ module comp_wr_ctrl_tb;
 
     // --- Tín hiệu cho comp_wr_ctrl ---
     reg en;
-    reg cwc_ins_dw_i;
-    reg [3:0] cwc_ins_hf_i;
-    reg [1:0] cwc_ins_stride_i;
-    reg [1:0] cwc_ins_padding_i;
+    reg cwc_inf_dw_i;
+    reg [3:0] cwc_inf_hf_i;
+    reg [1:0] cwc_inf_stride_i;
+    reg [1:0] cwc_inf_padding_i;
     reg cwc_pu_end_height_i;
     reg cwc_pu_end_height_nxt_i;
     reg cwc_pu_end_layer_i;
@@ -46,7 +46,7 @@ module comp_wr_ctrl_tb;
         forever #(CLK_PERIOD/2) clk = ~clk;
     end
 
-    // --- Instance: Controller ---
+    // --- inftance: Controller ---
     comp_wr_ctrl #(
         .WIDTH(WIDTH),
         .PE_PER_PU(PE_PER_PU)
@@ -54,10 +54,10 @@ module comp_wr_ctrl_tb;
         .clk(clk),
         .rst_n(rst_n),
         .en(en),
-        .cwc_ins_dw_i(cwc_ins_dw_i),
-        .cwc_ins_hf_i(cwc_ins_hf_i),
-        .cwc_ins_stride_i(cwc_ins_stride_i),
-        .cwc_ins_padding_i(cwc_ins_padding_i),
+        .cwc_inf_dw_i(cwc_inf_dw_i),
+        .cwc_inf_hf_i(cwc_inf_hf_i),
+        .cwc_inf_stride_i(cwc_inf_stride_i),
+        .cwc_inf_padding_i(cwc_inf_padding_i),
         .cwc_pu_end_height_i(cwc_pu_end_height_i),
         .cwc_pu_end_height_nxt_i(cwc_pu_end_height_nxt_i),
         .cwc_pu_end_layer_i(cwc_pu_end_layer_i),
@@ -76,7 +76,7 @@ module comp_wr_ctrl_tb;
         .cwc_ofbuf_data_o(cwc_ofbuf_data_o)
     );
 
-    // --- Instance: 12 Ping-Pong FIFOs (Cập nhật interface mới) ---
+    // --- inftance: 12 Ping-Pong FIFOs (Cập nhật interface mới) ---
     genvar i;
     generate
         for (i = 0; i < PE_PER_PU; i = i + 1) begin : gen_fifos
@@ -108,8 +108,8 @@ module comp_wr_ctrl_tb;
     integer j;
     initial begin
         // Init
-        rst_n = 0; en = 1; cwc_ins_dw_i = 1; cwc_ins_hf_i = 4;
-        cwc_ins_stride_i = 2; cwc_ins_padding_i = 2;
+        rst_n = 0; en = 1; cwc_inf_dw_i = 1; cwc_inf_hf_i = 4;
+        cwc_inf_stride_i = 2; cwc_inf_padding_i = 2;
         cwc_pu_end_height_i = 0; cwc_pu_end_height_nxt_i = 0;
         cwc_pu_end_layer_i = 0; cwc_pu_end_layer_nxt_i = 0;
         cwc_pu_swap_en_i = 0; cwc_ofbuf_rdy_i = 1; 

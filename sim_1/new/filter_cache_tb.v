@@ -30,7 +30,7 @@ module filter_cache_tb;
     integer i;
 
     // =========================================================
-    // 2. Instantiate the Unit Under Test (UUT)
+    // 2. inftantiate the Unit Under Test (UUT)
     // =========================================================
     filter_cache #(
         .WIDTH(WIDTH),
@@ -42,7 +42,7 @@ module filter_cache_tb;
         .fltc_fltbuf_vld_i(fltbuf_vld_i),       
         .fltc_fltbuf_data_i(fltbuf_data_i),     
         .fltc_fltbuf_rdy_o(fltbuf_rdy_o),       
-        .fltc_ins_hf_i(hf),                     
+        .fltc_inf_hf_i(hf),                     
         .fltc_fltbuf_done_pass_i(done_pass),    
         .fltc_pe_rdy_i(comp_rdy_i),             
         .fltc_pu_clr_ch_flt_i(comp_clr_i),      

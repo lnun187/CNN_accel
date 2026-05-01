@@ -27,20 +27,20 @@ module bias_buffer #(
     input                           clk,
     input                           rst_n,
     
-    input                           bias_ins_vld_i,
-    output                          bias_ins_rdy_o,
-    input           [31:0]          bias_ins_bias_baddr_i,
-    input           [7:0]           bias_ins_ofwidth_i,
-    input           [10:0]          bias_ins_ofchannel_i,
-    input           [4:0]           bias_ins_burstlen_i,
-    input           [4:0]           bias_ins_burstlen_tail_i,
-    input           [4:0]           bias_ins_burstlen_lane0_i,
-    input           [4:0]           bias_ins_burstlen_tail_lane0_i,
+    input                           bias_inf_vld_i,
+    output                          bias_inf_rdy_o,
+    input           [23:0]          bias_inf_bias_baddr_i,
+    input           [7:0]           bias_inf_ofwidth_i,
+    input           [10:0]          bias_inf_ofchannel_i,
+    input           [4:0]           bias_inf_burstlen_i,
+    input           [4:0]           bias_inf_burstlen_tail_i,
+    input           [4:0]           bias_inf_burstlen_lane0_i,
+    input           [4:0]           bias_inf_burstlen_tail_lane0_i,
 
     input                           bias_dma_rdycfg_i,
     output                          bias_dma_vldcfg_o,
     output          [4:0]           bias_dma_burst_o, 
-    output          [31:0]          bias_dma_baddr_o,
+    output          [23:0]          bias_dma_baddr_o,
     input                           bias_dma_vld_i,
     input   signed  [31:0]          bias_dma_data_i,
     input                           bias_dma_tlast_i,
@@ -52,18 +52,18 @@ module bias_buffer #(
     
     );
 
-    reg         [31:0]          bias_ins_bias_baddr_reg;
-    reg         [7:0]           bias_ins_ifwidth_reg;
-    reg         [10:0]          bias_ins_ofchannel_reg;
-    reg         [4:0]           bias_ins_burstlen_reg;
-    reg         [4:0]           bias_ins_burstlen_tail_reg;
-    reg         [4:0]           bias_ins_burstlen_lane0_reg;
-    reg         [4:0]           bias_ins_burstlen_lane1_reg;
-    reg         [4:0]           bias_ins_burstlen_tail_lane0_reg;
-    reg         [4:0]           bias_ins_burstlen_tail_lane1_reg;
+    reg         [23:0]          bias_inf_bias_baddr_reg;
+    reg         [7:0]           bias_inf_ifwidth_reg;
+    reg         [10:0]          bias_inf_ofchannel_reg;
+    reg         [4:0]           bias_inf_burstlen_reg;
+    reg         [4:0]           bias_inf_burstlen_tail_reg;
+    reg         [4:0]           bias_inf_burstlen_lane0_reg;
+    reg         [4:0]           bias_inf_burstlen_lane1_reg;
+    reg         [4:0]           bias_inf_burstlen_tail_lane0_reg;
+    reg         [4:0]           bias_inf_burstlen_tail_lane1_reg;
 
-    reg                         ins_rdy_dly;
-    reg                         ins_rdy_dly_2;
+    reg                         inf_rdy_dly;
+    reg                         inf_rdy_dly_2;
     reg         [4:0]           burst_length;
     reg         [4:0]           burst_length_real;
     reg         [31:0]          base_addr;
@@ -72,7 +72,7 @@ module bias_buffer #(
     reg                         is_tail_read;
     reg                         is_tail_write;
     reg                         vldcfg;
-    reg                         ins_rdy;
+    reg                         inf_rdy;
 
     reg         [4:0]           count_bias;
     reg                         is_lane_1;
@@ -86,26 +86,26 @@ module bias_buffer #(
     wire                        cnt_height_rd2_en;
     wire                        swap_en;
     //-------------------------------------------CONFIG------------------------------------------------
-    assign bias_ins_rdy_o = ins_rdy;
+    assign bias_inf_rdy_o = inf_rdy;
     assign bias_dma_vldcfg_o = vldcfg;
     assign bias_dma_burst_o = burst_length;
     assign bias_dma_baddr_o = base_addr;
     assign bias_dma_rdy_o = 1'b1;
     always @(posedge clk) begin
-        if(bias_ins_rdy_o) begin
-            bias_ins_bias_baddr_reg             <= bias_ins_bias_baddr_i;
-            bias_ins_ifwidth_reg                <= bias_ins_ofwidth_i;
-            bias_ins_ofchannel_reg              <= bias_ins_ofchannel_i;
-            bias_ins_burstlen_reg               <= bias_ins_burstlen_i;
-            bias_ins_burstlen_tail_reg          <= bias_ins_burstlen_tail_i;
-            bias_ins_burstlen_lane0_reg         <= bias_ins_burstlen_lane0_i;
-            bias_ins_burstlen_lane1_reg         <= bias_ins_burstlen_i - bias_ins_burstlen_lane0_i;
-            bias_ins_burstlen_tail_lane0_reg    <= bias_ins_burstlen_tail_lane0_i;
-            bias_ins_burstlen_tail_lane1_reg    <= bias_ins_burstlen_tail_i - bias_ins_burstlen_tail_lane0_i;
+        if(bias_inf_rdy_o) begin
+            bias_inf_bias_baddr_reg             <= bias_inf_bias_baddr_i;
+            bias_inf_ifwidth_reg                <= bias_inf_ofwidth_i;
+            bias_inf_ofchannel_reg              <= bias_inf_ofchannel_i;
+            bias_inf_burstlen_reg               <= bias_inf_burstlen_i;
+            bias_inf_burstlen_tail_reg          <= bias_inf_burstlen_tail_i;
+            bias_inf_burstlen_lane0_reg         <= bias_inf_burstlen_lane0_i;
+            bias_inf_burstlen_lane1_reg         <= bias_inf_burstlen_i - bias_inf_burstlen_lane0_i;
+            bias_inf_burstlen_tail_lane0_reg    <= bias_inf_burstlen_tail_lane0_i;
+            bias_inf_burstlen_tail_lane1_reg    <= bias_inf_burstlen_tail_i - bias_inf_burstlen_tail_lane0_i;
             
         end
-        ins_rdy_dly                         <= bias_ins_rdy_o && bias_ins_vld_i;
-        ins_rdy_dly_2                       <= ins_rdy_dly;
+        inf_rdy_dly                         <= bias_inf_rdy_o && bias_inf_vld_i;
+        inf_rdy_dly_2                       <= inf_rdy_dly;
     end
     always @(posedge clk) begin
         if(!rst_n) begin
@@ -116,51 +116,51 @@ module bias_buffer #(
     end
 
     always @(posedge clk) begin
-        if(swap_en || ins_rdy_dly) begin
-            burst_length        <= (ins_rdy_dly || !is_tail_cfg) ? 
-                                    bias_ins_burstlen_reg + bias_ins_burstlen_reg[0] : 
-                                    bias_ins_burstlen_tail_reg + bias_ins_burstlen_tail_reg[0];
-            burst_length_real   <= (ins_rdy_dly || !is_tail_cfg) ? 
-                                    bias_ins_burstlen_reg : 
-                                    bias_ins_burstlen_tail_reg;
-            base_addr           <= ins_rdy_dly ? bias_ins_bias_baddr_reg : (burst_length + base_addr);
+        if(swap_en || inf_rdy_dly) begin
+            burst_length        <= (inf_rdy_dly || !is_tail_cfg) ? 
+                                    bias_inf_burstlen_reg + bias_inf_burstlen_reg[0] : 
+                                    bias_inf_burstlen_tail_reg + bias_inf_burstlen_tail_reg[0];
+            burst_length_real   <= (inf_rdy_dly || !is_tail_cfg) ? 
+                                    bias_inf_burstlen_reg : 
+                                    bias_inf_burstlen_tail_reg;
+            base_addr           <= inf_rdy_dly ? bias_inf_bias_baddr_reg : (burst_length + base_addr);
         end
     end
     always @(posedge clk) begin
-        if((bias_dma_rdycfg_i && bias_dma_vldcfg_o) || ins_rdy_dly) begin
-            ch_cnt_nxt_swp  <= ins_rdy_dly ? bias_ins_burstlen_reg : ch_cnt_nxt_swp + bias_ins_burstlen_reg;
+        if((bias_dma_rdycfg_i && bias_dma_vldcfg_o) || inf_rdy_dly) begin
+            ch_cnt_nxt_swp  <= inf_rdy_dly ? bias_inf_burstlen_reg : ch_cnt_nxt_swp + bias_inf_burstlen_reg;
         end
     end
     always @(posedge clk) begin
-        if(bias_ins_rdy_o) begin
+        if(bias_inf_rdy_o) begin
             is_tail_cfg   <= 0;
-        end else if((bias_dma_rdycfg_i && bias_dma_vldcfg_o) || ins_rdy_dly) begin
-            is_tail_cfg   <= ins_rdy_dly ? !(bias_ins_burstlen_reg < bias_ins_ofchannel_reg) : !((ch_cnt_nxt_swp + bias_ins_burstlen_reg) < bias_ins_ofchannel_reg);
+        end else if((bias_dma_rdycfg_i && bias_dma_vldcfg_o) || inf_rdy_dly) begin
+            is_tail_cfg   <= inf_rdy_dly ? !(bias_inf_burstlen_reg < bias_inf_ofchannel_reg) : !((ch_cnt_nxt_swp + bias_inf_burstlen_reg) < bias_inf_ofchannel_reg);
         end
     end
     always @(posedge clk) begin
-        if(bias_ins_rdy_o) begin
+        if(bias_inf_rdy_o) begin
             is_tail_write <= 0;
-        end else if(swap_en || ins_rdy_dly_2) begin
+        end else if(swap_en || inf_rdy_dly_2) begin
             is_tail_write <= is_tail_cfg;
         end
     end
     always @(posedge clk) begin
         if(!rst_n) begin
             vldcfg <= 0;
-        end if(bias_dma_rdycfg_i && bias_dma_vldcfg_o || ins_rdy) begin
+        end if(bias_dma_rdycfg_i && bias_dma_vldcfg_o || inf_rdy) begin
             vldcfg <= 0;
-        end else if((!is_tail_write && swap_en) || ins_rdy_dly) begin
+        end else if((!is_tail_write && swap_en) || inf_rdy_dly) begin
             vldcfg <= 1;
         end
     end
     always @(posedge clk) begin
         if(!rst_n) begin
-            ins_rdy <= 1;
+            inf_rdy <= 1;
         end else if(is_tail_write && swap_en) begin
-            ins_rdy <= 1;
-        end else if(bias_ins_vld_i) begin
-            ins_rdy <= 0;
+            inf_rdy <= 1;
+        end else if(bias_inf_vld_i) begin
+            inf_rdy <= 0;
         end
     end
     //-------------------------------------------WRITE CONTROL------------------------------------------------
@@ -168,21 +168,21 @@ module bias_buffer #(
     always @(posedge clk) begin
         if(bias_dma_tlast_i) begin
             done_write <= 1;
-        end else if(swap_en || ins_rdy_dly) begin
+        end else if(swap_en || inf_rdy_dly) begin
             done_write <= 0;
         end
     end
     always @(posedge clk) begin
-        if(bias_dma_tlast_i || ins_rdy_dly) begin
+        if(bias_dma_tlast_i || inf_rdy_dly) begin
             count_bias <= 0;
         end else if(bias_dma_vld_i) begin
             count_bias <= count_bias + 1;
         end
     end
     always @(posedge clk) begin
-        if(bias_dma_tlast_i || ins_rdy_dly) begin
+        if(bias_dma_tlast_i || inf_rdy_dly) begin
             is_lane_1 <= 0;
-        end else if(bias_dma_vld_i && ((count_bias + 1) == bias_ins_burstlen_lane0_reg || ((count_bias + 1) == bias_ins_burstlen_tail_lane0_reg && is_tail_write))) begin
+        end else if(bias_dma_vld_i && ((count_bias + 1) == bias_inf_burstlen_lane0_reg || ((count_bias + 1) == bias_inf_burstlen_tail_lane0_reg && is_tail_write))) begin
             is_lane_1 <= 1;
         end
     end
@@ -194,7 +194,7 @@ module bias_buffer #(
         .id_i(id),
         .wr_en(bias_dma_vld_i && !is_lane_1 && (!bias_dma_tlast_i || !burst_length_real[0])),
         .rd_en(bias_scale_rdy_i[0]),
-        .is_wr_back(cnt_height_rd1 != bias_ins_ifwidth_reg - 1),
+        .is_wr_back(cnt_height_rd1 != bias_inf_ifwidth_reg - 1),
         .clr_i(1'b0),
         .data_i(bias_dma_data_i),
         .data_o(bias_scale_data_o[DATA_WIDTH-1:0]),
@@ -208,15 +208,15 @@ module bias_buffer #(
         .id_i(id),
         .wr_en(bias_dma_vld_i && is_lane_1 && (!bias_dma_tlast_i || !burst_length_real[0])),
         .rd_en(bias_scale_rdy_i[1]),
-        .is_wr_back(cnt_height_rd2 != bias_ins_ifwidth_reg - 1),
+        .is_wr_back(cnt_height_rd2 != bias_inf_ifwidth_reg - 1),
         .clr_i(1'b0),
         .data_i(bias_dma_data_i),
         .data_o(bias_scale_data_o[2*DATA_WIDTH-1:DATA_WIDTH]),
         .vld_o(bias_scale_vld_o[1])
     );
     //-------------------------------------------READ & CLEAR CONTROL------------------------------------------------
-    assign cnt_height_rd1_en = bias_scale_rdy_i[0] && bias_scale_vld_o[0] && ((cnt_bias_rd1 == bias_ins_burstlen_lane0_reg - 1) || is_tail_read && (cnt_bias_rd1 == bias_ins_burstlen_tail_lane0_reg - 1));
-    assign cnt_height_rd2_en = bias_scale_rdy_i[1] && bias_scale_vld_o[1] && ((cnt_bias_rd2 == bias_ins_burstlen_lane1_reg - 1) || is_tail_read && (cnt_bias_rd2 == bias_ins_burstlen_tail_lane1_reg - 1));
+    assign cnt_height_rd1_en = bias_scale_rdy_i[0] && bias_scale_vld_o[0] && ((cnt_bias_rd1 == bias_inf_burstlen_lane0_reg - 1) || is_tail_read && (cnt_bias_rd1 == bias_inf_burstlen_tail_lane0_reg - 1));
+    assign cnt_height_rd2_en = bias_scale_rdy_i[1] && bias_scale_vld_o[1] && ((cnt_bias_rd2 == bias_inf_burstlen_lane1_reg - 1) || is_tail_read && (cnt_bias_rd2 == bias_inf_burstlen_tail_lane1_reg - 1));
     always @(posedge clk) begin
         if(swap_en) begin
             is_tail_read <= is_tail_write;
@@ -226,7 +226,7 @@ module bias_buffer #(
         if(swap_en) begin
             cnt_bias_rd1 <= 0;
         end else if(bias_scale_rdy_i[0] && bias_scale_vld_o[0]) begin
-            cnt_bias_rd1 <= ((cnt_bias_rd1 == bias_ins_burstlen_lane0_reg - 1) || is_tail_read && (cnt_bias_rd1 == bias_ins_burstlen_tail_lane0_reg - 1)) 
+            cnt_bias_rd1 <= ((cnt_bias_rd1 == bias_inf_burstlen_lane0_reg - 1) || is_tail_read && (cnt_bias_rd1 == bias_inf_burstlen_tail_lane0_reg - 1)) 
             ? 0 : cnt_bias_rd1 + 1;
         end
     end
@@ -234,7 +234,7 @@ module bias_buffer #(
         if(swap_en) begin
             cnt_bias_rd2 <= 0;
         end else if(bias_scale_rdy_i[1] && bias_scale_vld_o[1]) begin
-            cnt_bias_rd2 <= ((cnt_bias_rd2 == bias_ins_burstlen_lane1_reg - 1) || is_tail_read && (cnt_bias_rd2 == bias_ins_burstlen_tail_lane1_reg - 1)) 
+            cnt_bias_rd2 <= ((cnt_bias_rd2 == bias_inf_burstlen_lane1_reg - 1) || is_tail_read && (cnt_bias_rd2 == bias_inf_burstlen_tail_lane1_reg - 1)) 
             ? 0 : cnt_bias_rd2 + 1;
         end
     end
@@ -243,14 +243,14 @@ module bias_buffer #(
         if(swap_en) begin
             cnt_height_rd1 <= 0;
         end else if(cnt_height_rd1_en) begin
-            cnt_height_rd1 <= (cnt_height_rd1 == bias_ins_ifwidth_reg - 1) ? 0 : cnt_height_rd1 + 1;
+            cnt_height_rd1 <= (cnt_height_rd1 == bias_inf_ifwidth_reg - 1) ? 0 : cnt_height_rd1 + 1;
         end
     end
     always @(posedge clk) begin
         if(swap_en) begin
             cnt_height_rd2 <= 0;
         end else if(cnt_height_rd2_en) begin
-            cnt_height_rd2 <= (cnt_height_rd2 == bias_ins_ifwidth_reg - 1) ? 0 : cnt_height_rd2 + 1;
+            cnt_height_rd2 <= (cnt_height_rd2 == bias_inf_ifwidth_reg - 1) ? 0 : cnt_height_rd2 + 1;
         end
     end
 endmodule

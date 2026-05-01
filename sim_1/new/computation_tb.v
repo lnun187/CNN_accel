@@ -23,13 +23,13 @@ module computation_tb;
     reg clk;
     reg rst_n;
 
-    // INSTRUCTION
-    reg               comp_ins_dw_i;
-    reg [3:0]         comp_ins_hf_i;
-    reg [2:0]         comp_ins_stride_i;
-    reg [1:0]         comp_ins_padding_i;
-    reg [7:0]         comp_ins_ifc_zp_i;
-    reg [7:0]         comp_ins_fltc_zp_i;
+    // infTRUCTION
+    reg               comp_inf_dw_i;
+    reg [3:0]         comp_inf_hf_i;
+    reg [2:0]         comp_inf_stride_i;
+    reg [1:0]         comp_inf_padding_i;
+    reg [7:0]         comp_inf_ifc_zp_i;
+    reg [7:0]         comp_inf_fltc_zp_i;
 
     // IFMAP BUFFER (Vào Cache)
     reg               comp_ifbuf_vld_i;
@@ -74,7 +74,7 @@ module computation_tb;
     integer lane_idx;
 
     // ==========================================
-    // 4. DUT INSTANTIATION
+    // 4. DUT infTANTIATION
     // ==========================================
     computation #(
         .WIDTH(WIDTH),
@@ -88,12 +88,12 @@ module computation_tb;
     ) uut (
         .clk(clk),
         .rst_n(rst_n),
-        .comp_ins_dw_i(comp_ins_dw_i),
-        .comp_ins_hf_i(comp_ins_hf_i),
-        .comp_ins_stride_i(comp_ins_stride_i),
-        .comp_ins_padding_i(comp_ins_padding_i),
-        .comp_ins_ifc_zp_i(comp_ins_ifc_zp_i),
-        .comp_ins_fltc_zp_i(comp_ins_fltc_zp_i),
+        .comp_inf_dw_i(comp_inf_dw_i),
+        .comp_inf_hf_i(comp_inf_hf_i),
+        .comp_inf_stride_i(comp_inf_stride_i),
+        .comp_inf_padding_i(comp_inf_padding_i),
+        .comp_inf_ifc_zp_i(comp_inf_ifc_zp_i),
+        .comp_inf_fltc_zp_i(comp_inf_fltc_zp_i),
 
         .comp_ifbuf_vld_i(comp_ifbuf_vld_i),
         .comp_ifbuf_data_i(comp_ifbuf_data_i),
@@ -132,12 +132,12 @@ module computation_tb;
     // ==========================================
     task clear_inputs;
     begin
-        comp_ins_dw_i                 = 0;
-        comp_ins_hf_i                 = 0;
-        comp_ins_stride_i             = 0;
-        comp_ins_padding_i            = 0;
-        comp_ins_ifc_zp_i             = 0;
-        comp_ins_fltc_zp_i            = 0;
+        comp_inf_dw_i                 = 0;
+        comp_inf_hf_i                 = 0;
+        comp_inf_stride_i             = 0;
+        comp_inf_padding_i            = 0;
+        comp_inf_ifc_zp_i             = 0;
+        comp_inf_fltc_zp_i            = 0;
 
         comp_ifbuf_vld_i              = 0;
         comp_ifbuf_data_i             = 0;
@@ -218,7 +218,7 @@ module computation_tb;
     end
     endtask
 
-    task configure_instruction;
+    task configure_inftruction;
         input integer dw;
         input integer hf;
         input integer stride;
@@ -226,14 +226,14 @@ module computation_tb;
         input integer ifc_zp;
         input integer fltc_zp;
     begin
-        comp_ins_dw_i      = dw;
-        comp_ins_hf_i      = hf[3:0];
-        comp_ins_stride_i  = stride[2:0];
-        comp_ins_padding_i = padding[1:0];
-        comp_ins_ifc_zp_i  = ifc_zp[7:0];
-        comp_ins_fltc_zp_i = fltc_zp[7:0];
+        comp_inf_dw_i      = dw;
+        comp_inf_hf_i      = hf[3:0];
+        comp_inf_stride_i  = stride[2:0];
+        comp_inf_padding_i = padding[1:0];
+        comp_inf_ifc_zp_i  = ifc_zp[7:0];
+        comp_inf_fltc_zp_i = fltc_zp[7:0];
 
-        $display("[INFO][%0t] Configure instruction: dw=%0d hf=%0d stride=%0d padding=%0d ifc_zp=%0d fltc_zp=%0d",
+        $display("[INFO][%0t] Configure inftruction: dw=%0d hf=%0d stride=%0d padding=%0d ifc_zp=%0d fltc_zp=%0d",
                  $time, dw, hf, stride, padding, ifc_zp, fltc_zp);
     end
     endtask
@@ -299,7 +299,7 @@ module computation_tb;
         integer done_last_word;
         integer value;
     begin
-        total = num_filter * comp_ins_hf_i * comp_ins_hf_i;
+        total = num_filter * comp_inf_hf_i * comp_inf_hf_i;
         for (pu_sel = 0; pu_sel < M; pu_sel = pu_sel + 1) begin
             for (lane_sel = 0; lane_sel < K; lane_sel = lane_sel + 1) begin
                 for (i = 0; i < total; i = i + 1) begin
@@ -474,7 +474,7 @@ module computation_tb;
     begin
         start_test("basic_single_pass");
         apply_reset();
-        configure_instruction(0, 3, 2, 1, 0, 0);
+        configure_inftruction(0, 3, 2, 1, 0, 0);
 
         $display("[CASE ] Basic: W=5 P=1 S=2 K=3 rows=2 chans=2 pass=1 parallel=1");
         run_layer(5, 1, 2, 3, 2, 2, 1, 1, 0);
@@ -493,7 +493,7 @@ module computation_tb;
     begin
         start_test("multi_pass_multi_channel");
         apply_reset();
-        configure_instruction(0, 3, 1, 1, 0, 0);
+        configure_inftruction(0, 3, 1, 1, 0, 0);
 
         $display("[CASE ] Multi-pass: W=6 P=1 S=1 K=3 rows=2 chans=2 pass=2 parallel=1");
         run_layer(6, 1, 1, 3, 2, 2, 2, 1, 100);
@@ -511,7 +511,7 @@ module computation_tb;
     begin
         start_test("output_backpressure");
         apply_reset();
-        configure_instruction(0, 3, 2, 1, 0, 0);
+        configure_inftruction(0, 3, 2, 1, 0, 0);
 
         fork
             begin

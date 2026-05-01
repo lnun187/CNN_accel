@@ -36,72 +36,74 @@ module CNN_accel#(
     input               rst_n,
 
     // =========================================================
-    // IFBUF instruction interface
+    // IFBUF inftruction interface
     // =========================================================
-    input               ifbuf_ins_vld_i,
-    input  [31:0]       ifbuf_ins_ifbaddr_i, //base address for ifmap
-    input  [7:0]        ifbuf_ins_ifwidth_i, //width and height of ifmap channel
-    input  [10:0]       ifbuf_ins_channel_i, //total ifmap channel
-    input  [3:0]        ifbuf_ins_ifparr_i, //count of parrallel ifmap channel
-    input  [15:0]       ifbuf_ins_ifsize_i, //width da duoc align (so chan) * height
-    input  [6:0]        ifbuf_ins_ifblock_i, //so lan 1 ifmap duoc tai lai = Co / (ofparrallel * oftile)
-    input  [3:0]        ifbuf_ins_oftiles_i, //so cum ofmap duoc tinh song song tren 1 lan tai ifmap
-    input  [3:0]        ifbuf_ins_oftiles_tail_i, //so cum ofmap song song o block cuoi cung
-    input  [6:0]        ifbuf_ins_iftiles_i, //Ci / ifmap parrallel
-    input  [8:0]        ifbuf_ins_wp_i, // the end point of row ifmap (include padding) 
-    //this is how too calculate ifbuf_ins_wp_i
+    input               ifbuf_inf_vld_i,
+    input  [23:0]       ifbuf_inf_ifbaddr_i, //base address for ifmap
+    input  [7:0]        ifbuf_inf_ifwidth_i, //width and height of ifmap channel
+    input  [10:0]       ifbuf_inf_channel_i, //total ifmap channel
+    input  [3:0]        ifbuf_inf_ifparr_i, //count of parrallel ifmap channel
+    input  [15:0]       ifbuf_inf_ifsize_i, //width da duoc align (so chan) * height
+    input  [6:0]        ifbuf_inf_ifblock_i, //so lan 1 ifmap duoc tai lai = Co / (ofparrallel * oftile)
+    input  [3:0]        ifbuf_inf_oftiles_i, //so cum ofmap duoc tinh song song tren 1 lan tai ifmap
+    input  [3:0]        ifbuf_inf_oftiles_tail_i, //so cum ofmap song song o block cuoi cung
+    input  [6:0]        ifbuf_inf_iftiles_i, //Ci / ifmap parrallel
+    input  [8:0]        ifbuf_inf_wp_i, // the end point of row ifmap (include padding) 
+    //this is how too calculate ifbuf_inf_wp_i
     //ALIGNED_WIDTH = (TEST_WIDTH % 2 != 0) ? (TEST_WIDTH + 1) : TEST_WIDTH;
     //TEST_IFSIZE   = TEST_WIDTH * ALIGNED_WIDTH; // Giả sử height = width
     //TEST_WP       = ((TEST_WIDTH + 2*TEST_PADDING - TEST_HF) / TEST_STRIDE) * TEST_STRIDE + TEST_HF - 1;
-    input  [1:0]                ifbuf_ins_padding_i, //padding
-    input  [DATA_WIDTH-1:0]     ifbuf_ins_ifc_zp_i, //zero point of quantize 8 bit
-    output                      ifbuf_ins_rdy_o,
+    input  [1:0]                ifbuf_inf_padding_i, //padding
+    input  signed   [DATA_WIDTH-1:0]     ifbuf_inf_ifc_zp_i, //zero point of quantize 8 bit
+    output                      ifbuf_inf_rdy_o,
 
     // =========================================================
-    // FLTBUF instruction interface
+    // FLTBUF inftruction interface
     // =========================================================
-    input               fltbuf_ins_vld_i, 
-    input  [31:0]       fltbuf_ins_fltbaddr_i, //base address for filter
-    input  [3:0]        fltbuf_ins_ifparr_i,
-    input  [3:0]        fltbuf_ins_ifparr_tail_i,
-    input  [6:0]        fltbuf_ins_fltsize_i,
-    input  [6:0]        fltbuf_ins_ifblock_i,
-    input  [4:0]        fltbuf_ins_ofparr_i, //so ofmap channel duoc tinh song song
-    input  [4:0]        fltbuf_ins_ofparr_tail_i,//so ofmap channel duoc tinh song song o block cuoi va oftile cuoi
-    input  [3:0]        fltbuf_ins_oftiles_i,
-    input  [3:0]        fltbuf_ins_oftiles_tail_i,
-    input  [6:0]        fltbuf_ins_iftiles_i,
-    output              fltbuf_ins_rdy_o,
+    input               fltbuf_inf_vld_i, 
+    input  [23:0]       fltbuf_inf_fltbaddr_i, //base address for filter
+    input  [3:0]        fltbuf_inf_ifparr_i,
+    input  [3:0]        fltbuf_inf_ifparr_tail_i,
+    input  [6:0]        fltbuf_inf_fltsize_i,
+    input  [6:0]        fltbuf_inf_ifblock_i,
+    input  [4:0]        fltbuf_inf_ofparr_i, //so ofmap channel duoc tinh song song
+    input  [4:0]        fltbuf_inf_ofparr_tail_i,//so ofmap channel duoc tinh song song o block cuoi va oftile cuoi
+    input  [3:0]        fltbuf_inf_oftiles_i,
+    input  [3:0]        fltbuf_inf_oftiles_tail_i,
+    input  [6:0]        fltbuf_inf_iftiles_i,
+    output              fltbuf_inf_rdy_o,
 
     // =========================================================
-    // BIAS BUF instruction interface
+    // BIAS BUF inftruction interface
     // =========================================================
-    input                           bias_ins_vld_i,
-    output                          bias_ins_rdy_o,
-    input           [31:0]          bias_ins_bias_baddr_i,
-    input           [7:0]           bias_ins_ofwidth_i,//width of ofmap
-    input           [10:0]          bias_ins_ofchannel_i,//total ofmap channel
-    input           [4:0]           bias_ins_burstlen_i,//equal iftile * ofparr
-    input           [4:0]           bias_ins_burstlen_tail_i,//equal ofchannel % (iftile * ofparr) == 0 ? iftile * ofparr : ofchannel % (iftile * ofparr) 
-    input           [4:0]           bias_ins_burstlen_lane0_i,//equal ceil(burstlen / 2)
-    input           [4:0]           bias_ins_burstlen_tail_lane0_i,//equal ceil(burstlen_tail / 2)
+    input                           bias_inf_vld_i,
+    output                          bias_inf_rdy_o,
+    input           [23:0]          bias_inf_bias_baddr_i,
+    input           [7:0]           bias_inf_ofwidth_i,//width of ofmap
+    input           [10:0]          bias_inf_ofchannel_i,//total ofmap channel
+    input           [4:0]           bias_inf_burstlen_i,//equal iftile * ofparr
+    input           [4:0]           bias_inf_burstlen_tail_i,//equal ofchannel % (iftile * ofparr) == 0 ? iftile * ofparr : ofchannel % (iftile * ofparr) 
+    input           [4:0]           bias_inf_burstlen_lane0_i,//equal ceil(burstlen / 2)
+    input           [4:0]           bias_inf_burstlen_tail_lane0_i,//equal ceil(burstlen_tail / 2)
     // =========================================================
-    // COMPUTATION instruction interface
+    // COMPUTATION inftruction interface
     // =========================================================
-    input  [3:0]                comp_ins_hf_i, //height of channel of filter
-    input  [2:0]                comp_ins_stride_i,
-    input  [1:0]                comp_ins_padding_i,
-    input  [DATA_WIDTH-1:0]     comp_ins_ifc_zp_i, //zero point of ifmap
-    input  [DATA_WIDTH-1:0]     comp_ins_fltc_zp_i, //zero point of filter
-    input           [7:0]       comp_ins_ofwidth_i,
-    input   signed  [31:0]      comp_ins_mult_i,
-    input           [5:0]       comp_ins_mult_shift_i,
-    input   signed  [31:0]      comp_ins_alphamult_i,
-    input           [5:0]       comp_ins_alphamult_shift_i,
-    input   signed  [7:0]       comp_ins_zpy_i,
-    input   signed  [7:0]       comp_ins_qmin_i,
-    input   signed  [7:0]       comp_ins_qmax_i,
-    input                       comp_ins_is_leaky_ReLU_i,
+    output                      comp_inf_rdy_o,
+    input                       comp_inf_vld_i,
+    input  [3:0]                comp_inf_hf_i, //height of channel of filter
+    input  [2:0]                comp_inf_stride_i,
+    input  [1:0]                comp_inf_padding_i,
+    input  signed [DATA_WIDTH-1:0]     comp_inf_ifc_zp_i, //zero point of ifmap
+    input  signed [DATA_WIDTH-1:0]     comp_inf_fltc_zp_i, //zero point of filter
+    input           [7:0]       comp_inf_ofwidth_i,
+    input   signed  [31:0]      comp_inf_mult_i,
+    input           [5:0]       comp_inf_mult_shift_i,
+    input   signed  [31:0]      comp_inf_alphamult_i,
+    input           [5:0]       comp_inf_alphamult_shift_i,
+    input   signed  [7:0]       comp_inf_zpy_i,
+    input   signed  [7:0]       comp_inf_qmin_i,
+    input   signed  [7:0]       comp_inf_qmax_i,
+    input                       comp_inf_is_leaky_ReLU_i,
     // =========================================================
     // IFBUF DMA side
     // =========================================================
@@ -111,7 +113,7 @@ module CNN_accel#(
     input                   ifbuf_dma_tlast_i,
     output                  ifbuf_dma_vldcfg_o, //ifbuf has valid config
     output [8:0]            ifbuf_dma_burst_o, //length of data, it will be align to even
-    output [31:0]           ifbuf_dma_baddr_o, //base address of data need to read
+    output [23:0]           ifbuf_dma_baddr_o, //base address of data need to read
     output                  ifbuf_dma_rdy_o,
 
     // =========================================================
@@ -123,7 +125,7 @@ module CNN_accel#(
     input                   fltbuf_dma_tlast_i,
     output                  fltbuf_dma_vldcfg_o,
     output [9:0]            fltbuf_dma_burst_o,
-    output [31:0]           fltbuf_dma_baddr_o,
+    output [23:0]           fltbuf_dma_baddr_o,
     output                  fltbuf_dma_rdy_o,
 
     // =========================================================
@@ -132,7 +134,7 @@ module CNN_accel#(
     input                           bias_dma_rdycfg_i,
     output                          bias_dma_vldcfg_o,
     output          [4:0]           bias_dma_burst_o, 
-    output          [31:0]          bias_dma_baddr_o,
+    output          [23:0]          bias_dma_baddr_o,
     input                           bias_dma_vld_i,
     input   signed  [31:0]          bias_dma_data_i,
     input                           bias_dma_tlast_i,
@@ -148,7 +150,8 @@ module CNN_accel#(
     // Optional debug / status
     // =========================================================
     output                    comp_pa_done_compute_o,
-    output                    ifbuf_comp_end_layer_o, 
+    output                    ifbuf_comp_end_layer_o,
+    output                    ifbuf_comp_end_layer_real_o, 
     output                    fltbuf_comp_donepass_o
 );
 
@@ -161,16 +164,18 @@ module CNN_accel#(
     wire                    ifbuf_comp_end_row_circle_w;
     wire                    ifbuf_comp_end_depth_w;
     wire                    ifbuf_comp_end_layer_w;
+    wire                    ifbuf_comp_end_layer_real_w;
     wire                    comp_ifbuf_rdy_w;
 
-    wire [K*DATA_WIDTH+3:0] ifbuf_comp_payload_w;
-    wire [K*DATA_WIDTH+3:0] ifbuf_comp_payload_buf_w;
+    wire [K*DATA_WIDTH+4:0] ifbuf_comp_payload_w;
+    wire [K*DATA_WIDTH+4:0] ifbuf_comp_payload_buf_w;
     wire                    ifbuf_comp_vld_buf_w;
     wire                    ifbuf_comp_rdy_buf_w;
     wire                    ifbuf_comp_end_row_buf_w;
     wire                    ifbuf_comp_end_row_circle_buf_w;
     wire                    ifbuf_comp_end_depth_buf_w;
     wire                    ifbuf_comp_end_layer_buf_w;
+    wire                    ifbuf_comp_end_layer_real_buf_w;
     wire [K*DATA_WIDTH-1:0] ifbuf_comp_data_buf_w;
 
     wire [K*M-1:0]            fltbuf_comp_vld_w;
@@ -183,18 +188,18 @@ module CNN_accel#(
     wire [M-1:0]            comp_ofbuf_rdy_w;
     wire [M*DATA_WIDTH-1:0]  comp_ofbuf_data_w;
 
-    reg [3:0]               comp_ins_hf_reg; //height of channel of filter
-    reg [2:0]               comp_ins_stride_reg;
-    reg [1:0]               comp_ins_padding_reg;
-    reg [DATA_WIDTH-1:0]    comp_ins_ifc_zp_reg; //zero point of ifmap
-    reg [DATA_WIDTH-1:0]    comp_ins_fltc_zp_reg;
+    reg [3:0]               comp_inf_hf_reg; //height of channel of filter
+    reg [2:0]               comp_inf_stride_reg;
+    reg [1:0]               comp_inf_padding_reg;
+    reg signed [DATA_WIDTH-1:0]    comp_inf_ifc_zp_reg; //zero point of ifmap
+    reg signed [DATA_WIDTH-1:0]    comp_inf_fltc_zp_reg;
 
     always @(posedge clk) begin
-        comp_ins_hf_reg         <= comp_ins_hf_i;
-        comp_ins_stride_reg     <= comp_ins_stride_i;
-        comp_ins_padding_reg    <= comp_ins_padding_i;
-        comp_ins_ifc_zp_reg     <= comp_ins_ifc_zp_i;
-        comp_ins_fltc_zp_reg    <= comp_ins_fltc_zp_i;
+        comp_inf_hf_reg         <= comp_inf_hf_i;
+        comp_inf_stride_reg     <= comp_inf_stride_i;
+        comp_inf_padding_reg    <= comp_inf_padding_i;
+        comp_inf_ifc_zp_reg     <= comp_inf_ifc_zp_i;
+        comp_inf_fltc_zp_reg    <= comp_inf_fltc_zp_i;
     end
 
     // Current filter_buf RTL only exposes one scalar ready input.
@@ -202,6 +207,7 @@ module CNN_accel#(
     assign fltbuf_comp_rdy_w = &comp_fltbuf_rdy_w;
 
     assign ifbuf_comp_end_layer_o = ifbuf_comp_end_layer_w;
+    assign ifbuf_comp_end_layer_real_o = ifbuf_comp_end_layer_real_w;
     assign fltbuf_comp_donepass_o = fltbuf_comp_donepass_w;
 
     // =========================================================
@@ -215,20 +221,20 @@ module CNN_accel#(
         .clk(clk),
         .rst_n(rst_n),
 
-        .ifbuf_ins_vld_i(ifbuf_ins_vld_i),
-        .ifbuf_ins_ifbaddr_i(ifbuf_ins_ifbaddr_i),
-        .ifbuf_ins_ifparr_i(ifbuf_ins_ifparr_i),
-        .ifbuf_ins_ifsize_i(ifbuf_ins_ifsize_i),
-        .ifbuf_ins_channel_i(ifbuf_ins_channel_i),
-        .ifbuf_ins_ifwidth_i(ifbuf_ins_ifwidth_i),
-        .ifbuf_ins_ifblock_i(ifbuf_ins_ifblock_i),
-        .ifbuf_ins_oftiles_i(ifbuf_ins_oftiles_i),
-        .ifbuf_ins_oftiles_tail_i(ifbuf_ins_oftiles_tail_i),
-        .ifbuf_ins_iftiles_i(ifbuf_ins_iftiles_i),
-        .ifbuf_ins_wp_i(ifbuf_ins_wp_i),
-        .ifbuf_ins_padding_i(ifbuf_ins_padding_i),
-        .ifbuf_ins_ifc_zp_i(ifbuf_ins_ifc_zp_i),
-        .ifbuf_ins_rdy_o(ifbuf_ins_rdy_o),
+        .ifbuf_inf_vld_i(ifbuf_inf_vld_i),
+        .ifbuf_inf_ifbaddr_i(ifbuf_inf_ifbaddr_i),
+        .ifbuf_inf_ifparr_i(ifbuf_inf_ifparr_i),
+        .ifbuf_inf_ifsize_i(ifbuf_inf_ifsize_i),
+        .ifbuf_inf_channel_i(ifbuf_inf_channel_i),
+        .ifbuf_inf_ifwidth_i(ifbuf_inf_ifwidth_i),
+        .ifbuf_inf_ifblock_i(ifbuf_inf_ifblock_i),
+        .ifbuf_inf_oftiles_i(ifbuf_inf_oftiles_i),
+        .ifbuf_inf_oftiles_tail_i(ifbuf_inf_oftiles_tail_i),
+        .ifbuf_inf_iftiles_i(ifbuf_inf_iftiles_i),
+        .ifbuf_inf_wp_i(ifbuf_inf_wp_i),
+        .ifbuf_inf_padding_i(ifbuf_inf_padding_i),
+        .ifbuf_inf_ifc_zp_i(ifbuf_inf_ifc_zp_i),
+        .ifbuf_inf_rdy_o(ifbuf_inf_rdy_o),
 
         .ifbuf_dma_rdycfg_i(ifbuf_dma_rdycfg_i),
         .ifbuf_dma_vld_i(ifbuf_dma_vld_i),
@@ -245,11 +251,13 @@ module CNN_accel#(
         .ifbuf_comp_end_row_o(ifbuf_comp_end_row_w),
         .ifbuf_comp_end_row_circle_o(ifbuf_comp_end_row_circle_w),
         .ifbuf_comp_end_depth_o(ifbuf_comp_end_depth_w),
-        .ifbuf_comp_end_layer_o(ifbuf_comp_end_layer_w)
+        .ifbuf_comp_end_layer_o(ifbuf_comp_end_layer_w),
+        .ifbuf_comp_end_layer_real_o(ifbuf_comp_end_layer_real_w)
     );
 
     assign ifbuf_comp_payload_w = {
         ifbuf_comp_end_layer_w,
+        ifbuf_comp_end_layer_real_w,
         ifbuf_comp_end_depth_w,
         ifbuf_comp_end_row_circle_w,
         ifbuf_comp_end_row_w,
@@ -259,7 +267,7 @@ module CNN_accel#(
     
     skid_buffer #(
         .SBUF_TYPE(0),
-        .DATA_WIDTH(K*DATA_WIDTH + 4)
+        .DATA_WIDTH(K*DATA_WIDTH + 6)
     ) skide_ifbuf_computation (
         .clk(clk),
         .rst_n(rst_n),
@@ -274,6 +282,7 @@ module CNN_accel#(
     );
     assign {
         ifbuf_comp_end_layer_buf_w,
+        ifbuf_comp_end_layer_real_buf_w,
         ifbuf_comp_end_depth_buf_w,
         ifbuf_comp_end_row_circle_buf_w,
         ifbuf_comp_end_row_buf_w,
@@ -294,20 +303,20 @@ module CNN_accel#(
         .clk(clk),
         .rst_n(rst_n),
 
-        .fltbuf_ins_vld_i(fltbuf_ins_vld_i),
-        .fltbuf_ins_fltbaddr_i(fltbuf_ins_fltbaddr_i),
-        .fltbuf_ins_ifparr_i(fltbuf_ins_ifparr_i),
-        .fltbuf_ins_ifparr_tail_i(fltbuf_ins_ifparr_tail_i),
-        .fltbuf_ins_fltsize_i(fltbuf_ins_fltsize_i),
-        .fltbuf_ins_ifblock_i(fltbuf_ins_ifblock_i),
-        .fltbuf_ins_ofparr_i(fltbuf_ins_ofparr_i),
-        .fltbuf_ins_ofparr_tail_i(fltbuf_ins_ofparr_tail_i),
-        .fltbuf_ins_oftiles_i(fltbuf_ins_oftiles_i),
-        .fltbuf_ins_oftiles_tail_i(fltbuf_ins_oftiles_tail_i),
-        .fltbuf_ins_iftiles_i(fltbuf_ins_iftiles_i),
-        .fltbuf_ins_rdy_o(fltbuf_ins_rdy_o),
-        .fltbuf_ins_height_i(ifbuf_ins_ifwidth_i),
-        .zp(comp_ins_fltc_zp_i),
+        .fltbuf_inf_vld_i(fltbuf_inf_vld_i),
+        .fltbuf_inf_fltbaddr_i(fltbuf_inf_fltbaddr_i),
+        .fltbuf_inf_ifparr_i(fltbuf_inf_ifparr_i),
+        .fltbuf_inf_ifparr_tail_i(fltbuf_inf_ifparr_tail_i),
+        .fltbuf_inf_fltsize_i(fltbuf_inf_fltsize_i),
+        .fltbuf_inf_ifblock_i(fltbuf_inf_ifblock_i),
+        .fltbuf_inf_ofparr_i(fltbuf_inf_ofparr_i),
+        .fltbuf_inf_ofparr_tail_i(fltbuf_inf_ofparr_tail_i),
+        .fltbuf_inf_oftiles_i(fltbuf_inf_oftiles_i),
+        .fltbuf_inf_oftiles_tail_i(fltbuf_inf_oftiles_tail_i),
+        .fltbuf_inf_iftiles_i(fltbuf_inf_iftiles_i),
+        .fltbuf_inf_rdy_o(fltbuf_inf_rdy_o),
+        .fltbuf_inf_height_i(ifbuf_inf_ifwidth_i),
+        .zp(comp_inf_fltc_zp_i),
 
         .fltbuf_dma_rdycfg_i(fltbuf_dma_rdycfg_i),
         .fltbuf_dma_vld_i(fltbuf_dma_vld_i),
@@ -336,15 +345,15 @@ module CNN_accel#(
         .clk(clk),
         .rst_n(rst_n),
 
-        .bias_ins_vld_i(bias_ins_vld_i),
-        .bias_ins_rdy_o(bias_ins_rdy_o),
-        .bias_ins_bias_baddr_i(bias_ins_bias_baddr_i),
-        .bias_ins_ofwidth_i(bias_ins_ofwidth_i),
-        .bias_ins_ofchannel_i(bias_ins_ofchannel_i),
-        .bias_ins_burstlen_i(bias_ins_burstlen_i),
-        .bias_ins_burstlen_tail_i(bias_ins_burstlen_tail_i),
-        .bias_ins_burstlen_lane0_i(bias_ins_burstlen_lane0_i),
-        .bias_ins_burstlen_tail_lane0_i(bias_ins_burstlen_tail_lane0_i),
+        .bias_inf_vld_i(bias_inf_vld_i),
+        .bias_inf_rdy_o(bias_inf_rdy_o),
+        .bias_inf_bias_baddr_i(bias_inf_bias_baddr_i),
+        .bias_inf_ofwidth_i(bias_inf_ofwidth_i),
+        .bias_inf_ofchannel_i(bias_inf_ofchannel_i),
+        .bias_inf_burstlen_i(bias_inf_burstlen_i),
+        .bias_inf_burstlen_tail_i(bias_inf_burstlen_tail_i),
+        .bias_inf_burstlen_lane0_i(bias_inf_burstlen_lane0_i),
+        .bias_inf_burstlen_tail_lane0_i(bias_inf_burstlen_tail_lane0_i),
 
         .bias_dma_rdycfg_i(bias_dma_rdycfg_i),
         .bias_dma_vldcfg_o(bias_dma_vldcfg_o),
@@ -376,20 +385,22 @@ module CNN_accel#(
         .clk(clk),
         .rst_n(rst_n),
 
-        .comp_ins_hf_i(comp_ins_hf_reg),
-        .comp_ins_stride_i(comp_ins_stride_reg),
-        .comp_ins_padding_i(comp_ins_padding_reg),
-        .comp_ins_ifc_zp_i(comp_ins_ifc_zp_reg),
-        .comp_ins_fltc_zp_i(comp_ins_fltc_zp_reg),
-        .comp_ins_ofwidth_i(comp_ins_ofwidth_i),
-        .comp_ins_mult_i(comp_ins_mult_i),
-        .comp_ins_mult_shift_i(comp_ins_mult_shift_i),
-        .comp_ins_alphamult_i(comp_ins_alphamult_i),
-        .comp_ins_alphamult_shift_i(comp_ins_alphamult_shift_i),
-        .comp_ins_zpy_i(comp_ins_zpy_i),
-        .comp_ins_qmin_i(comp_ins_qmin_i),
-        .comp_ins_qmax_i(comp_ins_qmax_i),
-        .comp_ins_is_leaky_ReLU_i(comp_ins_is_leaky_ReLU_i),
+        .comp_inf_rdy_o(comp_inf_rdy_o),
+        .comp_inf_vld_i(comp_inf_vld_i),
+        .comp_inf_hf_i(comp_inf_hf_reg),
+        .comp_inf_stride_i(comp_inf_stride_reg),
+        .comp_inf_padding_i(comp_inf_padding_reg),
+        .comp_inf_ifc_zp_i(comp_inf_ifc_zp_reg),
+        .comp_inf_fltc_zp_i(comp_inf_fltc_zp_reg),
+        .comp_inf_ofwidth_i(comp_inf_ofwidth_i),
+        .comp_inf_mult_i(comp_inf_mult_i),
+        .comp_inf_mult_shift_i(comp_inf_mult_shift_i),
+        .comp_inf_alphamult_i(comp_inf_alphamult_i),
+        .comp_inf_alphamult_shift_i(comp_inf_alphamult_shift_i),
+        .comp_inf_zpy_i(comp_inf_zpy_i),
+        .comp_inf_qmin_i(comp_inf_qmin_i),
+        .comp_inf_qmax_i(comp_inf_qmax_i),
+        .comp_inf_is_leaky_ReLU_i(comp_inf_is_leaky_ReLU_i),
 
         .comp_ifbuf_vld_i(ifbuf_comp_vld_buf_w),
         .comp_ifbuf_data_i(ifbuf_comp_data_buf_w),
@@ -399,6 +410,7 @@ module CNN_accel#(
         .comp_ifbuf_end_row_circle_i(ifbuf_comp_end_row_circle_buf_w),
         .comp_ifbuf_end_depth_i(ifbuf_comp_end_depth_buf_w),
         .comp_ifbuf_end_layer_i(ifbuf_comp_end_layer_buf_w),
+        .comp_ifbuf_end_layer_real_i(ifbuf_comp_end_layer_real_buf_w),
         .comp_ifbuf_rdy_o(ifbuf_comp_rdy_buf_w),
 
         .comp_fltbuf_vld_i(fltbuf_comp_vld_w),
