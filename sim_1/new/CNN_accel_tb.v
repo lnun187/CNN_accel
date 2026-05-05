@@ -24,7 +24,7 @@ module CNN_accel_tb;
   localparam int WIDTH      = 8;
   localparam int DATA_WIDTH = WIDTH;
   localparam int ACC_WIDTH  = 32;
-  localparam int K          = 4;
+  localparam int K          = 8;
   localparam int M          = 2;
 
   localparam int MAX_MEM = 65536;
@@ -44,67 +44,40 @@ module CNN_accel_tb;
   // =========================================================
   // DUT inputs / outputs
   // =========================================================
-  logic        ifbuf_inf_vld_i;
-  logic [31:0] ifbuf_inf_ifbaddr_i;
-  logic [7:0]  ifbuf_inf_ifwidth_i;
-  logic [10:0] ifbuf_inf_channel_i;
-  logic [3:0]  ifbuf_inf_ifparr_i;
-  logic [15:0]  ifbuf_inf_ifsize_i;
-  logic [6:0]  ifbuf_inf_ifblock_i;
-  logic [3:0]  ifbuf_inf_oftiles_i;
-  logic [3:0]  ifbuf_inf_oftiles_tail_i;
-  logic [6:0]  ifbuf_inf_iftiles_i;
-  logic [8:0]  ifbuf_inf_wp_i;
-  logic [1:0]  ifbuf_inf_padding_i;
-  logic [DATA_WIDTH-1:0]  ifbuf_inf_ifc_zp_i;
-  wire         ifbuf_inf_rdy_o;
-
-  logic        fltbuf_inf_vld_i;
-  logic [23:0] fltbuf_inf_fltbaddr_i;
-  logic [3:0]  fltbuf_inf_ifparr_i;
-  logic [3:0]  fltbuf_inf_ifparr_tail_i;
-  logic [6:0]  fltbuf_inf_fltsize_i;
-  logic [6:0]  fltbuf_inf_ifblock_i;
-  logic [4:0]  fltbuf_inf_ofparr_i;
-  logic [4:0]  fltbuf_inf_ofparr_tail_i;
-  logic [3:0]  fltbuf_inf_oftiles_i;
-  logic [3:0]  fltbuf_inf_oftiles_tail_i;
-  logic [6:0]  fltbuf_inf_iftiles_i;
-  wire         fltbuf_inf_rdy_o;
-
-  logic        bias_inf_vld_i;
-  wire         bias_inf_rdy_o;
-  logic [23:0] bias_inf_bias_baddr_i;
-  logic [7:0]  bias_inf_ofwidth_i;
-  logic [10:0] bias_inf_ofchannel_i;
-  logic [4:0]  bias_inf_burstlen_i;
-  logic [4:0]  bias_inf_burstlen_tail_i;
-  logic [4:0]  bias_inf_burstlen_lane0_i;
-  logic [4:0]  bias_inf_burstlen_tail_lane0_i;
-
-  logic        comp_inf_vld_i;
-  wire         comp_inf_rdy_o;
-  logic [3:0]  comp_inf_hf_i;
-  logic [2:0]  comp_inf_stride_i;
-  logic [1:0]  comp_inf_padding_i;
-  logic signed [DATA_WIDTH-1:0]  comp_inf_ifc_zp_i;
-  logic signed [DATA_WIDTH-1:0]  comp_inf_fltc_zp_i;
-  logic [7:0]  comp_inf_ofwidth_i;
-  logic signed [31:0] comp_inf_mult_i;
-  logic [5:0]  comp_inf_mult_shift_i;
-  logic signed [31:0] comp_inf_alphamult_i;
-  logic [5:0]  comp_inf_alphamult_shift_i;
-  logic signed [7:0] comp_inf_zpy_i;
-  logic signed [7:0] comp_inf_qmin_i;
-  logic signed [7:0] comp_inf_qmax_i;
-  logic        comp_inf_is_leaky_ReLU_i;
+  // TABLE instruction interface to CNN_accel/layer_info
+  logic                               inf_table_vld_i;
+  wire                                inf_table_rdy_o;
+  logic           [7:0]               inf_table_ifheight_i;
+  logic           [10:0]              inf_table_ifchannel_i;
+  logic           [10:0]              inf_table_ofchannel_i;
+  logic           [3:0]               inf_table_hf_i;
+  logic           [2:0]               inf_table_stride_i;
+  logic           [1:0]               inf_table_padding_i;
+  logic           [2:0]               inf_table_ifparr_i;
+  logic           [1:0]               inf_table_oftile_i;
+  logic           [4:0]               inf_table_ofparr_i;
+  logic           [23:0]              inf_table_ifbaddr_i;
+  logic           [23:0]              inf_table_fltbaddr_i;
+  logic           [23:0]              inf_table_bias_baddr_i;
+  logic           [23:0]              inf_table_ofbaddr_i;
+  logic signed    [DATA_WIDTH-1:0]    inf_table_ifc_zp_i;
+  logic signed    [DATA_WIDTH-1:0]    inf_table_fltc_zp_i;
+  logic signed    [31:0]              inf_table_mult_i;
+  logic           [5:0]               inf_table_mult_shift_i;
+  logic signed    [31:0]              inf_table_alphamult_i;
+  logic           [5:0]               inf_table_alphamult_shift_i;
+  logic signed    [7:0]               inf_table_zpy_i;
+  logic signed    [7:0]               inf_table_qmin_i;
+  logic signed    [7:0]               inf_table_qmax_i;
+  logic                               inf_table_is_leaky_ReLU_i;
+  logic                               inf_table_is_use_camera_i;
 
   logic                  ifbuf_dma_rdycfg_i;
   logic                  ifbuf_dma_vld_i;
   logic [DATA_WIDTH-1:0] ifbuf_dma_data_i;
   logic                  ifbuf_dma_tlast_i;
   wire                   ifbuf_dma_vldcfg_o;
-  wire [8:0]             ifbuf_dma_burst_o;
+  wire [7:0]             ifbuf_dma_burst_o;
   wire [23:0]            ifbuf_dma_baddr_o;
   wire                   ifbuf_dma_rdy_o;
 
@@ -119,7 +92,7 @@ module CNN_accel_tb;
 
   logic                  bias_dma_rdycfg_i;
   wire                   bias_dma_vldcfg_o;
-  wire [8:0]             bias_dma_burst_o;
+  wire [4:0]             bias_dma_burst_o;
   wire [23:0]            bias_dma_baddr_o;
   logic                  bias_dma_vld_i;
   logic signed [31:0]    bias_dma_data_i;
@@ -128,10 +101,11 @@ module CNN_accel_tb;
 
   logic [M-1:0]            comp_ofbuf_rdy_i;
   wire  [M-1:0]            comp_ofbuf_vld_o;
-  wire  [M*ACC_WIDTH-1:0]  comp_ofbuf_data_o;
+  wire  [M*DATA_WIDTH-1:0]  comp_ofbuf_data_o;
 
   wire                     comp_pa_done_compute_o;
   wire                     ifbuf_comp_end_layer_o;
+  wire                     ifbuf_comp_end_layer_real_o;
   wire                     fltbuf_comp_donepass_o;
 
   // =========================================================
@@ -194,6 +168,104 @@ module CNN_accel_tb;
   function automatic int align_even(input int x);
     return (x % 2 == 0) ? x : (x + 1);
   endfunction
+
+  task automatic clear_table_interface();
+    begin
+      inf_table_vld_i = 1'b0;
+      inf_table_ifheight_i = '0;
+      inf_table_ifchannel_i = '0;
+      inf_table_ofchannel_i = '0;
+      inf_table_hf_i = '0;
+      inf_table_stride_i = '0;
+      inf_table_padding_i = '0;
+      inf_table_ifparr_i = '0;
+      inf_table_oftile_i = '0;
+      inf_table_ofparr_i = '0;
+      inf_table_ifbaddr_i = '0;
+      inf_table_fltbaddr_i = '0;
+      inf_table_bias_baddr_i = '0;
+      inf_table_ofbaddr_i = '0;
+      inf_table_ifc_zp_i = '0;
+      inf_table_fltc_zp_i = '0;
+      inf_table_mult_i = '0;
+      inf_table_mult_shift_i = '0;
+      inf_table_alphamult_i = '0;
+      inf_table_alphamult_shift_i = '0;
+      inf_table_zpy_i = '0;
+      inf_table_qmin_i = -128;
+      inf_table_qmax_i = 127;
+      inf_table_is_leaky_ReLU_i = 1'b0;
+      inf_table_is_use_camera_i = 1'b0;
+    end
+  endtask
+
+  task automatic program_table_instruction(
+    input string tc_name,
+    input int    w,
+    input int    h,
+    input int    ci,
+    input int    co,
+    input int    kw,
+    input int    kh,
+    input int    stride,
+    input int    padding,
+    input int    ifparr,
+    input int    ofparr,
+    input int    oftile
+  );
+    begin
+      if (w != h) begin
+        $fatal(1, "%s: table interface has one ifheight/ifwidth value, but w=%0d h=%0d", tc_name, w, h);
+      end
+      if (kw != kh) begin
+        $fatal(1, "%s: table interface has only one hf field, but kw=%0d kh=%0d", tc_name, kw, kh);
+      end
+      if (h > 255) begin
+        $fatal(1, "%s: h=%0d exceeds inf_table_ifheight_i[7:0]", tc_name, h);
+      end
+      if (ci > 2047) begin
+        $fatal(1, "%s: ci=%0d exceeds inf_table_ifchannel_i[10:0]", tc_name, ci);
+      end
+      if (co > 2047) begin
+        $fatal(1, "%s: co=%0d exceeds inf_table_ofchannel_i[10:0]", tc_name, co);
+      end
+      if (ifparr > 7) begin
+        $fatal(1, "%s: ifparr=%0d exceeds inf_table_ifparr_i[2:0]", tc_name, ifparr);
+      end
+      if (oftile > 3) begin
+        $fatal(1, "%s: oftile=%0d exceeds inf_table_oftile_i[1:0]", tc_name, oftile);
+      end
+      if (ofparr > 31) begin
+        $fatal(1, "%s: ofparr=%0d exceeds inf_table_ofparr_i[4:0]", tc_name, ofparr);
+      end
+
+      // Direct table interface: no LUT encoding is used here.
+      inf_table_ifheight_i         = h[7:0];
+      inf_table_ifchannel_i        = ci[10:0];
+      inf_table_ofchannel_i        = co[10:0];
+      inf_table_hf_i               = kh[3:0];
+      inf_table_stride_i           = stride[2:0];
+      inf_table_padding_i          = padding[1:0];
+      inf_table_ifparr_i           = ifparr[2:0];
+      inf_table_oftile_i           = oftile[1:0];
+      inf_table_ofparr_i           = ofparr[4:0];
+      inf_table_ifbaddr_i          = current_if_base[23:0];
+      inf_table_fltbaddr_i         = current_flt_base[23:0];
+      inf_table_bias_baddr_i       = current_bias_base[23:0];
+      inf_table_ofbaddr_i          = '0;
+      inf_table_ifc_zp_i           = current_ifc_zp[DATA_WIDTH-1:0];
+      inf_table_fltc_zp_i          = current_fltc_zp[DATA_WIDTH-1:0];
+      inf_table_mult_i             = current_mult;
+      inf_table_mult_shift_i       = current_mult_shift[5:0];
+      inf_table_alphamult_i        = current_alphamult;
+      inf_table_alphamult_shift_i  = current_alphamult_shift[5:0];
+      inf_table_zpy_i              = current_zpy[7:0];
+      inf_table_qmin_i             = current_qmin[7:0];
+      inf_table_qmax_i             = current_qmax[7:0];
+      inf_table_is_leaky_ReLU_i    = current_is_leaky_relu[0];
+      inf_table_is_use_camera_i    = 1'b0;
+    end
+  endtask
 
   // Input ifmap/filter duoc quantize theo WIDTH bit.
   // Ifmap dùng đúng pattern init_memory: c*10000 + h*100 + w
@@ -321,10 +393,7 @@ module CNN_accel_tb;
   task automatic apply_reset();
     begin
       rst_n = 1'b0;
-      ifbuf_inf_vld_i = 1'b0;
-      fltbuf_inf_vld_i = 1'b0;
-      bias_inf_vld_i = 1'b0;
-      comp_inf_vld_i = 1'b0;
+      clear_table_interface();
       ifbuf_dma_vld_i = 1'b0;
       fltbuf_dma_vld_i = 1'b0;
       bias_dma_vld_i = 1'b0;
@@ -375,50 +444,235 @@ module CNN_accel_tb;
   // group channel = oftile * ofparr
   // trong moi group: cg block -> f_tile
   // moi f_tile la 1 burst rieng, add one padding word if burst is odd
-  task automatic fill_filter_external_memory(
+    task automatic fill_filter_external_memory(
     input int base_addr,
-    input int kw,//width of kernel
-    input int kh,//height of kernel
-    input int ci,//channel of ifmap
-    input int co,//channel of ofmap
-    input int ifparr, //channel parrallel
-    input int ofparr //filter parrallel
-    // input current_oftile //filter tile
+    input int kw,
+    input int kh,
+    input int ci,
+    input int co,
+    input int ifparr,
+    input int ofparr
   );
     int addr;
-    int fg, cg;
+    int cg;
     int cp;
-    int group_ch;
-    int fo;
-    int f_tile;
-    int fp;
-    int f_local, c_local, h_idx, w_idx;
+    int c_local, h_idx, w_idx;
+
+    int total_cols;
+    int full_cols;
+    int tail_slots;
+
+    int lane_rows [0:M-1];
+    int lane_count[0:M-1];
+    int lane_base [0:M-1];
+
+    int lane;
+    int r;
+    int group_start;
+    int group_cols;
+    int col_in_group;
+    int idx_in_lane;
+    int filter_idx;
+
+    int block_id;
+    int block_real;
+    int red_need [0:4-1];
+    int remain_in_block;
+
+    int slot_ch [0:M-1][0:24-1][0:4-1];
+
+    int lane_seq      [0:M-1][0:MAX_F-1];
+    int lane_seq_used [0:M-1][0:MAX_F-1];
+    int lane_seq_count[0:M-1];
+
+    int seq_pos;
+    int need;
+    int placed;
+
+    int burst_filters[0:MAX_F-1];
+    int burst_filter_count;
     int burst_width;
+
     begin
       addr = base_addr;
-      for (fg = 0; fg < co; fg += (ofparr * current_oftile)) begin
-        group_ch = min2(ofparr * current_oftile, co - fg);
-        fo       = ceil_div(group_ch, ofparr);
+
+      total_cols = ceil_div(co, ofparr);
+      full_cols  = co / ofparr;
+      tail_slots = co % ofparr;
+
+      for (lane = 0; lane < M; lane++) begin
+        lane_rows[lane] = 0;
+        for (r = lane; r < ofparr; r += M) begin
+          lane_rows[lane]++;
+        end
+      end
+
+      for (lane = 0; lane < M; lane++) begin
+        lane_count[lane] = full_cols * lane_rows[lane];
+
+        if (tail_slots > lane) begin
+          lane_count[lane] += ceil_div(tail_slots - lane, M);
+        end
+      end
+
+      lane_base[0] = 0;
+      for (lane = 1; lane < M; lane++) begin
+        lane_base[lane] = lane_base[lane-1] + lane_count[lane-1];
+      end
+
+      // =====================================================
+      // 1 block = oftile * ofparr.
+      // Trong 1 block:
+      //   red_arrow_0 fill toi da ofparr
+      //   red_arrow_1 fill toi da ofparr
+      //   ...
+      //   red_arrow cuoi co the bi tail.
+      // =====================================================
+      for (group_start = 0;
+           group_start < total_cols;
+           group_start += current_oftile) begin
+
+        group_cols = min2(current_oftile, total_cols - group_start);
+        block_id   = group_start / current_oftile;
+
+        block_real = co - block_id * current_oftile * ofparr;
+        if (block_real > current_oftile * ofparr) begin
+          block_real = current_oftile * ofparr;
+        end
+        if (block_real < 0) begin
+          block_real = 0;
+        end
+
+        remain_in_block = block_real;
+        for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+          red_need[col_in_group] = min2(ofparr, remain_in_block);
+          remain_in_block -= red_need[col_in_group];
+        end
+
+        // Clear slot map.
+        for (lane = 0; lane < M; lane++) begin
+          for (r = 0; r < 24; r++) begin
+            for (col_in_group = 0; col_in_group < 4; col_in_group++) begin
+              slot_ch[lane][r][col_in_group] = -1;
+            end
+          end
+        end
+
+        // Build lane-local sequence in GREEN order for this block.
+        for (lane = 0; lane < M; lane++) begin
+          lane_seq_count[lane] = 0;
+
+          for (r = 0; r < lane_rows[lane]; r++) begin
+            for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+              idx_in_lane =
+                lane_base[lane]
+                + lane_rows[lane] * group_start
+                + r * group_cols
+                + col_in_group;
+
+              if (idx_in_lane < lane_base[lane] + lane_count[lane]) begin
+                if (idx_in_lane < co) begin
+                  lane_seq[lane][lane_seq_count[lane]] = idx_in_lane;
+                  lane_seq_used[lane][lane_seq_count[lane]] = 0;
+                  lane_seq_count[lane]++;
+                end
+              end
+            end
+          end
+        end
+
+        // First pass:
+        // place natural row/col positions, but each red_arrow only up to red_need.
+        for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+          need = red_need[col_in_group];
+
+          for (lane = 0; lane < M; lane++) begin
+            for (r = 0; r < lane_rows[lane]; r++) begin
+              if (need > 0) begin
+                seq_pos = r * group_cols + col_in_group;
+
+                if (seq_pos < lane_seq_count[lane]) begin
+                  if (lane_seq_used[lane][seq_pos] == 0) begin
+                    slot_ch[lane][r][col_in_group] = lane_seq[lane][seq_pos];
+                    lane_seq_used[lane][seq_pos] = 1;
+                    need--;
+                  end
+                end
+              end
+            end
+          end
+
+          // Second pass:
+          // if this red_arrow has not reached ofparr yet,
+          // compact remaining filters into this red_arrow.
+          while (need > 0) begin
+            placed = 0;
+
+            for (lane = 0; lane < M; lane++) begin
+              for (seq_pos = 0; seq_pos < lane_seq_count[lane]; seq_pos++) begin
+                if ((need > 0) && (placed == 0)) begin
+                  if (lane_seq_used[lane][seq_pos] == 0) begin
+                    for (r = 0; r < lane_rows[lane]; r++) begin
+                      if ((placed == 0) &&
+                          (slot_ch[lane][r][col_in_group] < 0)) begin
+                        slot_ch[lane][r][col_in_group] = lane_seq[lane][seq_pos];
+                        lane_seq_used[lane][seq_pos] = 1;
+                        need--;
+                        placed = 1;
+                      end
+                    end
+                  end
+                end
+              end
+            end
+
+            if (placed == 0) begin
+              need = 0;
+            end
+          end
+        end
+
+        // Write filter external memory:
+        // for block
+        //   for cg
+        //     for red_arrow_col in block
         for (cg = 0; cg < ci; cg += ifparr) begin
           cp = min2(ifparr, ci - cg);
-          for (f_tile = 0; f_tile < fo; f_tile++) begin
-            fp = min2(ofparr, group_ch - f_tile * ofparr);
-            for (f_local = 0; f_local < fp; f_local++) begin
+
+          for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+            burst_filter_count = 0;
+
+            for (lane = 0; lane < M; lane++) begin
+              for (r = 0; r < lane_rows[lane]; r++) begin
+                filter_idx = slot_ch[lane][r][col_in_group];
+
+                if ((filter_idx >= 0) && (filter_idx < co)) begin
+                  burst_filters[burst_filter_count] = filter_idx;
+                  burst_filter_count++;
+                end
+              end
+            end
+
+            for (int bf = 0; bf < burst_filter_count; bf++) begin
+              filter_idx = burst_filters[bf];
+
               for (c_local = 0; c_local < cp; c_local++) begin
                 for (h_idx = 0; h_idx < kh; h_idx++) begin
                   for (w_idx = 0; w_idx < kw; w_idx++) begin
                     flt_ext_mem[addr] = mk_flt_val(
-                      fg + f_tile * ofparr + f_local, //filter idx
-                      cg + c_local,//channel idx
-                      h_idx,//height idx
-                      w_idx//width
+                      filter_idx,
+                      cg + c_local,
+                      h_idx,
+                      w_idx
                     );
                     addr++;
                   end
                 end
               end
             end
-            burst_width = kw * kh * cp * fp;
+
+            burst_width = kw * kh * cp * burst_filter_count;
+
             if ((burst_width % 2) != 0) begin
               flt_ext_mem[addr] = {WIDTH{1'b1}};
               addr++;
@@ -426,6 +680,7 @@ module CNN_accel_tb;
           end
         end
       end
+
       current_flt_words = addr - base_addr;
     end
   endtask
@@ -434,68 +689,189 @@ module CNN_accel_tb;
   // as filter DMA.  Payload order is head0 lanes first, then head1 lanes.  When
   // a block has an odd number of real bias values, one dummy beat is appended
   // and tlast belongs to that dummy beat.
-  task automatic fill_bias_external_memory(
+    task automatic fill_bias_external_memory(
     input int base_addr,
     input int co,
     input int ofparr,
     input int oftile
   );
     int addr;
-    int block_size;
-    int block_total;
-    int block_idx;
-    int block_base;
-    int real_count;
-    int full_tile;
-    int tail;
-    int tail_h0;
-    int tail_h1;
-    int h0_lanes;
-    int parr_idx;
-    int tile_idx;
-    int lane_count;
+
+    int total_cols;
+    int full_cols;
+    int tail_slots;
+
+    int lane_rows [0:M-1];
+    int lane_count[0:M-1];
+    int lane_base [0:M-1];
+
+    int lane;
+    int r;
+    int group_start;
+    int group_cols;
+    int col_in_group;
+    int idx_in_lane;
     int channel_idx;
-    int tail_base;
+
+    int block_id;
+    int block_real;
+    int red_need [0:4-1];
+    int remain_in_block;
+
+    int slot_ch [0:M-1][0:24-1][0:4-1];
+
+    int lane_seq      [0:M-1][0:MAX_F-1];
+    int lane_seq_used [0:M-1][0:MAX_F-1];
+    int lane_seq_count[0:M-1];
+
+    int seq_pos;
+    int need;
+    int placed;
+    int burst_count;
+
     begin
-      addr        = base_addr;
-      block_size  = ofparr * oftile;
-      block_total = ceil_div(co, block_size);
-      h0_lanes    = ceil_div(ofparr, M);
+      addr = base_addr;
 
-      for (block_idx = 0; block_idx < block_total; block_idx++) begin
-        block_base = block_idx * block_size;
-        real_count = min2(block_size, co - block_base);
-        full_tile  = real_count / ofparr;
-        tail       = real_count % ofparr;
-        tail_h0    = ceil_div(tail, M);
-        tail_h1    = tail - tail_h0;
-        tail_base  = block_base + full_tile * ofparr;
+      total_cols = ceil_div(co, ofparr);
+      full_cols  = co / ofparr;
+      tail_slots = co % ofparr;
 
-        for (parr_idx = 0; parr_idx < ofparr; parr_idx++) begin
-          lane_count = full_tile;
-          if (parr_idx < h0_lanes) begin
-            if (parr_idx < tail_h0) lane_count = lane_count + 1;
-          end else begin
-            if ((parr_idx - h0_lanes) < tail_h1) lane_count = lane_count + 1;
-          end
+      for (lane = 0; lane < M; lane++) begin
+        lane_rows[lane] = 0;
+        for (r = lane; r < ofparr; r += M) begin
+          lane_rows[lane]++;
+        end
+      end
 
-          for (tile_idx = 0; tile_idx < lane_count; tile_idx++) begin
-            if (tile_idx < full_tile) begin
-              channel_idx = block_base + tile_idx * ofparr + parr_idx;
-            end else if (parr_idx < h0_lanes) begin
-              channel_idx = tail_base + parr_idx;
-            end else begin
-              channel_idx = tail_base + tail_h0 + (parr_idx - h0_lanes);
+      for (lane = 0; lane < M; lane++) begin
+        lane_count[lane] = full_cols * lane_rows[lane];
+
+        if (tail_slots > lane) begin
+          lane_count[lane] += ceil_div(tail_slots - lane, M);
+        end
+      end
+
+      lane_base[0] = 0;
+      for (lane = 1; lane < M; lane++) begin
+        lane_base[lane] = lane_base[lane-1] + lane_count[lane-1];
+      end
+
+      for (group_start = 0;
+           group_start < total_cols;
+           group_start += oftile) begin
+
+        group_cols = min2(oftile, total_cols - group_start);
+        block_id   = group_start / oftile;
+
+        block_real = co - block_id * oftile * ofparr;
+        if (block_real > oftile * ofparr) begin
+          block_real = oftile * ofparr;
+        end
+        if (block_real < 0) begin
+          block_real = 0;
+        end
+
+        remain_in_block = block_real;
+        for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+          red_need[col_in_group] = min2(ofparr, remain_in_block);
+          remain_in_block -= red_need[col_in_group];
+        end
+
+        for (lane = 0; lane < M; lane++) begin
+          for (r = 0; r < 24; r++) begin
+            for (col_in_group = 0; col_in_group < 4; col_in_group++) begin
+              slot_ch[lane][r][col_in_group] = -1;
             end
-
-            bias_ext_mem[addr] = mk_bias_val(channel_idx);
-            addr = addr + 1;
           end
         end
 
-        if ((real_count % 2) != 0) begin
+        for (lane = 0; lane < M; lane++) begin
+          lane_seq_count[lane] = 0;
+
+          for (r = 0; r < lane_rows[lane]; r++) begin
+            for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+              idx_in_lane =
+                lane_base[lane]
+                + lane_rows[lane] * group_start
+                + r * group_cols
+                + col_in_group;
+
+              if (idx_in_lane < lane_base[lane] + lane_count[lane]) begin
+                if (idx_in_lane < co) begin
+                  lane_seq[lane][lane_seq_count[lane]] = idx_in_lane;
+                  lane_seq_used[lane][lane_seq_count[lane]] = 0;
+                  lane_seq_count[lane]++;
+                end
+              end
+            end
+          end
+        end
+
+        for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+          need = red_need[col_in_group];
+
+          for (lane = 0; lane < M; lane++) begin
+            for (r = 0; r < lane_rows[lane]; r++) begin
+              if (need > 0) begin
+                seq_pos = r * group_cols + col_in_group;
+
+                if (seq_pos < lane_seq_count[lane]) begin
+                  if (lane_seq_used[lane][seq_pos] == 0) begin
+                    slot_ch[lane][r][col_in_group] = lane_seq[lane][seq_pos];
+                    lane_seq_used[lane][seq_pos] = 1;
+                    need--;
+                  end
+                end
+              end
+            end
+          end
+
+          while (need > 0) begin
+            placed = 0;
+
+            for (lane = 0; lane < M; lane++) begin
+              for (seq_pos = 0; seq_pos < lane_seq_count[lane]; seq_pos++) begin
+                if ((need > 0) && (placed == 0)) begin
+                  if (lane_seq_used[lane][seq_pos] == 0) begin
+                    for (r = 0; r < lane_rows[lane]; r++) begin
+                      if ((placed == 0) &&
+                          (slot_ch[lane][r][col_in_group] < 0)) begin
+                        slot_ch[lane][r][col_in_group] = lane_seq[lane][seq_pos];
+                        lane_seq_used[lane][seq_pos] = 1;
+                        need--;
+                        placed = 1;
+                      end
+                    end
+                  end
+                end
+              end
+            end
+
+            if (placed == 0) begin
+              need = 0;
+            end
+          end
+        end
+
+        burst_count = 0;
+
+        for (lane = 0; lane < M; lane++) begin
+          for (r = 0; r < lane_rows[lane]; r++) begin
+            for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+              channel_idx = slot_ch[lane][r][col_in_group];
+
+              if ((channel_idx >= 0) && (channel_idx < co)) begin
+                bias_ext_mem[addr] = mk_bias_val(channel_idx);
+                addr++;
+                burst_count++;
+              end
+            end
+          end
+        end
+
+        if ((burst_count % 2) != 0) begin
           bias_ext_mem[addr] = '0;
-          addr = addr + 1;
+          addr++;
         end
       end
 
@@ -507,80 +883,109 @@ module CNN_accel_tb;
   // group channel = oftile * ofparr
   // trong moi group: h -> row_in_tile -> tile -> w
   // moi beat xuat {lane1, lane0}
-  task automatic build_expected_output();
+    task automatic build_expected_output();
     logic [WIDTH-1:0] if_t [0:MAX_C-1][0:MAX_H-1][0:MAX_W-1];
     logic [WIDTH-1:0] flt_t[0:MAX_F-1][0:MAX_C-1][0:MAX_KSZ-1][0:MAX_KSZ-1];
     logic [WIDTH-1:0] of_t [0:MAX_F-1][0:MAX_H-1][0:MAX_W-1];
+
     logic [M*WIDTH-1:0] pkt_word;
-    logic [M-1:0] pkt_vld;
+    logic [M-1:0]       pkt_vld;
+
     longint signed acc;
+
     int co_idx, ci_idx, h_idx, w_idx;
-    int fg;
     int oh, ow;
     int ho, wo;
     int ih, iw;
-    int group_ch;
-    int tile_idx;
+
+    int total_cols;
+    int full_cols;
+    int tail_slots;
+
+    int lane_rows [0:M-1];
+    int lane_count[0:M-1];
+    int lane_base [0:M-1];
+
+    int lane;
+    int r;
+    int max_lane_rows;
+
+    int group_start;
+    int group_cols;
     int row_idx;
-    int row_per_tile;
-    int lane0_rel;
-    int lane1_rel;
-    int tile_base;
-    int active_tiles;
-    int fp_active;
-    int row_per_tile_local;
-    int lane0_seq [0:MAX_F-1];
-    int lane1_seq [0:MAX_F-1];
-    int lane0_count;
-    int lane1_count;
-    int fp_active_tile;
-    int lane0_in_tile;
-    int lane1_in_tile;
-    int block_rows;
-    int max_lane0_rows_tile;
-    int max_lane1_rows_tile;
-    int lane0_cnt_tile [0:31];
-    int lane1_cnt_tile [0:31];
-    logic signed [WIDTH:0] if_val_adj;
-    logic signed [WIDTH:0] flt_val_adj;
+    int col_in_group;
+
+    int idx_in_lane;
+    int lane0_ch;
+    int lane1_ch;
+
+    logic signed [WIDTH:0]     if_val_adj;
+    logic signed [WIDTH:0]     flt_val_adj;
     logic signed [2*WIDTH+1:0] mac_term;
+
     begin
       exp_out_count = 0;
       exp_pkt_count = 0;
 
-      for (ci_idx = 0; ci_idx < current_ci; ci_idx++)
-        for (h_idx = 0; h_idx < current_h; h_idx++)
-          for (w_idx = 0; w_idx < current_w; w_idx++)
+      // =====================================================
+      // Rebuild IF tensor
+      // =====================================================
+      for (ci_idx = 0; ci_idx < current_ci; ci_idx++) begin
+        for (h_idx = 0; h_idx < current_h; h_idx++) begin
+          for (w_idx = 0; w_idx < current_w; w_idx++) begin
             if_t[ci_idx][h_idx][w_idx] = mk_if_val(ci_idx, h_idx, w_idx);
+          end
+        end
+      end
 
-      for (co_idx = 0; co_idx < current_co; co_idx++)
-        for (ci_idx = 0; ci_idx < current_ci; ci_idx++)
-          for (h_idx = 0; h_idx < current_kh; h_idx++)
-            for (w_idx = 0; w_idx < current_kw; w_idx++)
-              flt_t[co_idx][ci_idx][h_idx][w_idx] = mk_flt_val(co_idx, ci_idx, h_idx, w_idx);
+      // =====================================================
+      // Rebuild FILTER tensor
+      // =====================================================
+      for (co_idx = 0; co_idx < current_co; co_idx++) begin
+        for (ci_idx = 0; ci_idx < current_ci; ci_idx++) begin
+          for (h_idx = 0; h_idx < current_kh; h_idx++) begin
+            for (w_idx = 0; w_idx < current_kw; w_idx++) begin
+              flt_t[co_idx][ci_idx][h_idx][w_idx] =
+                mk_flt_val(co_idx, ci_idx, h_idx, w_idx);
+            end
+          end
+        end
+      end
 
       ho = (current_h + 2 * current_padding - current_kh) / current_stride + 1;
       wo = (current_w + 2 * current_padding - current_kw) / current_stride + 1;
-      row_per_tile = ceil_div(current_ofparr, M);
 
+      // =====================================================
+      // Golden convolution value, unchanged
+      // =====================================================
       for (co_idx = 0; co_idx < current_co; co_idx++) begin
         for (oh = 0; oh < ho; oh++) begin
           for (ow = 0; ow < wo; ow++) begin
             acc = 0;
+
             for (ci_idx = 0; ci_idx < current_ci; ci_idx++) begin
               for (h_idx = 0; h_idx < current_kh; h_idx++) begin
                 for (w_idx = 0; w_idx < current_kw; w_idx++) begin
                   ih = oh * current_stride + h_idx - current_padding;
                   iw = ow * current_stride + w_idx - current_padding;
-                  if ((ih >= 0) && (ih < current_h) && (iw >= 0) && (iw < current_w)) begin
-                    if_val_adj  = $signed({1'b0, if_t[ci_idx][ih][iw]}) - $signed((WIDTH+1)'(current_ifc_zp));
-                    flt_val_adj = $signed({1'b0, flt_t[co_idx][ci_idx][h_idx][w_idx]}) - $signed((WIDTH+1)'(current_fltc_zp));
-                    mac_term    = if_val_adj * flt_val_adj;
+
+                  if ((ih >= 0) && (ih < current_h) &&
+                      (iw >= 0) && (iw < current_w)) begin
+                    if_val_adj =
+                      $signed({1'b0, if_t[ci_idx][ih][iw]})
+                      - $signed((WIDTH+1)'(current_ifc_zp));
+
+                    flt_val_adj =
+                      $signed({1'b0, flt_t[co_idx][ci_idx][h_idx][w_idx]})
+                      - $signed((WIDTH+1)'(current_fltc_zp));
+
+                    mac_term = if_val_adj * flt_val_adj;
                     acc += mac_term;
                   end
                 end
               end
             end
+
             of_t[co_idx][oh][ow] = apply_output_pipeline(acc, co_idx);
           end
         end
@@ -588,68 +993,133 @@ module CNN_accel_tb;
 
       exp_out_count = current_co * ho * wo;
 
-      for (fg = 0; fg < current_co; fg += (current_oftile * current_ofparr)) begin
-        group_ch            = min2(current_oftile * current_ofparr, current_co - fg);
-        active_tiles        = ceil_div(group_ch, current_ofparr);
-        lane0_count         = 0;
-        lane1_count         = 0;
-        max_lane0_rows_tile = 0;
-        max_lane1_rows_tile = 0;
+      // =====================================================
+      // New expected output channel order
+      // Based on GREEN bias burst layout, split to 2 lanes.
+      // =====================================================
 
-        for (tile_idx = 0; tile_idx < active_tiles; tile_idx++) begin
-          tile_base      = tile_idx * current_ofparr;
-          fp_active_tile = min2(current_ofparr, group_ch - tile_base);
-          lane0_in_tile  = ceil_div(fp_active_tile, M);
-          lane1_in_tile  = fp_active_tile - lane0_in_tile;
+      total_cols = ceil_div(current_co, current_ofparr);
+      full_cols  = current_co / current_ofparr;
+      tail_slots = current_co % current_ofparr;
 
-          lane0_cnt_tile[tile_idx] = lane0_in_tile;
-          lane1_cnt_tile[tile_idx] = lane1_in_tile;
+      // -----------------------------------------------------
+      // So row trong moi lane.
+      // M = 2:
+      //   ofparr = 4 -> lane_rows[0] = 2, lane_rows[1] = 2
+      //   ofparr = 3 -> lane_rows[0] = 2, lane_rows[1] = 1
+      //   ofparr = 2 -> lane_rows[0] = 1, lane_rows[1] = 1
+      // -----------------------------------------------------
+      max_lane_rows = 0;
 
-          if (lane0_in_tile > max_lane0_rows_tile) max_lane0_rows_tile = lane0_in_tile;
-          if (lane1_in_tile > max_lane1_rows_tile) max_lane1_rows_tile = lane1_in_tile;
+      for (lane = 0; lane < M; lane++) begin
+        lane_rows[lane] = 0;
+
+        for (r = lane; r < current_ofparr; r += M) begin
+          lane_rows[lane]++;
         end
 
-        // Thu tu accel: trong moi lane, xuat theo row cua lane tren toan block.
-        // Vi du oftile=2, ofparr=3 => lane0: 0,3,1 ; lane1: 2,4
-        for (row_idx = 0; row_idx < max_lane0_rows_tile; row_idx++) begin
-          for (tile_idx = 0; tile_idx < active_tiles; tile_idx++) begin
-            tile_base = tile_idx * current_ofparr;
-            if (row_idx < lane0_cnt_tile[tile_idx]) begin
-              lane0_seq[lane0_count] = tile_base + row_idx;
-              lane0_count = lane0_count + 1;
-            end
-          end
+        if (lane_rows[lane] > max_lane_rows) begin
+          max_lane_rows = lane_rows[lane];
         end
+      end
 
-        for (row_idx = 0; row_idx < max_lane1_rows_tile; row_idx++) begin
-          for (tile_idx = 0; tile_idx < active_tiles; tile_idx++) begin
-            tile_base = tile_idx * current_ofparr;
-            if (row_idx < lane1_cnt_tile[tile_idx]) begin
-              lane1_seq[lane1_count] = tile_base + lane0_cnt_tile[tile_idx] + row_idx;
-              lane1_count = lane1_count + 1;
-            end
-          end
+      // -----------------------------------------------------
+      // Dem so channel that su thuoc moi lane.
+      // Channel index cua lane0 lien tuc truoc,
+      // sau do toi lane1.
+      // -----------------------------------------------------
+      for (lane = 0; lane < M; lane++) begin
+        lane_count[lane] = full_cols * lane_rows[lane];
+
+        if (tail_slots > lane) begin
+          lane_count[lane] += ceil_div(tail_slots - lane, M);
         end
+      end
 
-        block_rows = (lane0_count > lane1_count) ? lane0_count : lane1_count;
+      lane_base[0] = 0;
+
+      for (lane = 1; lane < M; lane++) begin
+        lane_base[lane] = lane_base[lane-1] + lane_count[lane-1];
+      end
+
+      // =====================================================
+      // Moi group oftile cot = 1 green burst.
+      //
+      // Thu tu packet trong 1 green burst:
+      //   row tren -> row duoi
+      //   trong moi row: cot phai -> trai
+      //
+      // Moi packet xuat song song:
+      //   lane0 = channel tai lane0, row, col
+      //   lane1 = channel tai lane1, row, col
+      //
+      // Neu lane0 co channel ma lane1 khong co:
+      //   pkt_vld[0] = 1
+      //   pkt_vld[1] = 0
+      // =====================================================
+      for (group_start = 0;
+           group_start < total_cols;
+           group_start += current_oftile) begin
+
+        group_cols = min2(current_oftile, total_cols - group_start);
+
         for (oh = 0; oh < ho; oh++) begin
-          for (row_idx = 0; row_idx < block_rows; row_idx++) begin
-            for (ow = 0; ow < wo; ow++) begin
-              pkt_vld  = '0;
-              pkt_word = '0;
+          for (row_idx = 0; row_idx < max_lane_rows; row_idx++) begin
+            for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
+              lane0_ch = -1;
+              lane1_ch = -1;
 
-              if (row_idx < lane0_count) begin
-                pkt_vld[0] = 1'b1;
-                pkt_word[WIDTH-1:0] = of_t[fg + lane0_seq[row_idx]][oh][ow];
-              end
-              if (row_idx < lane1_count) begin
-                pkt_vld[1] = 1'b1;
-                pkt_word[2*WIDTH-1:WIDTH] = of_t[fg + lane1_seq[row_idx]][oh][ow];
+              // -----------------------------
+              // lane0 channel at this row/col
+              // -----------------------------
+              if (row_idx < lane_rows[0]) begin
+                idx_in_lane =
+                  lane_base[0]
+                  + lane_rows[0] * group_start
+                  + row_idx * group_cols
+                  + col_in_group;
+
+                if (idx_in_lane < lane_base[0] + lane_count[0]) begin
+                  lane0_ch = idx_in_lane;
+                end
               end
 
-              exp_vld_mem[exp_pkt_count] = pkt_vld;
-              exp_pkt_mem[exp_pkt_count] = pkt_word;
-              exp_pkt_count = exp_pkt_count + 1;
+              // -----------------------------
+              // lane1 channel at this row/col
+              // -----------------------------
+              if (row_idx < lane_rows[1]) begin
+                idx_in_lane =
+                  lane_base[1]
+                  + lane_rows[1] * group_start
+                  + row_idx * group_cols
+                  + col_in_group;
+
+                if (idx_in_lane < lane_base[1] + lane_count[1]) begin
+                  lane1_ch = idx_in_lane;
+                end
+              end
+
+              // Khong tao packet neu ca 2 lane deu khong co channel.
+              if ((lane0_ch >= 0) || (lane1_ch >= 0)) begin
+                for (ow = 0; ow < wo; ow++) begin
+                  pkt_vld  = '0;
+                  pkt_word = '0;
+
+                  if (lane0_ch >= 0) begin
+                    pkt_vld[0] = 1'b1;
+                    pkt_word[WIDTH-1:0] = of_t[lane0_ch][oh][ow];
+                  end
+
+                  if (lane1_ch >= 0) begin
+                    pkt_vld[1] = 1'b1;
+                    pkt_word[2*WIDTH-1:WIDTH] = of_t[lane1_ch][oh][ow];
+                  end
+
+                  exp_vld_mem[exp_pkt_count] = pkt_vld;
+                  exp_pkt_mem[exp_pkt_count] = pkt_word;
+                  exp_pkt_count = exp_pkt_count + 1;
+                end
+              end
             end
           end
         end
@@ -876,18 +1346,28 @@ module CNN_accel_tb;
   endtask
 
   task automatic issue_inftructions();
+    int hold_count;
+    int watchdog;
     begin
-      wait (ifbuf_inf_rdy_o === 1'b1 && fltbuf_inf_rdy_o === 1'b1 && bias_inf_rdy_o === 1'b1 && comp_inf_rdy_o === 1'b1 );
-      @(posedge clk);
-      ifbuf_inf_vld_i  <= 1'b1;
-      fltbuf_inf_vld_i <= 1'b1;
-      bias_inf_vld_i   <= 1'b1;
-      comp_inf_vld_i   <= 1'b1;
-      @(posedge clk);
-      ifbuf_inf_vld_i  <= 1'b0;
-      fltbuf_inf_vld_i <= 1'b0;
-      bias_inf_vld_i   <= 1'b0;
-      comp_inf_vld_i   <= 1'b0;
+      // layer_info samples table fields when its internal count_cycle == 3'b110.
+      // Keep the table fields stable while inf_table_vld_i is asserted.
+      @(negedge clk);
+      inf_table_vld_i = 1'b1;
+      for (hold_count = 0; hold_count < 7; hold_count++) begin
+        @(posedge clk);
+        #1;
+      end
+      watchdog = 0;
+      while (inf_table_rdy_o !== 1'b1) begin
+        @(posedge clk);
+        #1;
+        watchdog++;
+        if (watchdog > 64) begin
+          $fatal(1, "TABLE instruction timeout: inf_table_rdy_o did not assert");
+        end
+      end
+      @(negedge clk);
+      inf_table_vld_i = 1'b0;
     end
   endtask
 
@@ -1020,57 +1500,7 @@ module CNN_accel_tb;
       bias_tail_lane0      = bias_tail_full_tile * bias_h0_lanes + ceil_div(bias_tail_mod, M);
       bias_lane0           = ((co < bias_block_real)) ? bias_tail_lane0 : bias_h0_lanes * oftile;
 
-      // Program IFBUF inftruction fields
-      ifbuf_inf_ifbaddr_i      = current_if_base;
-      ifbuf_inf_ifwidth_i        = w[7:0];
-      ifbuf_inf_channel_i      = ci[10:0];
-      ifbuf_inf_ifparr_i       = ifparr[3:0];
-      ifbuf_inf_ifsize_i       = align_w * h;
-      ifbuf_inf_ifblock_i      = ceil_div(co, (ofparr*oftile));
-      ifbuf_inf_oftiles_i      = oftile[3:0];
-      ifbuf_inf_oftiles_tail_i = oftiles_tail[3:0];
-      ifbuf_inf_iftiles_i      = iftiles[6:0];
-      ifbuf_inf_wp_i           = wp[8:0];
-      ifbuf_inf_padding_i      = padding[1:0];
-      ifbuf_inf_ifc_zp_i       = current_ifc_zp[DATA_WIDTH-1:0];
-
-      // Program FLTBUF inftruction fields
-      fltbuf_inf_fltbaddr_i      = current_flt_base;
-      fltbuf_inf_ifparr_i        = ifparr[3:0];
-      fltbuf_inf_ifparr_tail_i   = ifparr_tail[3:0];
-      fltbuf_inf_fltsize_i       = normal_burst;
-      fltbuf_inf_ifblock_i       = ceil_div(co, (ofparr*oftile));
-      fltbuf_inf_ofparr_i        = ofparr[4:0];
-      fltbuf_inf_ofparr_tail_i   = ofparr_tail[4:0];
-      fltbuf_inf_oftiles_i       = oftile;
-      fltbuf_inf_oftiles_tail_i  = oftiles_tail[3:0];
-      fltbuf_inf_iftiles_i       = iftiles[6:0];
-
-      // Program BIAS inftruction fields. burstlen includes optional dummy;
-      // lane0 counts only real head0 bias values.
-      bias_inf_bias_baddr_i           = current_bias_base;
-      bias_inf_ofwidth_i              = ((w + 2 * padding - kw) / stride + 1);
-      bias_inf_ofchannel_i            = co[10:0];
-      bias_inf_burstlen_i             = bias_burst[4:0];
-      bias_inf_burstlen_tail_i        = bias_tail_burst[4:0];
-      bias_inf_burstlen_lane0_i       = bias_lane0[4:0];
-      bias_inf_burstlen_tail_lane0_i  = bias_tail_lane0[4:0];
-
-      // Program COMPUTATION inftruction fields
-      comp_inf_hf_i         = kh[3:0];
-      comp_inf_stride_i     = stride[2:0];
-      comp_inf_padding_i    = padding[1:0];
-      comp_inf_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
-      comp_inf_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
-      comp_inf_ofwidth_i    = ((w + 2 * padding - kw) / stride + 1);
-      comp_inf_mult_i       = current_mult;
-      comp_inf_mult_shift_i = current_mult_shift[5:0];
-      comp_inf_alphamult_i  = current_alphamult;
-      comp_inf_alphamult_shift_i = current_alphamult_shift[5:0];
-      comp_inf_zpy_i        = current_zpy[7:0];
-      comp_inf_qmin_i       = current_qmin[7:0];
-      comp_inf_qmax_i       = current_qmax[7:0];
-      comp_inf_is_leaky_ReLU_i = current_is_leaky_relu[0];
+      program_table_instruction(tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile);
 
       fork
         if_dma_agent();
@@ -1203,57 +1633,7 @@ module CNN_accel_tb;
       bias_tail_lane0      = bias_tail_full_tile * bias_h0_lanes + ceil_div(bias_tail_mod, M);
       bias_lane0           = ((co / bias_block_real) == 0) ? bias_tail_lane0 : bias_h0_lanes * oftile;
 
-      // Program IFBUF inftruction fields
-      ifbuf_inf_ifbaddr_i      = current_if_base;
-      ifbuf_inf_ifwidth_i        = w[7:0];
-      ifbuf_inf_channel_i      = ci[10:0];
-      ifbuf_inf_ifparr_i       = ifparr[3:0];
-      ifbuf_inf_ifsize_i       = align_w * h;
-      ifbuf_inf_ifblock_i      = ceil_div(co, (ofparr*oftile));
-      ifbuf_inf_oftiles_i      = oftile[3:0];
-      ifbuf_inf_oftiles_tail_i = oftiles_tail[3:0];
-      ifbuf_inf_iftiles_i      = iftiles[6:0];
-      ifbuf_inf_wp_i           = wp[8:0];
-      ifbuf_inf_padding_i      = padding[1:0];
-      ifbuf_inf_ifc_zp_i       = current_ifc_zp[DATA_WIDTH-1:0];
-
-      // Program FLTBUF inftruction fields
-      fltbuf_inf_fltbaddr_i      = current_flt_base;
-      fltbuf_inf_ifparr_i        = ifparr[3:0];
-      fltbuf_inf_ifparr_tail_i   = ifparr_tail[3:0];
-      fltbuf_inf_fltsize_i       = normal_burst;
-      fltbuf_inf_ifblock_i       = ceil_div(co, (ofparr*oftile));
-      fltbuf_inf_ofparr_i        = ofparr[4:0];
-      fltbuf_inf_ofparr_tail_i   = ofparr_tail[4:0];
-      fltbuf_inf_oftiles_i       = oftile;
-      fltbuf_inf_oftiles_tail_i  = oftiles_tail[3:0];
-      fltbuf_inf_iftiles_i       = iftiles[6:0];
-
-      // Program BIAS inftruction fields. burstlen includes optional dummy;
-      // lane0 counts only real head0 bias values.
-      bias_inf_bias_baddr_i           = current_bias_base;
-      bias_inf_ofwidth_i              = ((w + 2 * padding - kw) / stride + 1);
-      bias_inf_ofchannel_i            = co[10:0];
-      bias_inf_burstlen_i             = bias_burst[4:0];
-      bias_inf_burstlen_tail_i        = bias_tail_burst[4:0];
-      bias_inf_burstlen_lane0_i       = bias_lane0[4:0];
-      bias_inf_burstlen_tail_lane0_i  = bias_tail_lane0[4:0];
-
-      // Program COMPUTATION inftruction fields
-      comp_inf_hf_i         = kh[3:0];
-      comp_inf_stride_i     = stride[2:0];
-      comp_inf_padding_i    = padding[1:0];
-      comp_inf_ifc_zp_i     = current_ifc_zp[DATA_WIDTH-1:0];
-      comp_inf_fltc_zp_i    = current_fltc_zp[DATA_WIDTH-1:0];
-      comp_inf_ofwidth_i    = ((w + 2 * padding - kw) / stride + 1);
-      comp_inf_mult_i       = current_mult;
-      comp_inf_mult_shift_i = current_mult_shift[5:0];
-      comp_inf_alphamult_i  = current_alphamult;
-      comp_inf_alphamult_shift_i = current_alphamult_shift[5:0];
-      comp_inf_zpy_i        = current_zpy[7:0];
-      comp_inf_qmin_i       = current_qmin[7:0];
-      comp_inf_qmax_i       = current_qmax[7:0];
-      comp_inf_is_leaky_ReLU_i = current_is_leaky_relu[0];
+      program_table_instruction(tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile);
 
       fork
         if_dma_agent();
@@ -1294,10 +1674,7 @@ module CNN_accel_tb;
       disable fork;
 
       // Hold all TB-driven interfaces idle during the rest of reset.
-      ifbuf_inf_vld_i = 1'b0;
-      fltbuf_inf_vld_i = 1'b0;
-      bias_inf_vld_i = 1'b0;
-      comp_inf_vld_i = 1'b0;
+      clear_table_interface();
       ifbuf_dma_rdycfg_i = 1'b0;
       fltbuf_dma_rdycfg_i = 1'b0;
       bias_dma_rdycfg_i = 1'b0;
@@ -1325,7 +1702,7 @@ module CNN_accel_tb;
   // =========================================================
   wire [WIDTH-1:0]     fltbuf_comp_data_tb   [0:K*M-1];
   wire [WIDTH-1:0]     ifbuf_comp_data_tb    [0:K-1];
-  wire [ACC_WIDTH-1:0] scale_comp_data_tb    [0:M-1];
+  wire [WIDTH-1:0]     scale_comp_data_tb    [0:M-1];
   wire [WIDTH-1:0]     flt_cache_pe_data_tb  [0:K*M*12-1];
   wire [WIDTH-1:0]     if_cache_pe_data_tb   [0:K-1];
   genvar i;
@@ -1342,7 +1719,7 @@ module CNN_accel_tb;
             dut.u_computation.gen_comp_pu[0].comp_pu_inft.pe_fltc_data_i[(i+1)*WIDTH-1 -: WIDTH];
     end
     for (i = 0; i < M; i = i + 1) begin : GEN_scale_TAP
-          assign scale_comp_data_tb[i] = comp_ofbuf_data_o[(i+1)*ACC_WIDTH-1 -: ACC_WIDTH];
+          assign scale_comp_data_tb[i] = comp_ofbuf_data_o[(i+1)*WIDTH-1 -: WIDTH];
       end
   endgenerate
   CNN_accel #(
@@ -1354,60 +1731,32 @@ module CNN_accel_tb;
     .clk(clk),
     .rst_n(rst_n),
 
-    .ifbuf_inf_vld_i(ifbuf_inf_vld_i),
-    .ifbuf_inf_ifbaddr_i(ifbuf_inf_ifbaddr_i),
-    .ifbuf_inf_ifwidth_i(ifbuf_inf_ifwidth_i),
-    .ifbuf_inf_channel_i(ifbuf_inf_channel_i),
-    .ifbuf_inf_ifparr_i(ifbuf_inf_ifparr_i),
-    .ifbuf_inf_ifsize_i(ifbuf_inf_ifsize_i),
-    .ifbuf_inf_ifblock_i(ifbuf_inf_ifblock_i),
-    .ifbuf_inf_oftiles_i(ifbuf_inf_oftiles_i),
-    .ifbuf_inf_oftiles_tail_i(ifbuf_inf_oftiles_tail_i),
-    .ifbuf_inf_iftiles_i(ifbuf_inf_iftiles_i),
-    .ifbuf_inf_wp_i(ifbuf_inf_wp_i),
-    .ifbuf_inf_padding_i(ifbuf_inf_padding_i),
-    .ifbuf_inf_ifc_zp_i(ifbuf_inf_ifc_zp_i),
-    .ifbuf_inf_rdy_o(ifbuf_inf_rdy_o),
-
-    .fltbuf_inf_vld_i(fltbuf_inf_vld_i),
-    .fltbuf_inf_fltbaddr_i(fltbuf_inf_fltbaddr_i),
-    .fltbuf_inf_ifparr_i(fltbuf_inf_ifparr_i),
-    .fltbuf_inf_ifparr_tail_i(fltbuf_inf_ifparr_tail_i),
-    .fltbuf_inf_fltsize_i(fltbuf_inf_fltsize_i),
-    .fltbuf_inf_ifblock_i(fltbuf_inf_ifblock_i),
-    .fltbuf_inf_ofparr_i(fltbuf_inf_ofparr_i),
-    .fltbuf_inf_ofparr_tail_i(fltbuf_inf_ofparr_tail_i),
-    .fltbuf_inf_oftiles_i(fltbuf_inf_oftiles_i),
-    .fltbuf_inf_oftiles_tail_i(fltbuf_inf_oftiles_tail_i),
-    .fltbuf_inf_iftiles_i(fltbuf_inf_iftiles_i),
-    .fltbuf_inf_rdy_o(fltbuf_inf_rdy_o),
-
-    .bias_inf_vld_i(bias_inf_vld_i),
-    .bias_inf_rdy_o(bias_inf_rdy_o),
-    .bias_inf_bias_baddr_i(bias_inf_bias_baddr_i),
-    .bias_inf_ofwidth_i(bias_inf_ofwidth_i),
-    .bias_inf_ofchannel_i(bias_inf_ofchannel_i),
-    .bias_inf_burstlen_i(bias_inf_burstlen_i),
-    .bias_inf_burstlen_tail_i(bias_inf_burstlen_tail_i),
-    .bias_inf_burstlen_lane0_i(bias_inf_burstlen_lane0_i),
-    .bias_inf_burstlen_tail_lane0_i(bias_inf_burstlen_tail_lane0_i),
-
-    .comp_inf_rdy_o(comp_inf_rdy_o),
-    .comp_inf_vld_i(comp_inf_vld_i),
-    .comp_inf_hf_i(comp_inf_hf_i),
-    .comp_inf_stride_i(comp_inf_stride_i),
-    .comp_inf_padding_i(comp_inf_padding_i),
-    .comp_inf_ifc_zp_i(comp_inf_ifc_zp_i),
-    .comp_inf_fltc_zp_i(comp_inf_fltc_zp_i),
-    .comp_inf_ofwidth_i(comp_inf_ofwidth_i),
-    .comp_inf_mult_i(comp_inf_mult_i),
-    .comp_inf_mult_shift_i(comp_inf_mult_shift_i),
-    .comp_inf_alphamult_i(comp_inf_alphamult_i),
-    .comp_inf_alphamult_shift_i(comp_inf_alphamult_shift_i),
-    .comp_inf_zpy_i(comp_inf_zpy_i),
-    .comp_inf_qmin_i(comp_inf_qmin_i),
-    .comp_inf_qmax_i(comp_inf_qmax_i),
-    .comp_inf_is_leaky_ReLU_i(comp_inf_is_leaky_ReLU_i),
+    .inf_table_vld_i(inf_table_vld_i),
+    .inf_table_rdy_o(inf_table_rdy_o),
+    .inf_table_ifheight_i(inf_table_ifheight_i),
+    .inf_table_ifchannel_i(inf_table_ifchannel_i),
+    .inf_table_ofchannel_i(inf_table_ofchannel_i),
+    .inf_table_hf_i(inf_table_hf_i),
+    .inf_table_stride_i(inf_table_stride_i),
+    .inf_table_padding_i(inf_table_padding_i),
+    .inf_table_ifparr_i(inf_table_ifparr_i),
+    .inf_table_oftile_i(inf_table_oftile_i),
+    .inf_table_ofparr_i(inf_table_ofparr_i),
+    .inf_table_ifbaddr_i(inf_table_ifbaddr_i),
+    .inf_table_fltbaddr_i(inf_table_fltbaddr_i),
+    .inf_table_bias_baddr_i(inf_table_bias_baddr_i),
+    .inf_table_ofbaddr_i(inf_table_ofbaddr_i),
+    .inf_table_ifc_zp_i(inf_table_ifc_zp_i),
+    .inf_table_fltc_zp_i(inf_table_fltc_zp_i),
+    .inf_table_mult_i(inf_table_mult_i),
+    .inf_table_mult_shift_i(inf_table_mult_shift_i),
+    .inf_table_alphamult_i(inf_table_alphamult_i),
+    .inf_table_alphamult_shift_i(inf_table_alphamult_shift_i),
+    .inf_table_zpy_i(inf_table_zpy_i),
+    .inf_table_qmin_i(inf_table_qmin_i),
+    .inf_table_qmax_i(inf_table_qmax_i),
+    .inf_table_is_leaky_ReLU_i(inf_table_is_leaky_ReLU_i),
+    .inf_table_is_use_camera_i(inf_table_is_use_camera_i),
 
     .ifbuf_dma_rdycfg_i(ifbuf_dma_rdycfg_i),
     .ifbuf_dma_vld_i(ifbuf_dma_vld_i),
@@ -1442,6 +1791,7 @@ module CNN_accel_tb;
 
     .comp_pa_done_compute_o(comp_pa_done_compute_o),
     .ifbuf_comp_end_layer_o(ifbuf_comp_end_layer_o),
+    .ifbuf_comp_end_layer_real_o(ifbuf_comp_end_layer_real_o),
     .fltbuf_comp_donepass_o(fltbuf_comp_donepass_o)
   );
 
@@ -1454,56 +1804,7 @@ module CNN_accel_tb;
     clk = 1'b0;
     rst_n = 1'b0;
 
-    ifbuf_inf_vld_i = 1'b0;
-    fltbuf_inf_vld_i = 1'b0;
-    bias_inf_vld_i = 1'b0;
-    comp_inf_vld_i = 1'b0;
-    ifbuf_inf_ifbaddr_i = '0;
-    ifbuf_inf_ifwidth_i = '0;
-    ifbuf_inf_channel_i = '0;
-    ifbuf_inf_ifparr_i = '0;
-    ifbuf_inf_ifsize_i = '0;
-    ifbuf_inf_ifblock_i = '0;
-    ifbuf_inf_oftiles_i = '0;
-    ifbuf_inf_oftiles_tail_i = '0;
-    ifbuf_inf_iftiles_i = '0;
-    ifbuf_inf_wp_i = '0;
-    ifbuf_inf_padding_i = '0;
-    ifbuf_inf_ifc_zp_i = '0;
-
-    bias_inf_bias_baddr_i = '0;
-    bias_inf_ofwidth_i = '0;
-    bias_inf_ofchannel_i = '0;
-    bias_inf_burstlen_i = '0;
-    bias_inf_burstlen_tail_i = '0;
-    bias_inf_burstlen_lane0_i = '0;
-    bias_inf_burstlen_tail_lane0_i = '0;
-
-    fltbuf_inf_fltbaddr_i = '0;
-    fltbuf_inf_ifparr_i = '0;
-    fltbuf_inf_ifparr_tail_i = '0;
-    fltbuf_inf_fltsize_i = '0;
-    fltbuf_inf_ifblock_i = '0;
-    fltbuf_inf_ofparr_i = '0;
-    fltbuf_inf_ofparr_tail_i = '0;
-    fltbuf_inf_oftiles_i = '0;
-    fltbuf_inf_oftiles_tail_i = '0;
-    fltbuf_inf_iftiles_i = '0;
-
-    comp_inf_hf_i = '0;
-    comp_inf_stride_i = '0;
-    comp_inf_padding_i = '0;
-    comp_inf_ifc_zp_i = '0;
-    comp_inf_fltc_zp_i = '0;
-    comp_inf_ofwidth_i = '0;
-    comp_inf_mult_i = '0;
-    comp_inf_mult_shift_i = '0;
-    comp_inf_alphamult_i = '0;
-    comp_inf_alphamult_shift_i = '0;
-    comp_inf_zpy_i = '0;
-    comp_inf_qmin_i = -128;
-    comp_inf_qmax_i = 127;
-    comp_inf_is_leaky_ReLU_i = 1'b0;
+    clear_table_interface();
 
     ifbuf_dma_rdycfg_i = 1'b0;
     fltbuf_dma_rdycfg_i = 1'b0;
@@ -1522,9 +1823,10 @@ module CNN_accel_tb;
     clear_all_memories();
     apply_reset();
     //tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,zp,zp
+    // Direct table interface: keep original testcase values; no LUT retargeting.
     
     // 1) Ifmap kích thước chẵn, burst filter chẵn
-    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
+    // //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
     run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap

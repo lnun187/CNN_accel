@@ -50,7 +50,7 @@ module ifbuf #(
     input       [DATA_WIDTH-1:0]    ifbuf_dma_data_i,
     input                           ifbuf_dma_tlast_i,
     output                          ifbuf_dma_vldcfg_o,
-    output reg  [8:0]               ifbuf_dma_burst_o, 
+    output reg  [7:0]               ifbuf_dma_burst_o, 
     output      [23:0]              ifbuf_dma_baddr_o,
     output                          ifbuf_dma_rdy_o,
 
@@ -105,7 +105,7 @@ module ifbuf #(
     wire        channel_config_en;  // Bổ sung wire bị thiếu
     reg [31:0]  base_addr_config;
     wire [31:0] base_addr_config_nxt;
-    wire [8:0]  width_align;
+    wire [7:0]  width_align;
     wire [K-1:0] wr_en;
     wire        vld_o;
     wire        clr;
@@ -122,6 +122,7 @@ module ifbuf #(
     wire        count_depth_read_en;
     reg [8:0]   count_height_read;
     wire        count_height_read_en;
+    reg         inf_rdy_dly;
     // Phân luồng các Assign logic
     assign channel_config_en    = ifbuf_dma_rdycfg_i && ifbuf_dma_vldcfg_o;
     assign height_config_en     = channel_config_en && (channel_config == ifbuf_inf_channel_reg - 1);
@@ -149,6 +150,7 @@ module ifbuf #(
             ifbuf_inf_ifparr_reg    <= ifbuf_inf_ifparr_i;
             ifbuf_inf_oftiles_tail_reg <= ifbuf_inf_oftiles_tail_i;
         end
+        inf_rdy_dly <=  ifbuf_inf_rdy_o;
     end
 
     always @(posedge clk) begin
@@ -198,7 +200,7 @@ module ifbuf #(
 
     // Khối đếm Channel
     always @(posedge clk) begin
-        if (!rst_n) begin
+        if (inf_rdy_dly) begin
             channel_config <= 0;
             channel_count <= 0;
         end else if (channel_config_en) begin
@@ -209,7 +211,7 @@ module ifbuf #(
 
     // Khối đếm Height
     always @(posedge clk) begin
-        if (!rst_n) begin
+        if (inf_rdy_dly) begin
             height_config <= 0;
             height_width_config <= 0;
         end else if (height_config_en) begin
@@ -220,7 +222,7 @@ module ifbuf #(
 
     // Khối đếm Block
     always @(posedge clk) begin
-        if (!rst_n) begin
+        if (inf_rdy_dly) begin
             ifblock_count <= 0;
         end else if (ifblock_count_en) begin
             ifblock_count <= (ifblock_count == ifbuf_inf_ifblock_reg - 1) ? 0 : ifblock_count + 1;
@@ -250,7 +252,7 @@ module ifbuf #(
     always @(posedge clk) begin
         if (!rst_n) begin
             channel_wr_cnt <= 0;
-        end else if (ifbuf_dma_tlast_i) begin
+        end else if (ifbuf_dma_tlast_i && ifbuf_dma_vld_i) begin
             channel_wr_cnt <= channel_wr_cnt == ifbuf_inf_channel_reg - 1 ? 0 : channel_wr_cnt + 1;
         end 
     end
@@ -259,7 +261,7 @@ module ifbuf #(
             done_prepare <= 0;
         end else begin
             if(swap_en) done_prepare <= 0;
-            else if (ifbuf_dma_tlast_i && (channel_wr_cnt + 1 == channel_config || channel_wr_cnt == ifbuf_inf_channel_reg - 1) && !en_config) begin
+            else if (ifbuf_dma_vld_i && ifbuf_dma_tlast_i && (channel_wr_cnt + 1 == channel_config || channel_wr_cnt == ifbuf_inf_channel_reg - 1) && !en_config) begin
                 done_prepare <= 1;
             end
         end 
@@ -281,7 +283,7 @@ module ifbuf #(
                 end else begin
                     if (swap_en) begin
                         key_ring[i] <= (i == 0) ? 1'b1 : 1'b0;
-                    end else if(ifbuf_dma_tlast_i) begin
+                    end else if(ifbuf_dma_tlast_i && ifbuf_dma_vld_i) begin
                         key_ring[i] <= (i == 0) ? key_ring[K - 1] : key_ring[i - 1];
                     end
                 end
@@ -337,7 +339,7 @@ module ifbuf #(
     assign count_height_read_en     = count_depth_read_en && (count_depth_read == ifbuf_inf_iftiles_reg - 1);
     assign ifblock_count_r_en       = count_height_read_en && (count_height_read == ifbuf_inf_width_reg - 1);
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(swap_en) begin
             count_w_read <= 9'b0;
         end else if(count_w_read_en) begin
             count_w_read <= (count_w_read == ifbuf_inf_wp_reg) ? 9'b0 : count_w_read + 1;

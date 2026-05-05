@@ -140,7 +140,7 @@ module filter_buf #(
     wire        last_iftile_wr;
     wire        last_iftile_rd;
     wire        last_ifblock_wr;
-
+    reg         inf_rdy_dly;
     assign last_fltsize_rd      = (fltsize_rd_cnt == fltsize_reg - 1);
     assign fltsize_rd_cnt_en    = cache_rd_en[0];
     assign filter_rd_cnt_en     = (fltsize_rd_cnt == fltsize_reg - 1) && fltsize_rd_cnt_en;
@@ -178,9 +178,10 @@ module filter_buf #(
             iftiles_reg     <= fltbuf_inf_iftiles_i;
             height_reg      <= fltbuf_inf_height_i;
         end
+        inf_rdy_dly         <= fltbuf_inf_rdy_o;
     end
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(inf_rdy_dly) begin
             actual_channel  <= 0;
             actual_filter   <= 0;
         end
@@ -204,22 +205,22 @@ module filter_buf #(
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) iftiles_cfg_cnt <= 0;
+        if(inf_rdy_dly) iftiles_cfg_cnt <= 0;
         else if (iftiles_cfg_cnt_en) iftiles_cfg_cnt <= (last_iftile) ? 0 : iftiles_cfg_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) oftiles_cfg_cnt <= 0;
+        if(inf_rdy_dly) oftiles_cfg_cnt <= 0;
         else if (oftiles_cfg_cnt_en) oftiles_cfg_cnt <= (last_oftile) ? 0 : oftiles_cfg_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) pass_total <= 0;
+        if(inf_rdy_dly) pass_total <= 0;
         else begin
             if(end_layer) pass_total <= 0;
             else if (oftiles_cfg_cnt_en) pass_total <= pass_total + 1;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) ifblock_cfg_cnt <= 0;
+        if(inf_rdy_dly) ifblock_cfg_cnt <= 0;
         else if (ifblock_cfg_cnt_en) ifblock_cfg_cnt <= (last_ifblock) ? 0 : ifblock_cfg_cnt + 1;
     end
     assign fltbuf_dma_vldcfg_o = en_cfg && vldcfg;
@@ -281,7 +282,7 @@ module filter_buf #(
     reg last_ifblock_rd;
     // assign last_ifblock_rd = (ifblock_rd_cnt == ifblock_reg - 1);
     always @(posedge clk) begin
-        if(!rst_n) last_ifblock_rd <= 1'b0;
+        if(inf_rdy_dly) last_ifblock_rd <= 1'b0;
         else begin
             if(fltbuf_inf_rdy_o)        last_ifblock_rd <= 0;
             else if(ifblock_reg == 1)   last_ifblock_rd <= (ifblock_rd_cnt == ifblock_reg - 1);
@@ -345,15 +346,15 @@ module filter_buf #(
                                     ((filter_rd_cnt_en && (filter_rd_cnt == actual_rd_filter1 - 1)) ? 1'b0 : pa1_rd_vld);
 
     always @(posedge clk) begin
-        if(!rst_n) last_filter_rd <= 1'b0;
+        if(inf_rdy_dly) last_filter_rd <= 1'b0;
         else last_filter_rd <= (filter_rd_cnt_after == actual_rd_filter0_after - 1'b1);
     end
     always @(posedge clk) begin
-        if(!rst_n) fltbuf_comp_vld_o <= {(K*M){1'b0}};
+        if(inf_rdy_dly) fltbuf_comp_vld_o <= {(K*M){1'b0}};
         else fltbuf_comp_vld_o <= fltbuf_comp_vld_o_nxt;
     end
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(inf_rdy_dly) begin
             end_layer1 <= 0;
             end_layer <= 0;
         end
@@ -364,43 +365,43 @@ module filter_buf #(
     end
 
     always @(posedge clk) begin
-        if(!rst_n) iftiles_rd_cnt <= 0;
+        if(inf_rdy_dly) iftiles_rd_cnt <= 0;
         else begin
             if(end_layer) iftiles_rd_cnt <= 0;
             else if (iftiles_rd_cnt_en) iftiles_rd_cnt <= (last_iftile_rd) ? 0 : iftiles_rd_cnt + 1;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) height_rd_cnt <= 0;
+        if(inf_rdy_dly) height_rd_cnt <= 0;
         else if (height_rd_cnt_en) height_rd_cnt <= (last_height_rd) ? 0 : height_rd_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) oftiles_rd_cnt <= 0;
+        if(inf_rdy_dly) oftiles_rd_cnt <= 0;
         else begin
             if(end_layer) oftiles_rd_cnt <= 0;
             else if (oftiles_rd_cnt_en) oftiles_rd_cnt <= (last_oftile_rd) ? 0 : oftiles_rd_cnt + 1;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) ifblock_rd_cnt <= 0;
+        if(inf_rdy_dly) ifblock_rd_cnt <= 0;
         else if (ifblock_rd_cnt_en) ifblock_rd_cnt <= (last_ifblock_rd) ? 0 : ifblock_rd_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) fltsize_rd_cnt <= 0;
+        if(inf_rdy_dly) fltsize_rd_cnt <= 0;
         else begin
             if(end_layer) fltsize_rd_cnt <= 0;
             else if (fltsize_rd_cnt_en) fltsize_rd_cnt <= (last_fltsize_rd) ? 0 : fltsize_rd_cnt + 1;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) filter_rd_cnt <= 0;
+        if(inf_rdy_dly) filter_rd_cnt <= 0;
         else begin 
             if(end_layer) filter_rd_cnt <= 0;
             else if (filter_rd_cnt_en) filter_rd_cnt <= (last_filter_rd) ? 0 : filter_rd_cnt + 1;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) done_pass <= 0;
+        if(inf_rdy_dly) done_pass <= 0;
         else begin
             if(done_pass) done_pass <= 0;
             else if (filter_rd_cnt_en && last_filter_rd) done_pass <= 1;
@@ -408,21 +409,21 @@ module filter_buf #(
     end
     assign fltbuf_comp_donepass_o = done_pass;
     always @(posedge clk) begin
-        if(!rst_n) pa0_rd_vld <= 1;
+        if(inf_rdy_dly) pa0_rd_vld <= 1;
         else begin
             if(fltbuf_comp_donepass_o) pa0_rd_vld <= 1;
             else if (filter_rd_cnt_en && last_filter_rd) pa0_rd_vld <= 0;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) pa1_rd_vld <= 1;
+        if(inf_rdy_dly) pa1_rd_vld <= 1;
         else begin
             if(fltbuf_comp_donepass_o) pa1_rd_vld <= 1;
             else if (filter_rd_cnt_en && (filter_rd_cnt == actual_rd_filter1 - 1)) pa1_rd_vld <= 0;
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) pass_idx <= 0;
+        if(inf_rdy_dly) pass_idx <= 0;
         else begin
             if(fltbuf_comp_donepass_o) pass_idx <= ((pass_idx == pass_total - 1) && !en_cfg)? 0 : pass_idx + 1;
         end
@@ -459,16 +460,16 @@ module filter_buf #(
         wr_map[pa_wr_cnt][channel_wr_cnt] = wr_val;
     end
     always @(posedge clk) begin
-        if(!rst_n) iftiles_wr_cnt <= 0;
+        if(inf_rdy_dly) iftiles_wr_cnt <= 0;
         else if (iftiles_wr_cnt_en) iftiles_wr_cnt <= (last_iftile_wr) ? 0 : iftiles_wr_cnt + 1;
     end
     
     integer j;
     always @(posedge clk) begin
-        t_last <= fltbuf_dma_tlast_i;
+        t_last <= fltbuf_dma_tlast_i && fltbuf_dma_vld_i;
     end
     always @(posedge clk) begin
-        if(!rst_n) pass_valid <= 256'b0;
+        if(inf_rdy_dly) pass_valid <= 256'b0;
         else begin
             if(end_layer) pass_valid <= 256'b0;
             else if (fltbuf_dma_tlast_i && fltbuf_dma_vld_i && fltsize_reg != 1 || t_last && fltsize_reg == 1) begin
@@ -478,27 +479,27 @@ module filter_buf #(
         end
     end
     always @(posedge clk) begin
-        if(!rst_n) oftiles_wr_cnt <= 0;
+        if(inf_rdy_dly) oftiles_wr_cnt <= 0;
         else if (oftiles_wr_cnt_en) oftiles_wr_cnt <= (last_oftile_wr) ? 0 : oftiles_wr_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) ifblock_wr_cnt <= 0;
+        if(inf_rdy_dly) ifblock_wr_cnt <= 0;
         else if (ifblock_wr_cnt_en) ifblock_wr_cnt <= (last_ifblock_wr) ? 0 : ifblock_wr_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) fltsize_wr_cnt <= 0;
+        if(inf_rdy_dly) fltsize_wr_cnt <= 0;
         else if (fltsize_wr_cnt_en) fltsize_wr_cnt <= (last_fltsize_wr) ? 0 : fltsize_wr_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) channel_wr_cnt <= 0;
+        if(inf_rdy_dly) channel_wr_cnt <= 0;
         else if (channel_wr_cnt_en) channel_wr_cnt <= (last_channel_wr) ? 0 : channel_wr_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) filter_wr_cnt <= 0;
+        if(inf_rdy_dly) filter_wr_cnt <= 0;
         else if (filter_wr_cnt_en) filter_wr_cnt <= (last_filter_wr) ? 0 : filter_wr_cnt + 1;
     end
     always @(posedge clk) begin
-        if(!rst_n) pa_wr_cnt <= 0;
+        if(inf_rdy_dly) pa_wr_cnt <= 0;
         else begin
             if(fltbuf_dma_tlast_i && fltbuf_dma_vld_i) pa_wr_cnt <= 0;
             else if (pa_wr_cnt_en) pa_wr_cnt <= 1;

@@ -166,21 +166,21 @@ module bias_buffer #(
     //-------------------------------------------WRITE CONTROL------------------------------------------------
     assign swap_en = done_write && !(bias_scale_vld_o[1] || bias_scale_vld_o[0]);
     always @(posedge clk) begin
-        if(bias_dma_tlast_i) begin
+        if(bias_dma_tlast_i && bias_dma_vld_i) begin
             done_write <= 1;
         end else if(swap_en || inf_rdy_dly) begin
             done_write <= 0;
         end
     end
     always @(posedge clk) begin
-        if(bias_dma_tlast_i || inf_rdy_dly) begin
+        if((bias_dma_tlast_i && bias_dma_vld_i) || inf_rdy_dly) begin
             count_bias <= 0;
         end else if(bias_dma_vld_i) begin
             count_bias <= count_bias + 1;
         end
     end
     always @(posedge clk) begin
-        if(bias_dma_tlast_i || inf_rdy_dly) begin
+        if((bias_dma_tlast_i && bias_dma_vld_i) || inf_rdy_dly) begin
             is_lane_1 <= 0;
         end else if(bias_dma_vld_i && ((count_bias + 1) == bias_inf_burstlen_lane0_reg || ((count_bias + 1) == bias_inf_burstlen_tail_lane0_reg && is_tail_write))) begin
             is_lane_1 <= 1;
