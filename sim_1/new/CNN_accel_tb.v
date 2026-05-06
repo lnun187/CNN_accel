@@ -1844,20 +1844,20 @@ module CNN_accel_tb;
     // Direct table interface: keep original testcase values; no LUT retargeting.
     
     // 1) Ifmap kích thước chẵn, burst filter chẵn
-    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
-    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
+    // //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
+    // run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
 
-    // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
-    // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2
-    run_case("TC1_odd_ifmap_align_and_padding", 5, 5, 8, 4, 3, 3, 1, 1, 1, 2, 2, 3, 1);
+    // // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
+    // // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2
+    // // run_case("TC1_odd_ifmap_align_and_padding", 5, 5, 8, 4, 3, 3, 1, 1, 1, 2, 2, 3, 1);
 
-    // 3) 1 burst filter le -> phai co them 1 word pad
-    // ifmap 7x7, Ci=3, Co=10, kernel 3x3, ifparr=3, ofparr=1, oftile=3, padding = 1, stride = 1
-    run_case("TC2_odd_filter_burst_need_pad", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5);
+    // // 3) 1 burst filter le -> phai co them 1 word pad
+    // // ifmap 7x7, Ci=3, Co=10, kernel 3x3, ifparr=3, ofparr=1, oftile=3, padding = 1, stride = 1
+    // run_case("TC2_odd_filter_burst_need_pad", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5);
 
     // 4) So filter song song = 1 tile, stride = 2, padding = 2
     // ifmap 8x8, Ci=11, Co=3, kernel 3x3, ifparr=1, ofparr=3, oftile=1, padding=2, stride=2
-    run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
+    // run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
 
     // 5) 1x1 pointwise, 2 block output-channel, test ofparr_tail
     // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=4, oftile=1

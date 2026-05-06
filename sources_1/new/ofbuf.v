@@ -22,7 +22,7 @@
 
 module ofbuf#(
     parameter DATA_WIDTH = 8, //Data dua vao FIFO
-    parameter DEPTH = 300, //do sau FIFO
+    parameter DEPTH = 896, //do sau FIFO
     parameter M = 2 //So luong FIFO
 )(
     input                           clk,

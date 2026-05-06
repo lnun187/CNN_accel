@@ -27,6 +27,7 @@ module CNN_accel#(
     parameter FLTBUF_DEPTH  = 2304,
     parameter COMP_DEPTH    = 12,
     parameter FIFO_DEPTH    = 12,
+    parameter OFBUF_DEPTH   = 896,
     parameter K             = 8,
     parameter M             = 2,
     parameter PE_PER_PU     = 12,
@@ -923,7 +924,7 @@ module CNN_accel#(
     // =========================================================
     ofbuf #(
         .DATA_WIDTH(DATA_WIDTH),
-        .DEPTH(IFBUF_DEPTH),
+        .DEPTH(OFBUF_DEPTH),
         .M(M)
     ) u_ofbuf (
         .clk(clk),
