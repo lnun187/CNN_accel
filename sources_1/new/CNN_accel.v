@@ -73,7 +73,6 @@ module CNN_accel#(
     // input                               cpu_receive_interupt,
     // input                               accel_start,
 
-    input                               inf_table_is_use_camera_i,
     // =========================================================
     // IFBUF DMA side
     // =========================================================
@@ -110,11 +109,16 @@ module CNN_accel#(
     input                           bias_dma_tlast_i,
     output                          bias_dma_rdy_o,
     // =========================================================
-    // Toward scale (not implemented in the uploaded RTL set)
+    // OFBUF DMA side
     // =========================================================
-    input  [M-1:0]            comp_ofbuf_rdy_i,
-    output [M-1:0]            comp_ofbuf_vld_o,
-    output [M*DATA_WIDTH-1:0]  comp_ofbuf_data_o,
+    input                           ofbuf_dma_rdycfg_i,
+    output                          ofbuf_dma_vldcfg_o,
+    output [BURSTL_OFMAP-1:0]       ofbuf_dma_burst_o,
+    output [23:0]                   ofbuf_dma_baddr_o,
+    output                          ofbuf_dma_vld_o,
+    output [DATA_WIDTH-1:0]         ofbuf_dma_data_o,
+    output                          ofbuf_dma_tlast_o,
+    input                           ofbuf_dma_rdy_i,
 
     // =========================================================
     // Optional debug / status
@@ -142,7 +146,6 @@ module CNN_accel#(
     wire [1:0]                      ifbuf_inf_padding_i;
     wire signed [DATA_WIDTH-1:0]    ifbuf_inf_ifc_zp_i;
     wire                            ifbuf_inf_rdy_o;
-    wire                            ifbuf_inf_is_use_camera_w;
 
     wire                            fltbuf_inf_vld_i;
     wire [23:0]                     fltbuf_inf_fltbaddr_i;
@@ -188,10 +191,11 @@ module CNN_accel#(
     // =========================================================
     // Skid-buffered instruction channels from layer_info
     // =========================================================
-    localparam IFBUF_INF_PAYLOAD_WIDTH  = 97 + DATA_WIDTH;
+    localparam IFBUF_INF_PAYLOAD_WIDTH  = 96 + DATA_WIDTH;
     localparam FLTBUF_INF_PAYLOAD_WIDTH = 79 + DATA_WIDTH;
     localparam BIAS_INF_PAYLOAD_WIDTH   = 63;
     localparam COMP_INF_PAYLOAD_WIDTH   = 118 + (2*DATA_WIDTH);
+    localparam OFBUF_INF_PAYLOAD_WIDTH  = 115;
 
     // Raw layer_info -> IFBUF instruction channel
     wire                            ifbuf_inf_vld_li_w;
@@ -208,7 +212,6 @@ module CNN_accel#(
     wire [8:0]                      ifbuf_inf_wp_li_w;
     wire [1:0]                      ifbuf_inf_padding_li_w;
     wire signed [DATA_WIDTH-1:0]    ifbuf_inf_ifc_zp_li_w;
-    wire                            ifbuf_inf_is_use_camera_li_w;
     wire [IFBUF_INF_PAYLOAD_WIDTH-1:0] ifbuf_inf_payload_li_w;
     wire [IFBUF_INF_PAYLOAD_WIDTH-1:0] ifbuf_inf_payload_w;
 
@@ -263,12 +266,32 @@ module CNN_accel#(
     wire [COMP_INF_PAYLOAD_WIDTH-1:0] comp_inf_payload_li_w;
     wire [COMP_INF_PAYLOAD_WIDTH-1:0] comp_inf_payload_w;
 
-    // Raw layer_info -> OFBUF instruction channel.  The uploaded top-level
-    // does not instantiate a separate ofbuf config consumer, so the buffered
-    // valid is drained with ready tied high, preserving the layer_info handshake.
+    // Raw layer_info -> OFBUF instruction channel
     wire                            ofbuf_inf_vld_li_w;
     wire                            ofbuf_inf_rdy_li_w;
-    wire                            ofbuf_inf_dummy_w;
+    wire [23:0]                     ofbuf_inf_ofbaddr_li_w;
+    wire [23:0]                     ofbuf_inf_ofbaddr_l0_li_w;
+    wire [23:0]                     ofbuf_inf_ofbaddr_l1_li_w;
+    wire [7:0]                      ofbuf_inf_ofwidth_li_w;
+    wire [15:0]                     ofbuf_inf_ofsize_li_w;
+    wire [6:0]                      ofbuf_inf_ofblock_li_w;
+    wire [4:0]                      ofbuf_inf_ofc_bl_l0_li_w;
+    wire [4:0]                      ofbuf_inf_ofc_bl_tail_l0_li_w;
+    wire [4:0]                      ofbuf_inf_ofc_bl_l1_li_w;
+    wire [4:0]                      ofbuf_inf_ofc_bl_tail_l1_li_w;
+    wire [OFBUF_INF_PAYLOAD_WIDTH-1:0] ofbuf_inf_payload_li_w;
+    wire [OFBUF_INF_PAYLOAD_WIDTH-1:0] ofbuf_inf_payload_w;
+    wire [23:0]                     ofbuf_inf_ofbaddr_w;
+    wire [23:0]                     ofbuf_inf_ofbaddr_l0_w;
+    wire [23:0]                     ofbuf_inf_ofbaddr_l1_w;
+    wire [7:0]                      ofbuf_inf_ofwidth_w;
+    wire [15:0]                     ofbuf_inf_ofsize_w;
+    wire [6:0]                      ofbuf_inf_ofblock_w;
+    wire [4:0]                      ofbuf_inf_ofc_bl_l0_w;
+    wire [4:0]                      ofbuf_inf_ofc_bl_tail_l0_w;
+    wire [4:0]                      ofbuf_inf_ofc_bl_l1_w;
+    wire [4:0]                      ofbuf_inf_ofc_bl_tail_l1_w;
+    wire                            ofbuf_inf_rdy_w;
 
     // =========================================================
     // Internal datapath wires
@@ -302,20 +325,23 @@ module CNN_accel#(
     wire [M-1:0]            comp_ofbuf_vld_w;
     wire [M-1:0]            comp_ofbuf_rdy_w;
     wire [M*DATA_WIDTH-1:0]  comp_ofbuf_data_w;
+    wire [M-1:0]            ofbuf_comp_vld_w;
+    wire [M-1:0]            ofbuf_comp_rdy_w;
+    wire [M*DATA_WIDTH-1:0] ofbuf_comp_data_w;
 
-    reg [3:0]               comp_inf_hf_reg; //height of channel of filter
-    reg [2:0]               comp_inf_stride_reg;
-    reg [1:0]               comp_inf_padding_reg;
-    reg signed [DATA_WIDTH-1:0]    comp_inf_ifc_zp_reg; //zero point of ifmap
-    reg signed [DATA_WIDTH-1:0]    comp_inf_fltc_zp_reg;
+    // reg [3:0]               comp_inf_hf_reg; //height of channel of filter
+    // reg [2:0]               comp_inf_stride_reg;
+    // reg [1:0]               comp_inf_padding_reg;
+    // reg signed [DATA_WIDTH-1:0]    comp_inf_ifc_zp_reg; //zero point of ifmap
+    // reg signed [DATA_WIDTH-1:0]    comp_inf_fltc_zp_reg;
 
-    always @(posedge clk) begin
-        comp_inf_hf_reg         <= comp_inf_hf_i;
-        comp_inf_stride_reg     <= comp_inf_stride_i;
-        comp_inf_padding_reg    <= comp_inf_padding_i;
-        comp_inf_ifc_zp_reg     <= comp_inf_ifc_zp_i;
-        comp_inf_fltc_zp_reg    <= comp_inf_fltc_zp_i;
-    end
+    // always @(posedge clk) begin
+    //     comp_inf_hf_reg         <= comp_inf_hf_i;
+    //     comp_inf_stride_reg     <= comp_inf_stride_i;
+    //     comp_inf_padding_reg    <= comp_inf_padding_i;
+    //     comp_inf_ifc_zp_reg     <= comp_inf_ifc_zp_i;
+    //     comp_inf_fltc_zp_reg    <= comp_inf_fltc_zp_i;
+    // end
 
     // Current filter_buf RTL only exposes one scalar ready input.
     // Best-effort integration: only pop weights when both PA branches are ready.
@@ -359,7 +385,6 @@ module CNN_accel#(
         .inf_table_qmin_i(inf_table_qmin_i),
         .inf_table_qmax_i(inf_table_qmax_i),
         .inf_table_is_leaky_ReLU_i(inf_table_is_leaky_ReLU_i),
-        .inf_table_is_use_camera_i(inf_table_is_use_camera_i),
 
         .inf_ifbuf_rdy_i(ifbuf_inf_rdy_li_w),
         .inf_ifbuf_vld_o(ifbuf_inf_vld_li_w),
@@ -374,7 +399,6 @@ module CNN_accel#(
         .inf_ifbuf_iftiles_o(ifbuf_inf_iftiles_li_w),
         .inf_ifbuf_wp_o(ifbuf_inf_wp_li_w),
         .inf_ifbuf_padding_o(ifbuf_inf_padding_li_w),
-        .inf_ifbuf_is_use_camera_o(ifbuf_inf_is_use_camera_li_w),
         .inf_ifbuf_ifc_zp_o(ifbuf_inf_ifc_zp_li_w),
 
         .inf_fltbuf_rdy_i(fltbuf_inf_rdy_li_w),
@@ -418,7 +442,17 @@ module CNN_accel#(
         .inf_comp_is_leaky_ReLU_o(comp_inf_is_leaky_ReLU_li_w),
 
         .inf_ofbuf_rdy_i(ofbuf_inf_rdy_li_w),
-        .inf_ofbuf_vld_o(ofbuf_inf_vld_li_w)
+        .inf_ofbuf_vld_o(ofbuf_inf_vld_li_w),
+        .inf_ofbuf_ofbaddr_o(ofbuf_inf_ofbaddr_li_w),
+        .inf_ofbuf_ofbaddr_l0_o(ofbuf_inf_ofbaddr_l0_li_w),
+        .inf_ofbuf_ofbaddr_l1_o(ofbuf_inf_ofbaddr_l1_li_w),
+        .inf_ofbuf_ofwidth_o(ofbuf_inf_ofwidth_li_w),
+        .inf_ofbuf_ofsize_o(ofbuf_inf_ofsize_li_w),
+        .inf_ofbuf_ofblock_o(ofbuf_inf_ofblock_li_w),
+        .inf_ofbuf_ofc_bl_l0_o(ofbuf_inf_ofc_bl_l0_li_w),
+        .inf_ofbuf_ofc_bl_tail_l0_o(ofbuf_inf_ofc_bl_tail_l0_li_w),
+        .inf_ofbuf_ofc_bl_l1_o(ofbuf_inf_ofc_bl_l1_li_w),
+        .inf_ofbuf_ofc_bl_tail_l1_o(ofbuf_inf_ofc_bl_tail_l1_li_w)
     );
 
     // =========================================================
@@ -436,7 +470,6 @@ module CNN_accel#(
         ifbuf_inf_iftiles_li_w,
         ifbuf_inf_wp_li_w,
         ifbuf_inf_padding_li_w,
-        ifbuf_inf_is_use_camera_li_w,
         ifbuf_inf_ifc_zp_li_w
     };
 
@@ -468,7 +501,6 @@ module CNN_accel#(
         ifbuf_inf_iftiles_i,
         ifbuf_inf_wp_i,
         ifbuf_inf_padding_i,
-        ifbuf_inf_is_use_camera_w,
         ifbuf_inf_ifc_zp_i
     } = ifbuf_inf_payload_w;
 
@@ -604,21 +636,47 @@ module CNN_accel#(
         comp_inf_is_leaky_ReLU_i
     } = comp_inf_payload_w;
 
+    assign ofbuf_inf_payload_li_w = {
+        ofbuf_inf_ofbaddr_li_w,
+        ofbuf_inf_ofbaddr_l0_li_w,
+        ofbuf_inf_ofbaddr_l1_li_w,
+        ofbuf_inf_ofwidth_li_w,
+        ofbuf_inf_ofsize_li_w,
+        ofbuf_inf_ofblock_li_w,
+        ofbuf_inf_ofc_bl_l0_li_w,
+        ofbuf_inf_ofc_bl_tail_l0_li_w,
+        ofbuf_inf_ofc_bl_l1_li_w,
+        ofbuf_inf_ofc_bl_tail_l1_li_w
+    };
+
     skid_buffer #(
         .SBUF_TYPE(0),
-        .DATA_WIDTH(1)
+        .DATA_WIDTH(OFBUF_INF_PAYLOAD_WIDTH)
     ) u_skid_layer_info_ofbuf (
         .clk(clk),
         .rst_n(rst_n),
 
-        .bwd_data_i(1'b0),
+        .bwd_data_i(ofbuf_inf_payload_li_w),
         .bwd_valid_i(ofbuf_inf_vld_li_w),
-        .fwd_ready_i(1'b1),
+        .fwd_ready_i(ofbuf_inf_rdy_w),
 
-        .fwd_data_o(ofbuf_inf_dummy_w),
+        .fwd_data_o(ofbuf_inf_payload_w),
         .bwd_ready_o(ofbuf_inf_rdy_li_w),
         .fwd_valid_o(ofbuf_inf_vld_w)
     );
+
+    assign {
+        ofbuf_inf_ofbaddr_w,
+        ofbuf_inf_ofbaddr_l0_w,
+        ofbuf_inf_ofbaddr_l1_w,
+        ofbuf_inf_ofwidth_w,
+        ofbuf_inf_ofsize_w,
+        ofbuf_inf_ofblock_w,
+        ofbuf_inf_ofc_bl_l0_w,
+        ofbuf_inf_ofc_bl_tail_l0_w,
+        ofbuf_inf_ofc_bl_l1_w,
+        ofbuf_inf_ofc_bl_tail_l1_w
+    } = ofbuf_inf_payload_w;
 
     // =========================================================
     // IFBUF
@@ -850,14 +908,53 @@ module CNN_accel#(
 
                 .bwd_data_i (comp_ofbuf_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
                 .bwd_valid_i(comp_ofbuf_vld_w[gi]),
-                .fwd_ready_i(comp_ofbuf_rdy_i[gi]),
+                .fwd_ready_i(ofbuf_comp_rdy_w[gi]),
 
-                .fwd_data_o (comp_ofbuf_data_o[gi*DATA_WIDTH +: DATA_WIDTH]),
+                .fwd_data_o (ofbuf_comp_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
                 .bwd_ready_o(comp_ofbuf_rdy_w[gi]),
-                .fwd_valid_o(comp_ofbuf_vld_o[gi])
+                .fwd_valid_o(ofbuf_comp_vld_w[gi])
             );
         end
     endgenerate
+
+
+    // =========================================================
+    // OFBUF
+    // =========================================================
+    ofbuf #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .DEPTH(IFBUF_DEPTH),
+        .M(M)
+    ) u_ofbuf (
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .ofbuf_inf_vld_i(ofbuf_inf_vld_w),
+        .ofbuf_inf_ofbaddr_i(ofbuf_inf_ofbaddr_w),
+        .ofbuf_inf_ofbaddr_l0_i(ofbuf_inf_ofbaddr_l0_w),
+        .ofbuf_inf_ofbaddr_l1_i(ofbuf_inf_ofbaddr_l1_w),
+        .ofbuf_inf_ofwidth_i(ofbuf_inf_ofwidth_w),
+        .ofbuf_inf_ofsize_i(ofbuf_inf_ofsize_w),
+        .ofbuf_inf_ofblock_i(ofbuf_inf_ofblock_w),
+        .ofbuf_inf_ofc_bl_l0_i(ofbuf_inf_ofc_bl_l0_w),
+        .ofbuf_inf_ofc_bl_tail_l0_i(ofbuf_inf_ofc_bl_tail_l0_w),
+        .ofbuf_inf_ofc_bl_l1_i(ofbuf_inf_ofc_bl_l1_w),
+        .ofbuf_inf_ofc_bl_tail_l1_i(ofbuf_inf_ofc_bl_tail_l1_w),
+        .ofbuf_inf_rdy_o(ofbuf_inf_rdy_w),
+
+        .ofbuf_dma_rdycfg_i(ofbuf_dma_rdycfg_i),
+        .ofbuf_dma_vldcfg_o(ofbuf_dma_vldcfg_o),
+        .ofbuf_dma_burst_o(ofbuf_dma_burst_o),
+        .ofbuf_dma_baddr_o(ofbuf_dma_baddr_o),
+        .ofbuf_dma_vld_o(ofbuf_dma_vld_o),
+        .ofbuf_dma_data_o(ofbuf_dma_data_o),
+        .ofbuf_dma_tlast_o(ofbuf_dma_tlast_o),
+        .ofbuf_dma_rdy_i(ofbuf_dma_rdy_i),
+
+        .ofbuf_comp_vld_i(ofbuf_comp_vld_w),
+        .ofbuf_comp_rdy_o(ofbuf_comp_rdy_w),
+        .ofbuf_comp_data_i(ofbuf_comp_data_w)
+    );
 
 endmodule
 

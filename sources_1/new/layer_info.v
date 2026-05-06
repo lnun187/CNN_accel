@@ -51,7 +51,6 @@ module layer_info #(
     input  signed   [7:0]               inf_table_qmin_i,
     input  signed   [7:0]               inf_table_qmax_i,
     input                               inf_table_is_leaky_ReLU_i,
-    input                               inf_table_is_use_camera_i,
 
     //ifbuf info
     input                               inf_ifbuf_rdy_i,
@@ -67,7 +66,6 @@ module layer_info #(
     output          [6:0]               inf_ifbuf_iftiles_o,
     output          [8:0]               inf_ifbuf_wp_o,
     output          [1:0]               inf_ifbuf_padding_o,
-    output                              inf_ifbuf_is_use_camera_o,
     output          [DATA_WIDTH-1:0]    inf_ifbuf_ifc_zp_o,
     
     //fltbuf info
@@ -115,24 +113,34 @@ module layer_info #(
 
     //ofbuf info - coming soon
     input                               inf_ofbuf_rdy_i,
-    output                              inf_ofbuf_vld_o
+    output                              inf_ofbuf_vld_o,
+    output          [23:0]              inf_ofbuf_ofbaddr_o,       
+    output          [23:0]              inf_ofbuf_ofbaddr_l0_o,    
+    output          [23:0]              inf_ofbuf_ofbaddr_l1_o,    
+    output          [7:0]               inf_ofbuf_ofwidth_o,       
+    output          [15:0]              inf_ofbuf_ofsize_o,        
+    output          [6:0]               inf_ofbuf_ofblock_o,       
+    output          [4:0]               inf_ofbuf_ofc_bl_l0_o,     
+    output          [4:0]               inf_ofbuf_ofc_bl_tail_l0_o,
+    output          [4:0]               inf_ofbuf_ofc_bl_l1_o,     
+    output          [4:0]               inf_ofbuf_ofc_bl_tail_l1_o
     );
-    wire                 [7:0]               ifheight;
-    wire                 [15:0]              ifsize;
-    wire                 [10:0]              ifchannel;
-    wire                 [10:0]              ofchannel_lut;
-    reg                                     table_rdy;
-    reg                 [2:0]               count_cycle;
-    reg                                     if_vld;
-    reg                                     flt_vld;
-    reg                                     bias_vld;
-    reg                                     comp_vld;
-    reg                                     of_vld;
-    wire                                    rst_cnt;
+    wire            [7:0]               ifheight;
+    wire            [15:0]              ifsize;
+    wire            [10:0]              ifchannel;
+    wire            [10:0]              ofchannel_lut;
+    reg                                 table_rdy;
+    reg             [2:0]               count_cycle;
+    reg                                 if_vld;
+    reg                                 flt_vld;
+    reg                                 bias_vld;
+    reg                                 comp_vld;
+    reg                                 of_vld;
+    wire                                rst_cnt;
     posedge_detection d(
         .clk(clk),
         .rst_n(rst_n),
-        .signal_i(!(if_vld || flt_vld || bias_vld || comp_vld)),//CHANGE .signal_i(!(if_vld || flt_vld || bias_vld || comp_vld || of_vld)),
+        .signal_i(!(if_vld || flt_vld || bias_vld || comp_vld || of_vld)),//CHANGE .signal_i(!(if_vld || flt_vld || bias_vld || comp_vld || of_vld)),
         .signal_o(rst_cnt)
     );
 
@@ -368,7 +376,6 @@ module layer_info #(
     wire                [6:0]               iftiles_d;
     wire                [8:0]               wp_d;
     wire                [1:0]               padding_d;
-    wire                                    is_use_camera_d;
     wire                [DATA_WIDTH-1:0]    ifc_zp_d;
     wire                [DATA_WIDTH-1:0]    fltc_zp_d;
     wire                [23:0]              fltbaddr_d;
@@ -423,38 +430,53 @@ module layer_info #(
     wire                [10:0]              bias_tail_lane0;
     wire                [10:0]              bias_lane0;
 
+    wire                [23:0]              ofbaddr_d;       
+    wire                [23:0]              ofbaddr_l0_d;    
+    wire                [23:0]              ofbaddr_l1_d;       
+    wire                [15:0]              ofsize_d;  
+    wire                [15:0]              ofsize_d1;     
+    wire                [15:0]              ofsize_d2;        
+    wire                [4:0]               ofc_bl_l1_d;     
+    wire                [4:0]               ofc_bl_tail_l1_d;
     
-
-    assign ifparr_ext      = {1'b0, inf_table_ifparr_i};
-    assign ofparr_ext      = inf_table_ofparr_i;
-    assign oftile_ext      = {2'b00, inf_table_oftile_i};
-    assign ifparr_div      = (ifparr_ext == 4'd0) ? 4'd1 : ifparr_ext;
-    assign ofparr_div      = (ofparr_ext == 5'd0) ? 5'd1 : ofparr_ext;
-    assign oftile_div      = (oftile_ext == 4'd0) ? 4'd1 : oftile_ext;
-    assign stride_div      = (inf_table_stride_i == 3'd0) ? 3'd1 : inf_table_stride_i;
-    assign hf_square       = {4'd0, inf_table_hf_i} * {4'd0, inf_table_hf_i};
-    assign padded_width    = {4'd0, ifheight} + {9'd0, inf_table_padding_i, 1'b0};
-    assign conv_span       = (padded_width >= {8'd0, inf_table_hf_i}) ?
-                             (padded_width - {8'd0, inf_table_hf_i}) : 12'd0;
-    assign conv_steps      = conv_span / {9'd0, stride_div};
-    assign ofparr_x_oftile = {4'd0, ofparr_div} * {5'd0, oftile_div};
-    assign ofblock_den     = {2'd0, ofparr_x_oftile};
-    assign ifblock_calc   = (ofchannel_lut + ofblock_den - 11'd1) / ofblock_den;
-    assign iftiles_calc    = (ifchannel + {7'd0, ifparr_div} - 11'd1) / {7'd0, ifparr_div};
-    assign ifparr_rem      = ifchannel % {7'd0, ifparr_div};
-    assign ofparr_rem      = ofchannel_lut % {6'd0, ofparr_div};
-    assign total_oftiles   = (ofchannel_lut + {6'd0, ofparr_div} - 11'd1) / {6'd0, ofparr_div};
-    assign oftile_tail_rem = total_oftiles % {7'd0, oftile_div};
-    assign bias_tail_rem   = ofchannel_lut % ofblock_den;
-    assign bias_tail_real  = (bias_tail_rem == 11'd0) ? ofblock_den : bias_tail_rem;
-    assign bias_h0_lanes   = ({1'b0, ofparr_div} + 6'd1) >> 1;
-    assign bias_tail_full_tile = bias_tail_real / {6'd0, ofparr_div};
-    assign bias_tail_mod       = bias_tail_real % {6'd0, ofparr_div};
-    assign bias_tail_lane0     = (bias_tail_full_tile * {5'd0, bias_h0_lanes}) + ((bias_tail_mod + 11'd1) >> 1);
-    assign bias_lane0          = (ofchannel_lut < ofblock_den) ?
-                                 bias_tail_lane0 : ({5'd0, bias_h0_lanes} * {7'd0, oftile_div});
-    assign wp_calc             = (conv_steps * {9'd0, stride_div}) + {8'd0, inf_table_hf_i} - 12'd1;
-    assign ofwidth_calc        = conv_steps + 12'd1;
+    assign ofc_bl_l1_d      = burstlen_d - burstlen_lane0_d;
+    assign ofc_bl_tail_l1_d = burstlen_tail_d - burstlen_tail_lane0_d;
+    assign ofbaddr_d        = inf_table_ofbaddr_i;
+    assign ofbaddr_l0_d     = inf_table_ofbaddr_i;
+    assign ofbaddr_l1_d     = inf_table_ofbaddr_i + ofsize_d * (bias_lane0 * (ifblock_d - 1) + bias_tail_lane0);
+    assign ofsize_d1        = {8'd0,ofwidth_d};
+    assign ofsize_d2        = {8'd0,(ofwidth_d[0] + ofwidth_d)};
+    assign ofsize_d         = ofsize_d1 * ofsize_d2;
+    assign ifparr_ext       = {1'b0, inf_table_ifparr_i};
+    assign ofparr_ext       = inf_table_ofparr_i;
+    assign oftile_ext       = {2'b00, inf_table_oftile_i};
+    assign ifparr_div       = (ifparr_ext == 4'd0) ? 4'd1 : ifparr_ext;
+    assign ofparr_div       = (ofparr_ext == 5'd0) ? 5'd1 : ofparr_ext;
+    assign oftile_div       = (oftile_ext == 4'd0) ? 4'd1 : oftile_ext;
+    assign stride_div       = (inf_table_stride_i == 3'd0) ? 3'd1 : inf_table_stride_i;
+    assign hf_square        = {4'd0, inf_table_hf_i} * {4'd0, inf_table_hf_i};
+    assign padded_width     = {4'd0, ifheight} + {9'd0, inf_table_padding_i, 1'b0};
+    assign conv_span        = (padded_width >= {8'd0, inf_table_hf_i}) ?
+                              (padded_width - {8'd0, inf_table_hf_i}) : 12'd0;
+    assign conv_steps       = conv_span / {9'd0, stride_div};
+    assign ofparr_x_oftile  = {4'd0, ofparr_div} * {5'd0, oftile_div};
+    assign ofblock_den      = {2'd0, ofparr_x_oftile};
+    assign ifblock_calc     = (ofchannel_lut + ofblock_den - 11'd1) / ofblock_den;
+    assign iftiles_calc         = (ifchannel + {7'd0, ifparr_div} - 11'd1) / {7'd0, ifparr_div};
+    assign ifparr_rem           = ifchannel % {7'd0, ifparr_div};
+    assign ofparr_rem           = ofchannel_lut % {6'd0, ofparr_div};
+    assign total_oftiles        = (ofchannel_lut + {6'd0, ofparr_div} - 11'd1) / {6'd0, ofparr_div};
+    assign oftile_tail_rem      = total_oftiles % {7'd0, oftile_div};
+    assign bias_tail_rem        = ofchannel_lut % ofblock_den;
+    assign bias_tail_real       = (bias_tail_rem == 11'd0) ? ofblock_den : bias_tail_rem;
+    assign bias_h0_lanes        = ({1'b0, ofparr_div} + 6'd1) >> 1;
+    assign bias_tail_full_tile  = bias_tail_real / {6'd0, ofparr_div};
+    assign bias_tail_mod        = bias_tail_real % {6'd0, ofparr_div};
+    assign bias_tail_lane0      = (bias_tail_full_tile * {5'd0, bias_h0_lanes}) + ((bias_tail_mod + 11'd1) >> 1);
+    assign bias_lane0           = (ofchannel_lut < ofblock_den) ?
+                                  bias_tail_lane0 : ({5'd0, bias_h0_lanes} * {7'd0, oftile_div});
+    assign wp_calc              = (conv_steps * {9'd0, stride_div}) + {8'd0, inf_table_hf_i} - 12'd1;
+    assign ofwidth_calc         = conv_steps + 12'd1;
 
     assign ifbaddr_d                 = inf_table_ifbaddr_i;
     assign ifwidth_d                 = ifheight;
@@ -468,7 +490,6 @@ module layer_info #(
     assign iftiles_d                 = iftiles_calc[6:0];
     assign wp_d                      = wp_calc[8:0];
     assign padding_d                 = inf_table_padding_i;
-    assign is_use_camera_d           = inf_table_is_use_camera_i;
     assign ifc_zp_d                  = inf_table_ifc_zp_i;
     assign fltc_zp_d                 = inf_table_fltc_zp_i;
     assign fltbaddr_d                = inf_table_fltbaddr_i;
@@ -505,7 +526,6 @@ module layer_info #(
     reg                 [6:0]               iftiles_q;
     reg                 [8:0]               wp_q;
     reg                 [1:0]               padding_q;
-    reg                                     is_use_camera_q;
     reg                 [DATA_WIDTH-1:0]    ifc_zp_q;
     reg                 [DATA_WIDTH-1:0]    fltc_zp_q;
     reg                 [23:0]              fltbaddr_q;
@@ -530,6 +550,12 @@ module layer_info #(
     reg    signed       [7:0]               qmax_q;
     reg                                     is_leaky_ReLU_q;
 
+    reg                 [23:0]              ofbaddr_q;       
+    reg                 [23:0]              ofbaddr_l0_q;    
+    reg                 [23:0]              ofbaddr_l1_q;       
+    reg                 [15:0]              ofsize_q;   
+    reg                 [4:0]               ofc_bl_l1_q;     
+    reg                 [4:0]               ofc_bl_tail_l1_q;         
     always @(posedge clk) begin
         if(count_cycle == 3'b110) begin
             ifbaddr_q                 <= ifbaddr_d;
@@ -544,7 +570,6 @@ module layer_info #(
             iftiles_q                 <= iftiles_d;
             wp_q                      <= wp_d;
             padding_q                 <= padding_d;
-            is_use_camera_q           <= is_use_camera_d;
             ifc_zp_q                  <= ifc_zp_d;
             fltc_zp_q                 <= fltc_zp_d;
             fltbaddr_q                <= fltbaddr_d;
@@ -568,6 +593,12 @@ module layer_info #(
             qmin_q                    <= qmin_d;
             qmax_q                    <= qmax_d;
             is_leaky_ReLU_q           <= is_leaky_ReLU_d;
+            ofbaddr_q                 <= ofbaddr_d;   
+            ofbaddr_l0_q              <= ofbaddr_l0_d;
+            ofbaddr_l1_q              <= ofbaddr_l1_d;
+            ofsize_q                  <= ofsize_d;    
+            ofc_bl_l1_q               <= ofc_bl_l1_d;
+            ofc_bl_tail_l1_q          <= ofc_bl_tail_l1_d;
         end
     end
 
@@ -585,7 +616,6 @@ module layer_info #(
     assign inf_ifbuf_iftiles_o              = iftiles_q;
     assign inf_ifbuf_wp_o                   = wp_q;
     assign inf_ifbuf_padding_o              = padding_q;
-    assign inf_ifbuf_is_use_camera_o        = is_use_camera_q;
     assign inf_ifbuf_ifc_zp_o               = ifc_zp_q;
 
     assign inf_fltbuf_vld_o                 = flt_vld;
@@ -625,6 +655,15 @@ module layer_info #(
     assign inf_comp_qmax_o                  = qmax_q;
     assign inf_comp_is_leaky_ReLU_o         = is_leaky_ReLU_q;
 
-    assign inf_ofbuf_vld_o                     = of_vld;
-
+    assign inf_ofbuf_vld_o                  = of_vld;
+    assign inf_ofbuf_ofwidth_o              = ofwidth_q;
+    assign inf_ofbuf_ofbaddr_o              = ofbaddr_q;
+    assign inf_ofbuf_ofbaddr_l0_o           = ofbaddr_l0_q;
+    assign inf_ofbuf_ofbaddr_l1_o           = ofbaddr_l1_q;
+    assign inf_ofbuf_ofsize_o               = ofsize_q;
+    assign inf_ofbuf_ofblock_o              = ifblock_q;
+    assign inf_ofbuf_ofc_bl_l0_o            = burstlen_lane0_q;
+    assign inf_ofbuf_ofc_bl_tail_l0_o       = burstlen_tail_lane0_q;
+    assign inf_ofbuf_ofc_bl_l1_o            = ofc_bl_l1_q;
+    assign inf_ofbuf_ofc_bl_tail_l1_o       = ofc_bl_tail_l1_q;
 endmodule

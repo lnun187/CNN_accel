@@ -70,7 +70,6 @@ module CNN_accel_tb;
   logic signed    [7:0]               inf_table_qmin_i;
   logic signed    [7:0]               inf_table_qmax_i;
   logic                               inf_table_is_leaky_ReLU_i;
-  logic                               inf_table_is_use_camera_i;
 
   logic                  ifbuf_dma_rdycfg_i;
   logic                  ifbuf_dma_vld_i;
@@ -99,9 +98,14 @@ module CNN_accel_tb;
   logic                  bias_dma_tlast_i;
   wire                   bias_dma_rdy_o;
 
-  logic [M-1:0]            comp_ofbuf_rdy_i;
-  wire  [M-1:0]            comp_ofbuf_vld_o;
-  wire  [M*DATA_WIDTH-1:0]  comp_ofbuf_data_o;
+  logic                  ofbuf_dma_rdycfg_i;
+  wire                   ofbuf_dma_vldcfg_o;
+  wire [7:0]             ofbuf_dma_burst_o;
+  wire [23:0]            ofbuf_dma_baddr_o;
+  wire                   ofbuf_dma_vld_o;
+  wire [DATA_WIDTH-1:0]  ofbuf_dma_data_o;
+  wire                   ofbuf_dma_tlast_o;
+  logic                  ofbuf_dma_rdy_i;
 
   wire                     comp_pa_done_compute_o;
   wire                     ifbuf_comp_end_layer_o;
@@ -114,6 +118,7 @@ module CNN_accel_tb;
   logic [DATA_WIDTH-1:0] if_ext_mem  [0:MAX_MEM-1];
   logic [DATA_WIDTH-1:0] flt_ext_mem [0:MAX_MEM-1];
   logic signed [31:0]    bias_ext_mem[0:MAX_MEM-1];
+  logic [DATA_WIDTH-1:0] of_ext_mem  [0:MAX_MEM-1];
   logic [ACC_WIDTH-1:0]  exp_out_mem [0:MAX_OUT-1];
   logic [ACC_WIDTH-1:0]  act_out_mem [0:MAX_OUT-1];
   logic [M*WIDTH-1:0] exp_pkt_mem [0:MAX_OUT-1];
@@ -132,6 +137,7 @@ module CNN_accel_tb;
   int current_if_base;
   int current_flt_base;
   int current_bias_base;
+  int current_of_base;
   int current_w;
   int current_h;
   int current_ci;
@@ -195,7 +201,6 @@ module CNN_accel_tb;
       inf_table_qmin_i = -128;
       inf_table_qmax_i = 127;
       inf_table_is_leaky_ReLU_i = 1'b0;
-      inf_table_is_use_camera_i = 1'b0;
     end
   endtask
 
@@ -252,7 +257,7 @@ module CNN_accel_tb;
       inf_table_ifbaddr_i          = current_if_base[23:0];
       inf_table_fltbaddr_i         = current_flt_base[23:0];
       inf_table_bias_baddr_i       = current_bias_base[23:0];
-      inf_table_ofbaddr_i          = '0;
+      inf_table_ofbaddr_i          = current_of_base[23:0];
       inf_table_ifc_zp_i           = current_ifc_zp[DATA_WIDTH-1:0];
       inf_table_fltc_zp_i          = current_fltc_zp[DATA_WIDTH-1:0];
       inf_table_mult_i             = current_mult;
@@ -263,7 +268,6 @@ module CNN_accel_tb;
       inf_table_qmin_i             = current_qmin[7:0];
       inf_table_qmax_i             = current_qmax[7:0];
       inf_table_is_leaky_ReLU_i    = current_is_leaky_relu[0];
-      inf_table_is_use_camera_i    = 1'b0;
     end
   endtask
 
@@ -361,6 +365,7 @@ module CNN_accel_tb;
         if_ext_mem[i]   = '0;
         flt_ext_mem[i]  = '0;
         bias_ext_mem[i] = '0;
+        of_ext_mem[i]   = '0;
       end
       for (i = 0; i < MAX_OUT; i++) begin
         exp_out_mem[i] = '0;
@@ -403,7 +408,8 @@ module CNN_accel_tb;
       ifbuf_dma_tlast_i = 1'b0;
       fltbuf_dma_tlast_i = 1'b0;
       bias_dma_tlast_i = 1'b0;
-      comp_ofbuf_rdy_i = '1;
+      ofbuf_dma_rdycfg_i = 1'b0;
+      ofbuf_dma_rdy_i    = 1'b0;
       repeat (8) @(posedge clk);
       rst_n = 1'b1;
       repeat (4) @(posedge clk);
@@ -991,136 +997,24 @@ module CNN_accel_tb;
         end
       end
 
-      exp_out_count = current_co * ho * wo;
-
       // =====================================================
-      // New expected output channel order
-      // Based on GREEN bias burst layout, split to 2 lanes.
+      // Expected memory layout for OFBUF DMA output
+      // Memory order: column -> row -> channel
+      // Address mapping checked later:
+      //   addr = of_base + channel * (ho * align_even(wo))
+      //                  + row     * align_even(wo)
+      //                  + column
+      // If wo is odd, the memory writer/module leaves 1 dummy cell
+      // at the end of each row. The checker skips that cell.
       // =====================================================
+      exp_out_count = 0;
+      exp_pkt_count = current_co * ho;  // one completed DMA row per output channel row
 
-      total_cols = ceil_div(current_co, current_ofparr);
-      full_cols  = current_co / current_ofparr;
-      tail_slots = current_co % current_ofparr;
-
-      // -----------------------------------------------------
-      // So row trong moi lane.
-      // M = 2:
-      //   ofparr = 4 -> lane_rows[0] = 2, lane_rows[1] = 2
-      //   ofparr = 3 -> lane_rows[0] = 2, lane_rows[1] = 1
-      //   ofparr = 2 -> lane_rows[0] = 1, lane_rows[1] = 1
-      // -----------------------------------------------------
-      max_lane_rows = 0;
-
-      for (lane = 0; lane < M; lane++) begin
-        lane_rows[lane] = 0;
-
-        for (r = lane; r < current_ofparr; r += M) begin
-          lane_rows[lane]++;
-        end
-
-        if (lane_rows[lane] > max_lane_rows) begin
-          max_lane_rows = lane_rows[lane];
-        end
-      end
-
-      // -----------------------------------------------------
-      // Dem so channel that su thuoc moi lane.
-      // Channel index cua lane0 lien tuc truoc,
-      // sau do toi lane1.
-      // -----------------------------------------------------
-      for (lane = 0; lane < M; lane++) begin
-        lane_count[lane] = full_cols * lane_rows[lane];
-
-        if (tail_slots > lane) begin
-          lane_count[lane] += ceil_div(tail_slots - lane, M);
-        end
-      end
-
-      lane_base[0] = 0;
-
-      for (lane = 1; lane < M; lane++) begin
-        lane_base[lane] = lane_base[lane-1] + lane_count[lane-1];
-      end
-
-      // =====================================================
-      // Moi group oftile cot = 1 green burst.
-      //
-      // Thu tu packet trong 1 green burst:
-      //   row tren -> row duoi
-      //   trong moi row: cot phai -> trai
-      //
-      // Moi packet xuat song song:
-      //   lane0 = channel tai lane0, row, col
-      //   lane1 = channel tai lane1, row, col
-      //
-      // Neu lane0 co channel ma lane1 khong co:
-      //   pkt_vld[0] = 1
-      //   pkt_vld[1] = 0
-      // =====================================================
-      for (group_start = 0;
-           group_start < total_cols;
-           group_start += current_oftile) begin
-
-        group_cols = min2(current_oftile, total_cols - group_start);
-
+      for (co_idx = 0; co_idx < current_co; co_idx++) begin
         for (oh = 0; oh < ho; oh++) begin
-          for (row_idx = 0; row_idx < max_lane_rows; row_idx++) begin
-            for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
-              lane0_ch = -1;
-              lane1_ch = -1;
-
-              // -----------------------------
-              // lane0 channel at this row/col
-              // -----------------------------
-              if (row_idx < lane_rows[0]) begin
-                idx_in_lane =
-                  lane_base[0]
-                  + lane_rows[0] * group_start
-                  + row_idx * group_cols
-                  + col_in_group;
-
-                if (idx_in_lane < lane_base[0] + lane_count[0]) begin
-                  lane0_ch = idx_in_lane;
-                end
-              end
-
-              // -----------------------------
-              // lane1 channel at this row/col
-              // -----------------------------
-              if (row_idx < lane_rows[1]) begin
-                idx_in_lane =
-                  lane_base[1]
-                  + lane_rows[1] * group_start
-                  + row_idx * group_cols
-                  + col_in_group;
-
-                if (idx_in_lane < lane_base[1] + lane_count[1]) begin
-                  lane1_ch = idx_in_lane;
-                end
-              end
-
-              // Khong tao packet neu ca 2 lane deu khong co channel.
-              if ((lane0_ch >= 0) || (lane1_ch >= 0)) begin
-                for (ow = 0; ow < wo; ow++) begin
-                  pkt_vld  = '0;
-                  pkt_word = '0;
-
-                  if (lane0_ch >= 0) begin
-                    pkt_vld[0] = 1'b1;
-                    pkt_word[WIDTH-1:0] = of_t[lane0_ch][oh][ow];
-                  end
-
-                  if (lane1_ch >= 0) begin
-                    pkt_vld[1] = 1'b1;
-                    pkt_word[2*WIDTH-1:WIDTH] = of_t[lane1_ch][oh][ow];
-                  end
-
-                  exp_vld_mem[exp_pkt_count] = pkt_vld;
-                  exp_pkt_mem[exp_pkt_count] = pkt_word;
-                  exp_pkt_count = exp_pkt_count + 1;
-                end
-              end
-            end
+          for (ow = 0; ow < wo; ow++) begin
+            exp_out_mem[exp_out_count] = of_t[co_idx][oh][ow];
+            exp_out_count = exp_out_count + 1;
           end
         end
       end
@@ -1310,39 +1204,129 @@ module CNN_accel_tb;
     end
   endtask
 
-  // Collector theo tung beat {lane1, lane0}.
-  // Chi so sanh cac lane co valid = 1.
-  task automatic collect_outputs(input int wanted_pkt_count, input int wanted_scalar_count);
+  // DMA writer for OFBUF.
+  // This is the memory-side model for the new CNN top-level OFBUF DMA interface.
+  // It accepts write data whenever rdy_dma is asserted. If the write config is not
+  // available/accepted yet, accepted data beats are held in a small FIFO instead of
+  // being dropped. rdy_dma is deasserted only when that FIFO is full.
+  // Dummy padding data, when generated by OFBUF/DMA, is not synthesized here; the
+  // checker simply skips the padded memory cell at the end of an odd-width row.
+  task automatic of_dma_agent();
+    localparam int OF_DMA_FIFO_DEPTH = 16;
+
+    int req_base;
+    int req_words;
+    int idx;
+    bit busy;
+
+    logic [DATA_WIDTH-1:0] data_fifo [0:OF_DMA_FIFO_DEPTH-1];
+    logic                  last_fifo [0:OF_DMA_FIFO_DEPTH-1];
+    int fifo_wr_ptr;
+    int fifo_rd_ptr;
+    int fifo_count;
+    bit accepted_data;
+    bit can_pop;
+    logic [DATA_WIDTH-1:0] pop_data;
+    logic                  pop_tlast;
+
+    begin
+      req_base    = 0;
+      req_words   = 0;
+      idx         = 0;
+      busy        = 1'b0;
+      fifo_wr_ptr = 0;
+      fifo_rd_ptr = 0;
+      fifo_count  = 0;
+      ofbuf_dma_rdycfg_i <= 1'b0;
+      ofbuf_dma_rdy_i    <= 1'b0;
+
+      forever begin
+        @(posedge clk);
+
+        if (!rst_n) begin
+          busy                = 1'b0;
+          req_base            = 0;
+          req_words           = 0;
+          idx                 = 0;
+          fifo_wr_ptr         = 0;
+          fifo_rd_ptr         = 0;
+          fifo_count          = 0;
+          ofbuf_dma_rdycfg_i  <= 1'b1;
+          ofbuf_dma_rdy_i     <= 1'b1;
+          act_pkt_count       = 0;
+          act_out_count       = 0;
+        end else begin
+          // DATA channel: rdy_dma means the beat will be stored.  When the DMA
+          // model is waiting for/accepting a config, incoming beats are buffered.
+          accepted_data = ofbuf_dma_vld_o && ofbuf_dma_rdy_i;
+          if (accepted_data) begin
+            if (fifo_count >= OF_DMA_FIFO_DEPTH) begin
+              $fatal(1, "OFBUF DMA internal FIFO overflow");
+            end
+            data_fifo[fifo_wr_ptr] = ofbuf_dma_data_o;
+            last_fifo[fifo_wr_ptr] = ofbuf_dma_tlast_o;
+            fifo_wr_ptr = (fifo_wr_ptr + 1) % OF_DMA_FIFO_DEPTH;
+            fifo_count  = fifo_count + 1;
+          end
+
+          // CONFIG channel: accept a new config only while no packet is active.
+          ofbuf_dma_rdycfg_i <= !busy;
+          if (!busy && ofbuf_dma_vldcfg_o && ofbuf_dma_rdycfg_i) begin
+            req_base  = ofbuf_dma_baddr_o;
+            req_words = ofbuf_dma_burst_o;
+            idx       = 0;
+            busy      = 1'b1;
+            ofbuf_dma_rdycfg_i <= 1'b0;
+          end
+
+          // Once a config is active, drain exactly the beats that were accepted
+          // from the data channel. This also handles beats that arrived before
+          // rdycfg/config handshake completed.
+          can_pop = busy && (fifo_count > 0);
+          if (can_pop) begin
+            pop_data  = data_fifo[fifo_rd_ptr];
+            pop_tlast = last_fifo[fifo_rd_ptr];
+            fifo_rd_ptr = (fifo_rd_ptr + 1) % OF_DMA_FIFO_DEPTH;
+            fifo_count  = fifo_count - 1;
+
+            if ((req_base + idx) >= MAX_MEM) begin
+              $fatal(1, "OFBUF DMA write address overflow: base=%0d idx=%0d", req_base, idx);
+            end
+
+            of_ext_mem[req_base + idx] = pop_data;
+            act_out_mem[act_out_count] = pop_data;
+            act_out_count = act_out_count + 1;
+
+            if (pop_tlast || (idx == req_words - 1)) begin
+              busy = 1'b0;
+              act_pkt_count = act_pkt_count + 1;
+            end
+
+            idx = idx + 1;
+          end
+
+          // Backpressure only when the FIFO cannot store the next beat.  Account
+          // for a same-cycle pop so the source can continue when one slot opens.
+          ofbuf_dma_rdy_i <= (fifo_count < OF_DMA_FIFO_DEPTH);
+        end
+      end
+    end
+  endtask
+
+  task automatic wait_ofbuf_dma_done(input int wanted_row_count);
     int watchdog;
-    int lane;
     begin
       watchdog = 0;
-      act_pkt_count = 0;
-      act_out_count = 0;
-      while ((act_pkt_count < wanted_pkt_count) && (watchdog < 500000)) begin
+      while ((act_pkt_count < wanted_row_count) && (watchdog < 500000)) begin
         @(posedge clk);
-        if (rst_n) begin
-          if (|(comp_ofbuf_vld_o & comp_ofbuf_rdy_i)) begin
-            act_vld_mem[act_pkt_count] = comp_ofbuf_vld_o & comp_ofbuf_rdy_i;
-            act_pkt_mem[act_pkt_count] = comp_ofbuf_data_o;
-            for (lane = 0; lane < M; lane++) begin
-              if ((comp_ofbuf_vld_o[lane] == 1'b1) && (comp_ofbuf_rdy_i[lane] == 1'b1)) begin
-                act_out_mem[act_out_count] = comp_ofbuf_data_o[lane*WIDTH +: WIDTH];
-                act_out_count = act_out_count + 1;
-              end
-            end
-            act_pkt_count = act_pkt_count + 1;
-          end
-        end
         watchdog = watchdog + 1;
       end
-      if (act_pkt_count != wanted_pkt_count)
-        $fatal(1, "Output collection timeout. collected_pkt=%0d wanted_pkt=%0d", act_pkt_count, wanted_pkt_count);
-      if (act_out_count != wanted_scalar_count)
-        $fatal(1, "Output scalar count mismatch after collection. collected=%0d wanted=%0d", act_out_count, wanted_scalar_count);
+      if (act_pkt_count != wanted_row_count) begin
+        $fatal(1, "OFBUF DMA timeout. completed_rows=%0d wanted_rows=%0d data_writes=%0d",
+               act_pkt_count, wanted_row_count, act_out_count);
+      end
+      $display("OFBUF DMA completed: rows=%0d data_writes=%0d", act_pkt_count, act_out_count);
     end
-    $display("act_pkt_count=%0d act_out_count=%0d vld=%b",
-         act_pkt_count, act_out_count, comp_ofbuf_vld_o & comp_ofbuf_rdy_i);
   endtask
 
   task automatic issue_inftructions();
@@ -1372,32 +1356,58 @@ module CNN_accel_tb;
   endtask
 
   task automatic compare_outputs(input string tc_name);
-    int i;
-    int lane;
+    int co_idx;
+    int oh;
+    int ow;
+    int ho;
+    int wo;
+    int align_wo;
+    int exp_idx;
+    int mem_addr;
+    logic [WIDTH-1:0] exp_data;
+    logic [WIDTH-1:0] act_data;
     begin
-      if (act_pkt_count != exp_pkt_count)
-        $fatal(1, "%s: packet count mismatch. act=%0d exp=%0d", tc_name, act_pkt_count, exp_pkt_count);
-      if (act_out_count != exp_out_count)
-        $fatal(1, "%s: scalar count mismatch. act=%0d exp=%0d", tc_name, act_out_count, exp_out_count);
+      ho = (current_h + 2 * current_padding - current_kh) / current_stride + 1;
+      wo = (current_w + 2 * current_padding - current_kw) / current_stride + 1;
+      align_wo = align_even(wo);
 
-      for (i = 0; i < exp_pkt_count; i++) begin
-        if (act_vld_mem[i] !== exp_vld_mem[i]) begin
-          $display("%s: valid mismatch at pkt=%0d act_vld=%b exp_vld=%b", tc_name, i, act_vld_mem[i], exp_vld_mem[i]);
-          $fatal(1, "%s failed", tc_name);
-        end
-        for (lane = 0; lane < M; lane++) begin
-          if (exp_vld_mem[i][lane]) begin
-            if (act_pkt_mem[i][lane*WIDTH +: WIDTH] !== exp_pkt_mem[i][lane*WIDTH +: WIDTH]) begin
-              $display("%s: data mismatch at pkt=%0d lane=%0d act=0x%08x exp=0x%08x",
-                       tc_name, i, lane,
-                       act_pkt_mem[i][lane*WIDTH +: WIDTH],
-                       exp_pkt_mem[i][lane*WIDTH +: WIDTH]);
+      if (exp_out_count != current_co * ho * wo) begin
+        $fatal(1, "%s: expected scalar count internal mismatch. exp=%0d calc=%0d",
+               tc_name, exp_out_count, current_co * ho * wo);
+      end
+
+      if (act_pkt_count != exp_pkt_count) begin
+        $fatal(1, "%s: OFBUF DMA row count mismatch. act_rows=%0d exp_rows=%0d",
+               tc_name, act_pkt_count, exp_pkt_count);
+      end
+
+      exp_idx = 0;
+      for (co_idx = 0; co_idx < current_co; co_idx++) begin
+        for (oh = 0; oh < ho; oh++) begin
+          for (ow = 0; ow < wo; ow++) begin
+            mem_addr = current_of_base + co_idx * (ho * align_wo) + oh * align_wo + ow;
+            exp_data = exp_out_mem[exp_idx][WIDTH-1:0];
+            act_data = of_ext_mem[mem_addr];
+
+            if (act_data !== exp_data) begin
+              $display("%s: OFBUF memory mismatch ch=%0d row=%0d col=%0d addr=%0d act=0x%02x exp=0x%02x",
+                       tc_name, co_idx, oh, ow, mem_addr, act_data, exp_data);
               $fatal(1, "%s failed", tc_name);
             end
+            exp_idx = exp_idx + 1;
           end
+          // If wo is odd, addr current_of_base + ... + wo is dummy padding.
+          // The checker intentionally does not compare it and moves to next row.
         end
       end
-      $display("[PASS] %s : %0d packets / %0d outputs matched", tc_name, exp_pkt_count, exp_out_count);
+
+      if ((wo % 2) != 0) begin
+        $display("[PASS] %s : %0d output values matched from OFBUF memory, row_stride=%0d (odd width: skipped dummy after each row)",
+                 tc_name, exp_out_count, align_wo);
+      end else begin
+        $display("[PASS] %s : %0d output values matched from OFBUF memory, row_stride=%0d",
+                 tc_name, exp_out_count, align_wo);
+      end
     end
   endtask
 
@@ -1453,6 +1463,7 @@ module CNN_accel_tb;
       current_if_base   = 0;
       current_flt_base  = 8192;
       current_bias_base = 32768;
+      current_of_base   = 0;
       current_w         = w;
       current_h         = h;
       current_ci        = ci;
@@ -1479,7 +1490,7 @@ module CNN_accel_tb;
       fill_filter_external_memory(current_flt_base, kw, kh, ci, co, ifparr, ofparr);
       fill_bias_external_memory(current_bias_base, co, ofparr, oftile);
       build_expected_output();
-      $display("%s: exp_pkt_count=%0d exp_out_count=%0d",
+      $display("%s: exp_dma_rows=%0d exp_out_count=%0d",
          tc_name, exp_pkt_count, exp_out_count);
       align_w      = align_even(w);
       iftiles      = ceil_div(ci, ifparr);
@@ -1506,11 +1517,11 @@ module CNN_accel_tb;
         if_dma_agent();
         flt_dma_agent();
         bias_dma_agent();
-        collect_outputs(exp_pkt_count, exp_out_count);
+        of_dma_agent();
       join_none
 
       issue_inftructions();
-      wait (act_pkt_count == exp_pkt_count);
+      wait_ofbuf_dma_done(exp_pkt_count);
       repeat (20) @(posedge clk);
       compare_outputs(tc_name);
 
@@ -1585,6 +1596,7 @@ module CNN_accel_tb;
       current_if_base   = 0;
       current_flt_base  = 8192;
       current_bias_base = 32768;
+      current_of_base   = 0;
       current_w         = w;
       current_h         = h;
       current_ci        = ci;
@@ -1611,7 +1623,7 @@ module CNN_accel_tb;
       fill_filter_external_memory(current_flt_base, kw, kh, ci, co, ifparr, ofparr);
       fill_bias_external_memory(current_bias_base, co, ofparr, oftile);
       build_expected_output();
-      $display("%s: exp_pkt_count=%0d exp_out_count=%0d. This case will be reset before compare.",
+      $display("%s: exp_dma_rows=%0d exp_out_count=%0d. This case will be reset before compare.",
          tc_name, exp_pkt_count, exp_out_count);
 
       align_w       = align_even(w);
@@ -1639,7 +1651,7 @@ module CNN_accel_tb;
         if_dma_agent();
         flt_dma_agent();
         bias_dma_agent();
-        collect_outputs(exp_pkt_count, exp_out_count);
+        of_dma_agent();
       join_none
 
       issue_inftructions();
@@ -1687,7 +1699,8 @@ module CNN_accel_tb;
       ifbuf_dma_tlast_i = 1'b0;
       fltbuf_dma_tlast_i = 1'b0;
       bias_dma_tlast_i = 1'b0;
-      comp_ofbuf_rdy_i = '1;
+      ofbuf_dma_rdycfg_i = 1'b0;
+      ofbuf_dma_rdy_i    = 1'b0;
 
       repeat (6) @(posedge clk);
       rst_n = 1'b1;
@@ -1719,7 +1732,7 @@ module CNN_accel_tb;
             dut.u_computation.gen_comp_pu[0].comp_pu_inft.pe_fltc_data_i[(i+1)*WIDTH-1 -: WIDTH];
     end
     for (i = 0; i < M; i = i + 1) begin : GEN_scale_TAP
-          assign scale_comp_data_tb[i] = comp_ofbuf_data_o[(i+1)*WIDTH-1 -: WIDTH];
+          assign scale_comp_data_tb[i] = dut.ofbuf_comp_data_w[(i+1)*WIDTH-1 -: WIDTH];
       end
   endgenerate
   CNN_accel #(
@@ -1756,7 +1769,6 @@ module CNN_accel_tb;
     .inf_table_qmin_i(inf_table_qmin_i),
     .inf_table_qmax_i(inf_table_qmax_i),
     .inf_table_is_leaky_ReLU_i(inf_table_is_leaky_ReLU_i),
-    .inf_table_is_use_camera_i(inf_table_is_use_camera_i),
 
     .ifbuf_dma_rdycfg_i(ifbuf_dma_rdycfg_i),
     .ifbuf_dma_vld_i(ifbuf_dma_vld_i),
@@ -1785,9 +1797,14 @@ module CNN_accel_tb;
     .bias_dma_tlast_i(bias_dma_tlast_i),
     .bias_dma_rdy_o(bias_dma_rdy_o),
 
-    .comp_ofbuf_rdy_i(comp_ofbuf_rdy_i),
-    .comp_ofbuf_vld_o(comp_ofbuf_vld_o),
-    .comp_ofbuf_data_o(comp_ofbuf_data_o),
+    .ofbuf_dma_rdycfg_i(ofbuf_dma_rdycfg_i),
+    .ofbuf_dma_vldcfg_o(ofbuf_dma_vldcfg_o),
+    .ofbuf_dma_burst_o(ofbuf_dma_burst_o),
+    .ofbuf_dma_baddr_o(ofbuf_dma_baddr_o),
+    .ofbuf_dma_vld_o(ofbuf_dma_vld_o),
+    .ofbuf_dma_data_o(ofbuf_dma_data_o),
+    .ofbuf_dma_tlast_o(ofbuf_dma_tlast_o),
+    .ofbuf_dma_rdy_i(ofbuf_dma_rdy_i),
 
     .comp_pa_done_compute_o(comp_pa_done_compute_o),
     .ifbuf_comp_end_layer_o(ifbuf_comp_end_layer_o),
@@ -1809,6 +1826,8 @@ module CNN_accel_tb;
     ifbuf_dma_rdycfg_i = 1'b0;
     fltbuf_dma_rdycfg_i = 1'b0;
     bias_dma_rdycfg_i = 1'b0;
+    ofbuf_dma_rdycfg_i = 1'b0;
+    ofbuf_dma_rdy_i = 1'b0;
     ifbuf_dma_vld_i = 1'b0;
     fltbuf_dma_vld_i = 1'b0;
     bias_dma_vld_i = 1'b0;
@@ -1818,7 +1837,6 @@ module CNN_accel_tb;
     ifbuf_dma_tlast_i = 1'b0;
     fltbuf_dma_tlast_i = 1'b0;
     bias_dma_tlast_i = 1'b0;
-    comp_ofbuf_rdy_i = '1;
 
     clear_all_memories();
     apply_reset();
@@ -1826,7 +1844,7 @@ module CNN_accel_tb;
     // Direct table interface: keep original testcase values; no LUT retargeting.
     
     // 1) Ifmap kích thước chẵn, burst filter chẵn
-    // //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
+    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
     run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
@@ -1881,10 +1899,10 @@ module CNN_accel_tb;
     // =====================================================
 
     // A) Reset rat som sau khi issue inftruction: cover loi FSM/DMA config dang bat dau.
-    run_case_abort_reset("RST_ABORT_A_early_TC2", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5, 35, 0);
+    run_case_abort_reset("RST_ABORT_A_early_TC2", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5, 35, 0); 
     run_case("RST_RECOVER_A_next_no_extra_reset_TC3", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
 
-    // B) Reset giua compute sau mot khoang clock: cover loi partial-sum/cache dang co du lieu cu.
+    // // B) Reset giua compute sau mot khoang clock: cover loi partial-sum/cache dang co du lieu cu.
     run_case_abort_reset("RST_ABORT_B_mid_compute_TC6", 22, 22, 5, 7, 5, 5, 3, 1, 2, 3, 1, 3, 2, 2200, 11);
     run_case("RST_RECOVER_B_next_no_extra_reset_TC7", 9, 9, 4, 6, 1, 1, 1, 0, 2, 4, 2, 2, 3);
 
@@ -1897,7 +1915,7 @@ module CNN_accel_tb;
     $finish;
   end
   initial begin
-    // #200000 $finish;
+    // #9000 $finish;
   end
 endmodule
 
