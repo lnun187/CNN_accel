@@ -230,13 +230,9 @@ module ofbuf#(
         if(ofbuf_inf_rdy_o) begin
             end_row_q   <= 0;
             tlast_q     <= 0;
-            vld_dma_q   <= 0;
-            data_dma_q  <= 0;
         end else if((rdy_cfg_q && vld_cfg_dma_q) || rdy_fifo || !vld_dma_q) begin
             data_dma_q  <= data_dma_d;
             vld_dma_q   <= vld_dma_d && !(rdy_cfg_q && vld_cfg_dma_q);
-            tlast_q     <= tlast_d;
-            end_row_q   <= end_row_d_q;
         end
     end
     always @(posedge clk) begin
