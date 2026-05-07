@@ -111,7 +111,7 @@ module ifmap_cache #(
     assign ifc_pu_end_row_o         = fifo_dout[K*DATA_WIDTH + 3];
     assign ifc_pu_vld_o             = is_begin && ~empty;
     
-       fifo #(
+       fifo_n #(
        .DATA_WIDTH(K*DATA_WIDTH + 5),
        .FF_TYPE(0),
        .FF_NUM(2),

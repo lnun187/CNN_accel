@@ -418,7 +418,7 @@ module ping_pong_ifbuf #(
     fifo_bram_zp #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)
-    ) fifo1 (
+    ) ifbuf_mem0 (
         .clk(clk),
         .rst_n(rst_n),
         .wr_en(wr_en1 || rd_en1 && vld1),
@@ -434,7 +434,7 @@ module ping_pong_ifbuf #(
     fifo_bram_zp #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)
-    ) fifo2 (
+    ) ifbuf_mem1 (
         .clk(clk),
         .rst_n(rst_n),
         .wr_en(wr_en2 || rd_en2 && vld2),

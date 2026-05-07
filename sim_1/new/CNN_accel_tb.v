@@ -34,6 +34,9 @@ module CNN_accel_tb;
   localparam int MAX_F   = 64;
   localparam int MAX_KSZ = 16;
   localparam int MAX_OUT = 65536;
+  localparam int MAX_LAYERS_TB = 128;
+  localparam int BASE_ALIGN = 64;
+
 
   // =========================================================
   // Clock / reset
@@ -45,79 +48,87 @@ module CNN_accel_tb;
   // DUT inputs / outputs
   // =========================================================
   // TABLE instruction interface to CNN_accel/layer_info
-  logic                               inf_table_vld_i;
-  wire                                inf_table_rdy_o;
-  logic           [7:0]               inf_table_ifheight_i;
-  logic           [10:0]              inf_table_ifchannel_i;
-  logic           [10:0]              inf_table_ofchannel_i;
-  logic           [3:0]               inf_table_hf_i;
-  logic           [2:0]               inf_table_stride_i;
-  logic           [1:0]               inf_table_padding_i;
-  logic           [2:0]               inf_table_ifparr_i;
-  logic           [1:0]               inf_table_oftile_i;
-  logic           [4:0]               inf_table_ofparr_i;
-  logic           [23:0]              inf_table_ifbaddr_i;
-  logic           [23:0]              inf_table_fltbaddr_i;
-  logic           [23:0]              inf_table_bias_baddr_i;
-  logic           [23:0]              inf_table_ofbaddr_i;
-  logic signed    [DATA_WIDTH-1:0]    inf_table_ifc_zp_i;
-  logic signed    [DATA_WIDTH-1:0]    inf_table_fltc_zp_i;
-  logic signed    [31:0]              inf_table_mult_i;
-  logic           [5:0]               inf_table_mult_shift_i;
-  logic signed    [31:0]              inf_table_alphamult_i;
-  logic           [5:0]               inf_table_alphamult_shift_i;
-  logic signed    [7:0]               inf_table_zpy_i;
-  logic signed    [7:0]               inf_table_qmin_i;
-  logic signed    [7:0]               inf_table_qmax_i;
-  logic                               inf_table_is_leaky_ReLU_i;
+  logic                               cnn_table_vld_i;
+  wire                                cnn_table_rdy_o;
+  logic           [7:0]               cnn_table_ifheight_i;
+  logic           [10:0]              cnn_table_ifchannel_i;
+  logic           [10:0]              cnn_table_ofchannel_i;
+  logic           [3:0]               cnn_table_hf_i;
+  logic           [2:0]               cnn_table_stride_i;
+  logic           [1:0]               cnn_table_padding_i;
+  logic           [2:0]               cnn_table_ifparr_i;
+  logic           [1:0]               cnn_table_oftile_i;
+  logic           [4:0]               cnn_table_ofparr_i;
+  logic           [23:0]              cnn_table_ifbaddr_i;
+  logic           [23:0]              cnn_table_fltbaddr_i;
+  logic           [23:0]              cnn_table_bias_baddr_i;
+  logic           [23:0]              cnn_table_ofbaddr_i;
+  logic signed    [DATA_WIDTH-1:0]    cnn_table_ifc_zp_i;
+  logic signed    [DATA_WIDTH-1:0]    cnn_table_fltc_zp_i;
+  logic signed    [31:0]              cnn_table_mult_i;
+  logic           [5:0]               cnn_table_mult_shift_i;
+  logic signed    [31:0]              cnn_table_alphamult_i;
+  logic           [5:0]               cnn_table_alphamult_shift_i;
+  logic signed    [7:0]               cnn_table_zpy_i;
+  logic signed    [7:0]               cnn_table_qmin_i;
+  logic signed    [7:0]               cnn_table_qmax_i;
+  logic                               cnn_table_is_leaky_ReLU_i;
 
-  logic                  ifbuf_dma_rdycfg_i;
-  logic                  ifbuf_dma_vld_i;
-  logic [DATA_WIDTH-1:0] ifbuf_dma_data_i;
-  logic                  ifbuf_dma_tlast_i;
-  wire                   ifbuf_dma_vldcfg_o;
-  wire [7:0]             ifbuf_dma_burst_o;
-  wire [23:0]            ifbuf_dma_baddr_o;
-  wire                   ifbuf_dma_rdy_o;
+  logic                  cnn_ifbuf_dma_rdycfg_i;
+  logic                  cnn_ifbuf_dma_vld_i;
+  logic [DATA_WIDTH-1:0] cnn_ifbuf_dma_data_i;
+  logic                  cnn_ifbuf_dma_tlast_i;
+  wire                   cnn_ifbuf_dma_vldcfg_o;
+  wire [7:0]             cnn_ifbuf_dma_burst_o;
+  wire [23:0]            cnn_ifbuf_dma_baddr_o;
+  wire                   cnn_ifbuf_dma_rdy_o;
 
-  logic                  fltbuf_dma_rdycfg_i;
-  logic                  fltbuf_dma_vld_i;
-  logic [DATA_WIDTH-1:0] fltbuf_dma_data_i;
-  logic                  fltbuf_dma_tlast_i;
-  wire                   fltbuf_dma_vldcfg_o;
-  wire [9:0]             fltbuf_dma_burst_o;
-  wire [23:0]            fltbuf_dma_baddr_o;
-  wire                   fltbuf_dma_rdy_o;
+  logic                  cnn_fltbuf_dma_rdycfg_i;
+  logic                  cnn_fltbuf_dma_vld_i;
+  logic [DATA_WIDTH-1:0] cnn_fltbuf_dma_data_i;
+  logic                  cnn_fltbuf_dma_tlast_i;
+  wire                   cnn_fltbuf_dma_vldcfg_o;
+  wire [9:0]             cnn_fltbuf_dma_burst_o;
+  wire [23:0]            cnn_fltbuf_dma_baddr_o;
+  wire                   cnn_fltbuf_dma_rdy_o;
 
-  logic                  bias_dma_rdycfg_i;
-  wire                   bias_dma_vldcfg_o;
-  wire [4:0]             bias_dma_burst_o;
-  wire [23:0]            bias_dma_baddr_o;
-  logic                  bias_dma_vld_i;
-  logic signed [31:0]    bias_dma_data_i;
-  logic                  bias_dma_tlast_i;
-  wire                   bias_dma_rdy_o;
+  logic                  cnn_bias_dma_rdycfg_i;
+  wire                   cnn_bias_dma_vldcfg_o;
+  wire [4:0]             cnn_bias_dma_burst_o;
+  wire [23:0]            cnn_bias_dma_baddr_o;
+  logic                  cnn_bias_dma_vld_i;
+  logic           [7:0]     cnn_bias_dma_data_i;
+  logic                  cnn_bias_dma_tlast_i;
+  wire                   cnn_bias_dma_rdy_o;
 
-  logic                  ofbuf_dma_rdycfg_i;
-  wire                   ofbuf_dma_vldcfg_o;
-  wire [7:0]             ofbuf_dma_burst_o;
-  wire [23:0]            ofbuf_dma_baddr_o;
-  wire                   ofbuf_dma_vld_o;
-  wire [DATA_WIDTH-1:0]  ofbuf_dma_data_o;
-  wire                   ofbuf_dma_tlast_o;
-  logic                  ofbuf_dma_rdy_i;
+  logic                  cnn_ofbuf_dma_rdycfg_i;
+  wire                   cnn_ofbuf_dma_vldcfg_o;
+  wire [7:0]             cnn_ofbuf_dma_burst_o;
+  wire [23:0]            cnn_ofbuf_dma_baddr_o;
+  wire                   cnn_ofbuf_dma_vld_o;
+  wire [DATA_WIDTH-1:0]  cnn_ofbuf_dma_data_o;
+  wire                   cnn_ofbuf_dma_tlast_o;
+  logic                  cnn_ofbuf_dma_rdy_i;
 
-  wire                     comp_pa_done_compute_o;
-  wire                     ifbuf_comp_end_layer_o;
-  wire                     ifbuf_comp_end_layer_real_o;
-  wire                     fltbuf_comp_donepass_o;
+  wire                     cnn_comp_pa_done_compute_o;
+  wire                     cnn_ifbuf_comp_end_layer_o;
+  wire                     cnn_ifbuf_comp_end_layer_real_o;
+  wire                     cnn_fltbuf_comp_donepass_o;
+
+  // =========================================================
+  // CNN CPU control interface
+  // =========================================================
+  wire                   cnn_cpu_accel_busy_o;
+  logic                  cnn_cpu_accel_start_i;
+  wire                   cnn_cpu_accel_done_o;
+  logic                  cnn_cpu_receive_interupt_i;
 
   // =========================================================
   // External memories + scoreboard memories
   // =========================================================
   logic [DATA_WIDTH-1:0] if_ext_mem  [0:MAX_MEM-1];
   logic [DATA_WIDTH-1:0] flt_ext_mem [0:MAX_MEM-1];
-  logic signed [31:0]    bias_ext_mem[0:MAX_MEM-1];
+  logic           [7:0]     bias_ext_mem[0:MAX_MEM-1];
   logic [DATA_WIDTH-1:0] of_ext_mem  [0:MAX_MEM-1];
   logic [ACC_WIDTH-1:0]  exp_out_mem [0:MAX_OUT-1];
   logic [ACC_WIDTH-1:0]  act_out_mem [0:MAX_OUT-1];
@@ -161,6 +172,35 @@ module CNN_accel_tb;
   int current_is_leaky_relu;
 
   // =========================================================
+  // Multi-layer testcase description storage
+  // =========================================================
+  string layer_name       [0:MAX_LAYERS_TB-1];
+  int    layer_w          [0:MAX_LAYERS_TB-1];
+  int    layer_h          [0:MAX_LAYERS_TB-1];
+  int    layer_ci         [0:MAX_LAYERS_TB-1];
+  int    layer_co         [0:MAX_LAYERS_TB-1];
+  int    layer_kw         [0:MAX_LAYERS_TB-1];
+  int    layer_kh         [0:MAX_LAYERS_TB-1];
+  int    layer_stride     [0:MAX_LAYERS_TB-1];
+  int    layer_padding    [0:MAX_LAYERS_TB-1];
+  int    layer_ifparr     [0:MAX_LAYERS_TB-1];
+  int    layer_ofparr     [0:MAX_LAYERS_TB-1];
+  int    layer_oftile     [0:MAX_LAYERS_TB-1];
+  int    layer_if_zp      [0:MAX_LAYERS_TB-1];
+  int    layer_fl_zp      [0:MAX_LAYERS_TB-1];
+  int    layer_if_base    [0:MAX_LAYERS_TB-1];
+  int    layer_flt_base   [0:MAX_LAYERS_TB-1];
+  int    layer_bias_base  [0:MAX_LAYERS_TB-1];
+  int    layer_of_base    [0:MAX_LAYERS_TB-1];
+  int    layer_if_words   [0:MAX_LAYERS_TB-1];
+  int    layer_flt_words  [0:MAX_LAYERS_TB-1];
+  int    layer_bias_words [0:MAX_LAYERS_TB-1];
+  int    layer_of_words   [0:MAX_LAYERS_TB-1];
+  int    layer_exp_rows   [0:MAX_LAYERS_TB-1];
+  int    layer_exp_values [0:MAX_LAYERS_TB-1];
+  int    num_loaded_layers;
+
+  // =========================================================
   // Helpers
   // =========================================================
   function automatic int min2(input int a, input int b);
@@ -175,32 +215,97 @@ module CNN_accel_tb;
     return (x % 2 == 0) ? x : (x + 1);
   endfunction
 
+  function automatic int align_base(input int x);
+    return ((x + BASE_ALIGN - 1) / BASE_ALIGN) * BASE_ALIGN;
+  endfunction
+
+  function automatic int calc_of_h(
+    input int h,
+    input int kh,
+    input int stride,
+    input int padding
+  );
+    return (h + 2 * padding - kh) / stride + 1;
+  endfunction
+
+  function automatic int calc_of_w(
+    input int w,
+    input int kw,
+    input int stride,
+    input int padding
+  );
+    return (w + 2 * padding - kw) / stride + 1;
+  endfunction
+
+  function automatic int calc_if_words(
+    input int w,
+    input int h,
+    input int ci
+  );
+    return align_even(w) * h * ci;
+  endfunction
+
+  function automatic int calc_of_words(
+    input int w,
+    input int h,
+    input int co,
+    input int kw,
+    input int kh,
+    input int stride,
+    input int padding
+  );
+    int ho;
+    int wo;
+    begin
+      ho = calc_of_h(h, kh, stride, padding);
+      wo = calc_of_w(w, kw, stride, padding);
+      return co * ho * align_even(wo);
+    end
+  endfunction
+
+  task automatic check_mem_range(
+    input string tc_name,
+    input string mem_name,
+    input int    base_addr,
+    input int    words
+  );
+    begin
+      if (words < 0) begin
+        $fatal(1, "%s: %s negative word count=%0d", tc_name, mem_name, words);
+      end
+      if ((base_addr < 0) || ((base_addr + words) > MAX_MEM)) begin
+        $fatal(1, "%s: %s memory range overflow base=%0d words=%0d MAX_MEM=%0d",
+               tc_name, mem_name, base_addr, words, MAX_MEM);
+      end
+    end
+  endtask
+
   task automatic clear_table_interface();
     begin
-      inf_table_vld_i = 1'b0;
-      inf_table_ifheight_i = '0;
-      inf_table_ifchannel_i = '0;
-      inf_table_ofchannel_i = '0;
-      inf_table_hf_i = '0;
-      inf_table_stride_i = '0;
-      inf_table_padding_i = '0;
-      inf_table_ifparr_i = '0;
-      inf_table_oftile_i = '0;
-      inf_table_ofparr_i = '0;
-      inf_table_ifbaddr_i = '0;
-      inf_table_fltbaddr_i = '0;
-      inf_table_bias_baddr_i = '0;
-      inf_table_ofbaddr_i = '0;
-      inf_table_ifc_zp_i = '0;
-      inf_table_fltc_zp_i = '0;
-      inf_table_mult_i = '0;
-      inf_table_mult_shift_i = '0;
-      inf_table_alphamult_i = '0;
-      inf_table_alphamult_shift_i = '0;
-      inf_table_zpy_i = '0;
-      inf_table_qmin_i = -128;
-      inf_table_qmax_i = 127;
-      inf_table_is_leaky_ReLU_i = 1'b0;
+      cnn_table_vld_i = 1'b0;
+      cnn_table_ifheight_i = '0;
+      cnn_table_ifchannel_i = '0;
+      cnn_table_ofchannel_i = '0;
+      cnn_table_hf_i = '0;
+      cnn_table_stride_i = '0;
+      cnn_table_padding_i = '0;
+      cnn_table_ifparr_i = '0;
+      cnn_table_oftile_i = '0;
+      cnn_table_ofparr_i = '0;
+      cnn_table_ifbaddr_i = '0;
+      cnn_table_fltbaddr_i = '0;
+      cnn_table_bias_baddr_i = '0;
+      cnn_table_ofbaddr_i = '0;
+      cnn_table_ifc_zp_i = '0;
+      cnn_table_fltc_zp_i = '0;
+      cnn_table_mult_i = '0;
+      cnn_table_mult_shift_i = '0;
+      cnn_table_alphamult_i = '0;
+      cnn_table_alphamult_shift_i = '0;
+      cnn_table_zpy_i = '0;
+      cnn_table_qmin_i = -128;
+      cnn_table_qmax_i = 127;
+      cnn_table_is_leaky_ReLU_i = 1'b0;
     end
   endtask
 
@@ -226,48 +331,48 @@ module CNN_accel_tb;
         $fatal(1, "%s: table interface has only one hf field, but kw=%0d kh=%0d", tc_name, kw, kh);
       end
       if (h > 255) begin
-        $fatal(1, "%s: h=%0d exceeds inf_table_ifheight_i[7:0]", tc_name, h);
+        $fatal(1, "%s: h=%0d exceeds cnn_table_ifheight_i[7:0]", tc_name, h);
       end
       if (ci > 2047) begin
-        $fatal(1, "%s: ci=%0d exceeds inf_table_ifchannel_i[10:0]", tc_name, ci);
+        $fatal(1, "%s: ci=%0d exceeds cnn_table_ifchannel_i[10:0]", tc_name, ci);
       end
       if (co > 2047) begin
-        $fatal(1, "%s: co=%0d exceeds inf_table_ofchannel_i[10:0]", tc_name, co);
+        $fatal(1, "%s: co=%0d exceeds cnn_table_ofchannel_i[10:0]", tc_name, co);
       end
       if (ifparr > 7) begin
-        $fatal(1, "%s: ifparr=%0d exceeds inf_table_ifparr_i[2:0]", tc_name, ifparr);
+        $fatal(1, "%s: ifparr=%0d exceeds cnn_table_ifparr_i[2:0]", tc_name, ifparr);
       end
       if (oftile > 3) begin
-        $fatal(1, "%s: oftile=%0d exceeds inf_table_oftile_i[1:0]", tc_name, oftile);
+        $fatal(1, "%s: oftile=%0d exceeds cnn_table_oftile_i[1:0]", tc_name, oftile);
       end
       if (ofparr > 31) begin
-        $fatal(1, "%s: ofparr=%0d exceeds inf_table_ofparr_i[4:0]", tc_name, ofparr);
+        $fatal(1, "%s: ofparr=%0d exceeds cnn_table_ofparr_i[4:0]", tc_name, ofparr);
       end
 
       // Direct table interface: no LUT encoding is used here.
-      inf_table_ifheight_i         = h[7:0];
-      inf_table_ifchannel_i        = ci[10:0];
-      inf_table_ofchannel_i        = co[10:0];
-      inf_table_hf_i               = kh[3:0];
-      inf_table_stride_i           = stride[2:0];
-      inf_table_padding_i          = padding[1:0];
-      inf_table_ifparr_i           = ifparr[2:0];
-      inf_table_oftile_i           = oftile[1:0];
-      inf_table_ofparr_i           = ofparr[4:0];
-      inf_table_ifbaddr_i          = current_if_base[23:0];
-      inf_table_fltbaddr_i         = current_flt_base[23:0];
-      inf_table_bias_baddr_i       = current_bias_base[23:0];
-      inf_table_ofbaddr_i          = current_of_base[23:0];
-      inf_table_ifc_zp_i           = current_ifc_zp[DATA_WIDTH-1:0];
-      inf_table_fltc_zp_i          = current_fltc_zp[DATA_WIDTH-1:0];
-      inf_table_mult_i             = current_mult;
-      inf_table_mult_shift_i       = current_mult_shift[5:0];
-      inf_table_alphamult_i        = current_alphamult;
-      inf_table_alphamult_shift_i  = current_alphamult_shift[5:0];
-      inf_table_zpy_i              = current_zpy[7:0];
-      inf_table_qmin_i             = current_qmin[7:0];
-      inf_table_qmax_i             = current_qmax[7:0];
-      inf_table_is_leaky_ReLU_i    = current_is_leaky_relu[0];
+      cnn_table_ifheight_i         = h[7:0];
+      cnn_table_ifchannel_i        = ci[10:0];
+      cnn_table_ofchannel_i        = co[10:0];
+      cnn_table_hf_i               = kh[3:0];
+      cnn_table_stride_i           = stride[2:0];
+      cnn_table_padding_i          = padding[1:0];
+      cnn_table_ifparr_i           = ifparr[2:0];
+      cnn_table_oftile_i           = oftile[1:0];
+      cnn_table_ofparr_i           = ofparr[4:0];
+      cnn_table_ifbaddr_i          = current_if_base[23:0];
+      cnn_table_fltbaddr_i         = current_flt_base[23:0];
+      cnn_table_bias_baddr_i       = current_bias_base[23:0];
+      cnn_table_ofbaddr_i          = current_of_base[23:0];
+      cnn_table_ifc_zp_i           = current_ifc_zp[DATA_WIDTH-1:0];
+      cnn_table_fltc_zp_i          = current_fltc_zp[DATA_WIDTH-1:0];
+      cnn_table_mult_i             = current_mult;
+      cnn_table_mult_shift_i       = current_mult_shift[5:0];
+      cnn_table_alphamult_i        = current_alphamult;
+      cnn_table_alphamult_shift_i  = current_alphamult_shift[5:0];
+      cnn_table_zpy_i              = current_zpy[7:0];
+      cnn_table_qmin_i             = current_qmin[7:0];
+      cnn_table_qmax_i             = current_qmax[7:0];
+      cnn_table_is_leaky_ReLU_i    = current_is_leaky_relu[0];
     end
   endtask
 
@@ -399,17 +504,19 @@ module CNN_accel_tb;
     begin
       rst_n = 1'b0;
       clear_table_interface();
-      ifbuf_dma_vld_i = 1'b0;
-      fltbuf_dma_vld_i = 1'b0;
-      bias_dma_vld_i = 1'b0;
-      ifbuf_dma_data_i = '0;
-      fltbuf_dma_data_i = '0;
-      bias_dma_data_i = '0;
-      ifbuf_dma_tlast_i = 1'b0;
-      fltbuf_dma_tlast_i = 1'b0;
-      bias_dma_tlast_i = 1'b0;
-      ofbuf_dma_rdycfg_i = 1'b0;
-      ofbuf_dma_rdy_i    = 1'b0;
+      cnn_cpu_accel_start_i = 1'b0;
+      cnn_cpu_receive_interupt_i = 1'b0;
+      cnn_ifbuf_dma_vld_i = 1'b0;
+      cnn_fltbuf_dma_vld_i = 1'b0;
+      cnn_bias_dma_vld_i = 1'b0;
+      cnn_ifbuf_dma_data_i = '0;
+      cnn_fltbuf_dma_data_i = '0;
+      cnn_bias_dma_data_i = '0;
+      cnn_ifbuf_dma_tlast_i = 1'b0;
+      cnn_fltbuf_dma_tlast_i = 1'b0;
+      cnn_bias_dma_tlast_i = 1'b0;
+      cnn_ofbuf_dma_rdycfg_i = 1'b0;
+      cnn_ofbuf_dma_rdy_i    = 1'b0;
       repeat (8) @(posedge clk);
       rst_n = 1'b1;
       repeat (4) @(posedge clk);
@@ -692,9 +799,10 @@ module CNN_accel_tb;
   endtask
 
   // Bias memory layout follows the same one-config/one-burst DMA handshake style
-  // as filter DMA.  Payload order is head0 lanes first, then head1 lanes.  When
-  // a block has an odd number of real bias values, one dummy beat is appended
-  // and tlast belongs to that dummy beat.
+  // as filter DMA.  Payload order is head0 lanes first, then head1 lanes.
+  // Each 32-bit bias value is stored as four consecutive 8-bit locations in
+  // big-endian order: [31:24] at the lowest address, then [23:16], [15:8], [7:0].
+  // No dummy/padding beat is needed because each bias always expands to 4 bytes.
     task automatic fill_bias_external_memory(
     input int base_addr,
     input int co,
@@ -718,6 +826,7 @@ module CNN_accel_tb;
     int col_in_group;
     int idx_in_lane;
     int channel_idx;
+    logic signed [31:0] bias_word;
 
     int block_id;
     int block_real;
@@ -733,7 +842,6 @@ module CNN_accel_tb;
     int seq_pos;
     int need;
     int placed;
-    int burst_count;
 
     begin
       addr = base_addr;
@@ -859,26 +967,23 @@ module CNN_accel_tb;
           end
         end
 
-        burst_count = 0;
-
         for (lane = 0; lane < M; lane++) begin
           for (r = 0; r < lane_rows[lane]; r++) begin
             for (col_in_group = 0; col_in_group < group_cols; col_in_group++) begin
               channel_idx = slot_ch[lane][r][col_in_group];
 
               if ((channel_idx >= 0) && (channel_idx < co)) begin
-                bias_ext_mem[addr] = mk_bias_val(channel_idx);
-                addr++;
-                burst_count++;
+                bias_word = mk_bias_val(channel_idx);
+                bias_ext_mem[addr + 0] = bias_word[31:24];
+                bias_ext_mem[addr + 1] = bias_word[23:16];
+                bias_ext_mem[addr + 2] = bias_word[15:8];
+                bias_ext_mem[addr + 3] = bias_word[7:0];
+                addr += 4;
               end
             end
           end
         end
 
-        if ((burst_count % 2) != 0) begin
-          bias_ext_mem[addr] = '0;
-          addr++;
-        end
       end
 
       current_bias_words = addr - base_addr;
@@ -1034,10 +1139,10 @@ module CNN_accel_tb;
       req_words = 0;
       idx = 0;
       busy = 1'b0;
-      ifbuf_dma_rdycfg_i <= 1'b0;
-      ifbuf_dma_vld_i    <= 1'b0;
-      ifbuf_dma_data_i   <= '0;
-      ifbuf_dma_tlast_i  <= 1'b0;
+      cnn_ifbuf_dma_rdycfg_i <= 1'b0;
+      cnn_ifbuf_dma_vld_i    <= 1'b0;
+      cnn_ifbuf_dma_data_i   <= '0;
+      cnn_ifbuf_dma_tlast_i  <= 1'b0;
 
       forever begin
         @(posedge clk);
@@ -1047,33 +1152,33 @@ module CNN_accel_tb;
           req_base           = 0;
           req_words          = 0;
           idx                = 0;
-          ifbuf_dma_rdycfg_i <= 1'b1;
-          ifbuf_dma_vld_i    <= 1'b0;
-          ifbuf_dma_data_i   <= '0;
-          ifbuf_dma_tlast_i  <= 1'b0;
+          cnn_ifbuf_dma_rdycfg_i <= 1'b1;
+          cnn_ifbuf_dma_vld_i    <= 1'b0;
+          cnn_ifbuf_dma_data_i   <= '0;
+          cnn_ifbuf_dma_tlast_i  <= 1'b0;
         end else begin
-          ifbuf_dma_vld_i   <= 1'b0;
-          ifbuf_dma_tlast_i <= 1'b0;
+          cnn_ifbuf_dma_vld_i   <= 1'b0;
+          cnn_ifbuf_dma_tlast_i <= 1'b0;
 
           if (!busy) begin
-            ifbuf_dma_rdycfg_i <= 1'b1;
-            if (ifbuf_dma_vldcfg_o) begin
-              req_base           = ifbuf_dma_baddr_o;
-              req_words          = ifbuf_dma_burst_o;
+            cnn_ifbuf_dma_rdycfg_i <= 1'b1;
+            if (cnn_ifbuf_dma_vldcfg_o) begin
+              req_base           = cnn_ifbuf_dma_baddr_o;
+              req_words          = cnn_ifbuf_dma_burst_o;
               idx                = 0;
               busy               = 1'b1;
-              ifbuf_dma_rdycfg_i <= 1'b0;
+              cnn_ifbuf_dma_rdycfg_i <= 1'b0;
             end
           end else begin
-            ifbuf_dma_rdycfg_i <= 1'b0;
-            if (ifbuf_dma_rdy_o && (idx < req_words)) begin
-              ifbuf_dma_vld_i   <= 1'b1;
-              ifbuf_dma_data_i  <= if_ext_mem[req_base + idx];
-              ifbuf_dma_tlast_i <= (idx == req_words - 1);
+            cnn_ifbuf_dma_rdycfg_i <= 1'b0;
+            if (cnn_ifbuf_dma_rdy_o && (idx < req_words)) begin
+              cnn_ifbuf_dma_vld_i   <= 1'b1;
+              cnn_ifbuf_dma_data_i  <= if_ext_mem[req_base + idx];
+              cnn_ifbuf_dma_tlast_i <= (idx == req_words - 1);
 
               if (idx == req_words - 1) begin
                 busy = 1'b0;
-                ifbuf_dma_rdycfg_i <= 1'b1;
+                cnn_ifbuf_dma_rdycfg_i <= 1'b1;
               end
               idx = idx + 1;
             end
@@ -1095,10 +1200,10 @@ module CNN_accel_tb;
       req_words = 0;
       idx = 0;
       busy = 1'b0;
-      fltbuf_dma_rdycfg_i <= 1'b0;
-      fltbuf_dma_vld_i    <= 1'b0;
-      fltbuf_dma_data_i   <= '0;
-      fltbuf_dma_tlast_i  <= 1'b0;
+      cnn_fltbuf_dma_rdycfg_i <= 1'b0;
+      cnn_fltbuf_dma_vld_i    <= 1'b0;
+      cnn_fltbuf_dma_data_i   <= '0;
+      cnn_fltbuf_dma_tlast_i  <= 1'b0;
 
       forever begin
         @(posedge clk);
@@ -1108,33 +1213,33 @@ module CNN_accel_tb;
           req_base           = 0;
           req_words          = 0;
           idx                = 0;
-          fltbuf_dma_rdycfg_i <= 1'b1;
-          fltbuf_dma_vld_i    <= 1'b0;
-          fltbuf_dma_data_i   <= '0;
-          fltbuf_dma_tlast_i  <= 1'b0;
+          cnn_fltbuf_dma_rdycfg_i <= 1'b1;
+          cnn_fltbuf_dma_vld_i    <= 1'b0;
+          cnn_fltbuf_dma_data_i   <= '0;
+          cnn_fltbuf_dma_tlast_i  <= 1'b0;
         end else begin
-          fltbuf_dma_rdycfg_i <= !busy;
-          fltbuf_dma_vld_i    <= 1'b0;
-          fltbuf_dma_data_i   <= '0;
-          fltbuf_dma_tlast_i  <= '0;
+          cnn_fltbuf_dma_rdycfg_i <= !busy;
+          cnn_fltbuf_dma_vld_i    <= 1'b0;
+          cnn_fltbuf_dma_data_i   <= '0;
+          cnn_fltbuf_dma_tlast_i  <= '0;
 
           if (!busy) begin
-            if (fltbuf_dma_vldcfg_o && fltbuf_dma_rdycfg_i) begin
-              req_base  = fltbuf_dma_baddr_o;
-              req_words = fltbuf_dma_burst_o;
+            if (cnn_fltbuf_dma_vldcfg_o && cnn_fltbuf_dma_rdycfg_i) begin
+              req_base  = cnn_fltbuf_dma_baddr_o;
+              req_words = cnn_fltbuf_dma_burst_o;
               idx       = 0;
               busy      = 1'b1;
-              fltbuf_dma_rdycfg_i <= 0;
+              cnn_fltbuf_dma_rdycfg_i <= 0;
             end
           end else begin
-            if (fltbuf_dma_rdy_o) begin
-              fltbuf_dma_vld_i   <= 1'b1;
-              fltbuf_dma_data_i  <= flt_ext_mem[req_base + idx];
-              fltbuf_dma_tlast_i <= (idx == req_words - 1);
+            if (cnn_fltbuf_dma_rdy_o) begin
+              cnn_fltbuf_dma_vld_i   <= 1'b1;
+              cnn_fltbuf_dma_data_i  <= flt_ext_mem[req_base + idx];
+              cnn_fltbuf_dma_tlast_i <= (idx == req_words - 1);
 
               if (idx == req_words - 1) begin
                 busy = 1'b0;
-                fltbuf_dma_rdycfg_i <= 1;
+                cnn_fltbuf_dma_rdycfg_i <= 1;
               end
               idx = idx + 1;
             end
@@ -1145,7 +1250,7 @@ module CNN_accel_tb;
   endtask
 
   // Generic DMA responder cho BIAS BUF.
-  task automatic bias_dma_agent();
+  task automatic cnn_bias_dma_agent();
     int req_base;
     int req_words;
     int idx;
@@ -1155,10 +1260,10 @@ module CNN_accel_tb;
       req_words = 0;
       idx = 0;
       busy = 1'b0;
-      bias_dma_rdycfg_i <= 1'b0;
-      bias_dma_vld_i    <= 1'b0;
-      bias_dma_data_i   <= '0;
-      bias_dma_tlast_i  <= 1'b0;
+      cnn_bias_dma_rdycfg_i <= 1'b0;
+      cnn_bias_dma_vld_i    <= 1'b0;
+      cnn_bias_dma_data_i   <= '0;
+      cnn_bias_dma_tlast_i  <= 1'b0;
 
       forever begin
         @(posedge clk);
@@ -1168,33 +1273,33 @@ module CNN_accel_tb;
           req_base            = 0;
           req_words           = 0;
           idx                 = 0;
-          bias_dma_rdycfg_i   <= 1'b1;
-          bias_dma_vld_i      <= 1'b0;
-          bias_dma_data_i     <= '0;
-          bias_dma_tlast_i    <= 1'b0;
+          cnn_bias_dma_rdycfg_i   <= 1'b1;
+          cnn_bias_dma_vld_i      <= 1'b0;
+          cnn_bias_dma_data_i     <= '0;
+          cnn_bias_dma_tlast_i    <= 1'b0;
         end else begin
-          bias_dma_rdycfg_i <= !busy;
-          bias_dma_vld_i    <= 1'b0;
-          bias_dma_data_i   <= '0;
-          bias_dma_tlast_i  <= 1'b0;
+          cnn_bias_dma_rdycfg_i <= !busy;
+          cnn_bias_dma_vld_i    <= 1'b0;
+          cnn_bias_dma_data_i   <= '0;
+          cnn_bias_dma_tlast_i  <= 1'b0;
 
           if (!busy) begin
-            if (bias_dma_vldcfg_o && bias_dma_rdycfg_i) begin
-              req_base  = bias_dma_baddr_o;
-              req_words = bias_dma_burst_o;
+            if (cnn_bias_dma_vldcfg_o && cnn_bias_dma_rdycfg_i) begin
+              req_base  = cnn_bias_dma_baddr_o;
+              req_words = cnn_bias_dma_burst_o;
               idx       = 0;
               busy      = 1'b1;
-              bias_dma_rdycfg_i <= 1'b0;
+              cnn_bias_dma_rdycfg_i <= 1'b0;
             end
           end else begin
-            if (bias_dma_rdy_o && (idx < req_words)) begin
-              bias_dma_vld_i   <= 1'b1;
-              bias_dma_data_i  <= bias_ext_mem[req_base + idx];
-              bias_dma_tlast_i <= (idx == req_words - 1);
+            if (cnn_bias_dma_rdy_o && (idx < req_words)) begin
+              cnn_bias_dma_vld_i   <= 1'b1;
+              cnn_bias_dma_data_i  <= bias_ext_mem[req_base + idx];
+              cnn_bias_dma_tlast_i <= (idx == req_words - 1);
 
               if (idx == req_words - 1) begin
                 busy = 1'b0;
-                bias_dma_rdycfg_i <= 1'b1;
+                cnn_bias_dma_rdycfg_i <= 1'b1;
               end
               idx = idx + 1;
             end
@@ -1237,8 +1342,8 @@ module CNN_accel_tb;
       fifo_wr_ptr = 0;
       fifo_rd_ptr = 0;
       fifo_count  = 0;
-      ofbuf_dma_rdycfg_i <= 1'b0;
-      ofbuf_dma_rdy_i    <= 1'b0;
+      cnn_ofbuf_dma_rdycfg_i <= 1'b0;
+      cnn_ofbuf_dma_rdy_i    <= 1'b0;
 
       forever begin
         @(posedge clk);
@@ -1251,32 +1356,32 @@ module CNN_accel_tb;
           fifo_wr_ptr         = 0;
           fifo_rd_ptr         = 0;
           fifo_count          = 0;
-          ofbuf_dma_rdycfg_i  <= 1'b1;
-          ofbuf_dma_rdy_i     <= 1'b1;
+          cnn_ofbuf_dma_rdycfg_i  <= 1'b1;
+          cnn_ofbuf_dma_rdy_i     <= 1'b1;
           act_pkt_count       = 0;
           act_out_count       = 0;
         end else begin
           // DATA channel: rdy_dma means the beat will be stored.  When the DMA
           // model is waiting for/accepting a config, incoming beats are buffered.
-          accepted_data = ofbuf_dma_vld_o && ofbuf_dma_rdy_i;
+          accepted_data = cnn_ofbuf_dma_vld_o && cnn_ofbuf_dma_rdy_i;
           if (accepted_data) begin
             if (fifo_count >= OF_DMA_FIFO_DEPTH) begin
               $fatal(1, "OFBUF DMA internal FIFO overflow");
             end
-            data_fifo[fifo_wr_ptr] = ofbuf_dma_data_o;
-            last_fifo[fifo_wr_ptr] = ofbuf_dma_tlast_o;
+            data_fifo[fifo_wr_ptr] = cnn_ofbuf_dma_data_o;
+            last_fifo[fifo_wr_ptr] = cnn_ofbuf_dma_tlast_o;
             fifo_wr_ptr = (fifo_wr_ptr + 1) % OF_DMA_FIFO_DEPTH;
             fifo_count  = fifo_count + 1;
           end
 
           // CONFIG channel: accept a new config only while no packet is active.
-          ofbuf_dma_rdycfg_i <= !busy;
-          if (!busy && ofbuf_dma_vldcfg_o && ofbuf_dma_rdycfg_i) begin
-            req_base  = ofbuf_dma_baddr_o;
-            req_words = ofbuf_dma_burst_o;
+          cnn_ofbuf_dma_rdycfg_i <= !busy;
+          if (!busy && cnn_ofbuf_dma_vldcfg_o && cnn_ofbuf_dma_rdycfg_i) begin
+            req_base  = cnn_ofbuf_dma_baddr_o;
+            req_words = cnn_ofbuf_dma_burst_o;
             idx       = 0;
             busy      = 1'b1;
-            ofbuf_dma_rdycfg_i <= 1'b0;
+            cnn_ofbuf_dma_rdycfg_i <= 1'b0;
           end
 
           // Once a config is active, drain exactly the beats that were accepted
@@ -1307,13 +1412,13 @@ module CNN_accel_tb;
 
           // Backpressure only when the FIFO cannot store the next beat.  Account
           // for a same-cycle pop so the source can continue when one slot opens.
-          ofbuf_dma_rdy_i <= (fifo_count < OF_DMA_FIFO_DEPTH);
+          cnn_ofbuf_dma_rdy_i <= (fifo_count < OF_DMA_FIFO_DEPTH);
         end
       end
     end
   endtask
 
-  task automatic wait_ofbuf_dma_done(input int wanted_row_count);
+  task automatic wait_cnn_ofbuf_dma_done(input int wanted_row_count);
     int watchdog;
     begin
       watchdog = 0;
@@ -1329,29 +1434,397 @@ module CNN_accel_tb;
     end
   endtask
 
-  task automatic issue_inftructions();
-    int hold_count;
+  task automatic clear_cnn_done_if_pending();
     int watchdog;
     begin
-      // layer_info samples table fields when its internal count_cycle == 3'b110.
-      // Keep the table fields stable while inf_table_vld_i is asserted.
-      @(negedge clk);
-      inf_table_vld_i = 1'b1;
-      for (hold_count = 0; hold_count < 7; hold_count++) begin
+      if (cnn_cpu_accel_done_o === 1'b1) begin
+        @(negedge clk);
+        cnn_cpu_receive_interupt_i = 1'b1;
+        @(negedge clk);
+        cnn_cpu_receive_interupt_i = 1'b0;
+
+        watchdog = 0;
+        while (cnn_cpu_accel_done_o !== 1'b0) begin
+          @(posedge clk);
+          #1;
+          watchdog++;
+          if (watchdog > 64) begin
+            $fatal(1, "CNN done clear timeout before writing layer_description");
+          end
+        end
+      end
+    end
+  endtask
+
+  task automatic validate_layer_cfg(input string tc_name, input int layer_idx);
+    begin
+      if (layer_stride[layer_idx] > 7)
+        $fatal(1, "%s[L%0d]: invalid stride=%0d exceeds 3-bit field", tc_name, layer_idx, layer_stride[layer_idx]);
+      if (layer_padding[layer_idx] > 3)
+        $fatal(1, "%s[L%0d]: invalid padding=%0d exceeds 2-bit field", tc_name, layer_idx, layer_padding[layer_idx]);
+      if ((layer_stride[layer_idx] > layer_kw[layer_idx]) || (layer_stride[layer_idx] > layer_kh[layer_idx]))
+        $fatal(1, "%s[L%0d]: invalid stride=%0d > filter=(%0d,%0d)", tc_name, layer_idx, layer_stride[layer_idx], layer_kw[layer_idx], layer_kh[layer_idx]);
+      if ((layer_padding[layer_idx] >= layer_kw[layer_idx]) || (layer_padding[layer_idx] >= layer_kh[layer_idx]))
+        $fatal(1, "%s[L%0d]: padding=%0d must be < filter=(%0d,%0d)", tc_name, layer_idx, layer_padding[layer_idx], layer_kw[layer_idx], layer_kh[layer_idx]);
+      if ((layer_w[layer_idx] + 2 * layer_padding[layer_idx] < layer_kw[layer_idx]) ||
+          (layer_h[layer_idx] + 2 * layer_padding[layer_idx] < layer_kh[layer_idx]))
+        $fatal(1, "%s[L%0d]: padded ifmap smaller than filter", tc_name, layer_idx);
+    end
+  endtask
+
+  task automatic clear_layer_configs();
+    int l;
+    begin
+      num_loaded_layers = 0;
+      for (l = 0; l < MAX_LAYERS_TB; l++) begin
+        layer_name[l]       = "";
+        layer_w[l]          = 0;
+        layer_h[l]          = 0;
+        layer_ci[l]         = 0;
+        layer_co[l]         = 0;
+        layer_kw[l]         = 0;
+        layer_kh[l]         = 0;
+        layer_stride[l]     = 0;
+        layer_padding[l]    = 0;
+        layer_ifparr[l]     = 0;
+        layer_ofparr[l]     = 0;
+        layer_oftile[l]     = 0;
+        layer_if_zp[l]      = 0;
+        layer_fl_zp[l]      = 0;
+        layer_if_base[l]    = 0;
+        layer_flt_base[l]   = 0;
+        layer_bias_base[l]  = 0;
+        layer_of_base[l]    = 0;
+        layer_if_words[l]   = 0;
+        layer_flt_words[l]  = 0;
+        layer_bias_words[l] = 0;
+        layer_of_words[l]   = 0;
+        layer_exp_rows[l]   = 0;
+        layer_exp_values[l] = 0;
+      end
+    end
+  endtask
+
+  task automatic add_layer_cfg(
+    input string layer_desc_name,
+    input int    w,
+    input int    h,
+    input int    ci,
+    input int    co,
+    input int    kw,
+    input int    kh,
+    input int    stride,
+    input int    padding,
+    input int    ifparr,
+    input int    ofparr,
+    input int    oftile,
+    input int    if_zp,
+    input int    fl_zp
+  );
+    int l;
+    begin
+      if (num_loaded_layers >= MAX_LAYERS_TB) begin
+        $fatal(1, "Too many layers for this TB. Increase MAX_LAYERS_TB=%0d", MAX_LAYERS_TB);
+      end
+
+      l = num_loaded_layers;
+      layer_name[l]    = layer_desc_name;
+      layer_w[l]       = w;
+      layer_h[l]       = h;
+      layer_ci[l]      = ci;
+      layer_co[l]      = co;
+      layer_kw[l]      = kw;
+      layer_kh[l]      = kh;
+      layer_stride[l]  = stride;
+      layer_padding[l] = padding;
+      layer_ifparr[l]  = ifparr;
+      layer_ofparr[l]  = ofparr;
+      layer_oftile[l]  = oftile;
+      layer_if_zp[l]   = if_zp;
+      layer_fl_zp[l]   = fl_zp;
+      num_loaded_layers++;
+    end
+  endtask
+
+  task automatic set_current_layer(input int layer_idx);
+    begin
+      current_if_base   = layer_if_base[layer_idx];
+      current_flt_base  = layer_flt_base[layer_idx];
+      current_bias_base = layer_bias_base[layer_idx];
+      current_of_base   = layer_of_base[layer_idx];
+      current_w         = layer_w[layer_idx];
+      current_h         = layer_h[layer_idx];
+      current_ci        = layer_ci[layer_idx];
+      current_co        = layer_co[layer_idx];
+      current_kw        = layer_kw[layer_idx];
+      current_kh        = layer_kh[layer_idx];
+      current_stride    = layer_stride[layer_idx];
+      current_padding   = layer_padding[layer_idx];
+      current_ifparr    = layer_ifparr[layer_idx];
+      current_ofparr    = layer_ofparr[layer_idx];
+      current_oftile    = layer_oftile[layer_idx];
+      current_ifc_zp    = layer_if_zp[layer_idx];
+      current_fltc_zp   = layer_fl_zp[layer_idx];
+      current_mult      = 3;
+      current_mult_shift = 2;
+      current_alphamult = 1;
+      current_alphamult_shift = 3;
+      current_zpy       = 0;
+      current_qmin      = -128;
+      current_qmax      = 127;
+      current_is_leaky_relu = layer_co[layer_idx] % 2;
+    end
+  endtask
+
+  task automatic prepare_loaded_layers(input string tc_name, output int total_exp_rows);
+    int l;
+    int next_if_base;
+    int next_flt_base;
+    int next_bias_base;
+    int next_of_base;
+    begin
+      if (num_loaded_layers <= 0) begin
+        $fatal(1, "%s: no layer description was added", tc_name);
+      end
+
+      next_if_base   = 0;
+      next_flt_base  = 0;
+      next_bias_base = 0;
+      next_of_base   = 0;
+      total_exp_rows = 0;
+
+      for (l = 0; l < num_loaded_layers; l++) begin
+        validate_layer_cfg(tc_name, l);
+
+        layer_if_base[l]    = align_base(next_if_base);
+        layer_flt_base[l]   = align_base(next_flt_base);
+        layer_bias_base[l]  = align_base(next_bias_base);
+        layer_of_base[l]    = align_base(next_of_base);
+
+        set_current_layer(l);
+
+        fill_ifmap_external_memory(current_if_base, current_w, current_h, current_ci);
+        layer_if_words[l] = current_if_words;
+        check_mem_range(tc_name, "IFBUF", current_if_base, layer_if_words[l]);
+
+        fill_filter_external_memory(current_flt_base, current_kw, current_kh, current_ci,
+                                    current_co, current_ifparr, current_ofparr);
+        layer_flt_words[l] = current_flt_words;
+        check_mem_range(tc_name, "FLTBUF", current_flt_base, layer_flt_words[l]);
+
+        fill_bias_external_memory(current_bias_base, current_co, current_ofparr, current_oftile);
+        layer_bias_words[l] = current_bias_words;
+        check_mem_range(tc_name, "BIAS", current_bias_base, layer_bias_words[l]);
+
+        layer_of_words[l] = calc_of_words(current_w, current_h, current_co, current_kw,
+                                          current_kh, current_stride, current_padding);
+        check_mem_range(tc_name, "OFBUF", current_of_base, layer_of_words[l]);
+
+        build_expected_output();
+        layer_exp_rows[l]   = exp_pkt_count;
+        layer_exp_values[l] = exp_out_count;
+        total_exp_rows += layer_exp_rows[l];
+
+        $display("%s[L%0d:%s]: IF base=%0d words=%0d, FLT base=%0d words=%0d, BIAS base=%0d words=%0d, OF base=%0d words=%0d, exp_rows=%0d exp_values=%0d",
+                 tc_name, l, layer_name[l],
+                 layer_if_base[l], layer_if_words[l],
+                 layer_flt_base[l], layer_flt_words[l],
+                 layer_bias_base[l], layer_bias_words[l],
+                 layer_of_base[l], layer_of_words[l],
+                 layer_exp_rows[l], layer_exp_values[l]);
+
+        next_if_base   = layer_if_base[l]   + layer_if_words[l]   + BASE_ALIGN;
+        next_flt_base  = layer_flt_base[l]  + layer_flt_words[l]  + BASE_ALIGN;
+        next_bias_base = layer_bias_base[l] + layer_bias_words[l] + BASE_ALIGN;
+        next_of_base   = layer_of_base[l]   + layer_of_words[l]   + BASE_ALIGN;
+      end
+    end
+  endtask
+
+  task automatic issue_loaded_layer_descriptions();
+    int l;
+    begin
+      for (l = 0; l < num_loaded_layers; l++) begin
+        set_current_layer(l);
+        program_table_instruction(layer_name[l], current_w, current_h, current_ci, current_co,
+                                  current_kw, current_kh, current_stride, current_padding,
+                                  current_ifparr, current_ofparr, current_oftile);
+        issue_layer_description();
+      end
+    end
+  endtask
+
+  task automatic compare_layer_outputs(input string tc_name, input int layer_idx);
+    int co_idx;
+    int oh;
+    int ow;
+    int ho;
+    int wo;
+    int align_wo;
+    int exp_idx;
+    int mem_addr;
+    logic [WIDTH-1:0] exp_data;
+    logic [WIDTH-1:0] act_data;
+    begin
+      set_current_layer(layer_idx);
+      build_expected_output();
+
+      ho = calc_of_h(current_h, current_kh, current_stride, current_padding);
+      wo = calc_of_w(current_w, current_kw, current_stride, current_padding);
+      align_wo = align_even(wo);
+
+      if (exp_out_count != layer_exp_values[layer_idx]) begin
+        $fatal(1, "%s[L%0d]: expected scalar count changed. exp_now=%0d exp_saved=%0d",
+               tc_name, layer_idx, exp_out_count, layer_exp_values[layer_idx]);
+      end
+
+      exp_idx = 0;
+      for (co_idx = 0; co_idx < current_co; co_idx++) begin
+        for (oh = 0; oh < ho; oh++) begin
+          for (ow = 0; ow < wo; ow++) begin
+            mem_addr = current_of_base + co_idx * (ho * align_wo) + oh * align_wo + ow;
+            exp_data = exp_out_mem[exp_idx][WIDTH-1:0];
+            act_data = of_ext_mem[mem_addr];
+
+            if (act_data !== exp_data) begin
+              $display("%s[L%0d:%s]: OFBUF mismatch ch=%0d row=%0d col=%0d addr=%0d act=0x%02x exp=0x%02x",
+                       tc_name, layer_idx, layer_name[layer_idx], co_idx, oh, ow, mem_addr, act_data, exp_data);
+              $fatal(1, "%s[L%0d] failed", tc_name, layer_idx);
+            end
+            exp_idx = exp_idx + 1;
+          end
+        end
+      end
+
+      $display("[PASS] %s[L%0d:%s] : %0d output values matched from OFBUF base=%0d row_stride=%0d",
+               tc_name, layer_idx, layer_name[layer_idx], exp_out_count, current_of_base, align_wo);
+    end
+  endtask
+
+  task automatic compare_loaded_layer_outputs(input string tc_name);
+    int l;
+    begin
+      for (l = 0; l < num_loaded_layers; l++) begin
+        compare_layer_outputs(tc_name, l);
+      end
+    end
+  endtask
+
+  task automatic run_loaded_layers(input string tc_name);
+    int total_exp_rows;
+    begin
+      $display("\n========== RUN %s : %0d layer(s) ==========", tc_name, num_loaded_layers);
+
+      clear_all_memories();
+      prepare_loaded_layers(tc_name, total_exp_rows);
+      $display("%s: total_exp_dma_rows=%0d", tc_name, total_exp_rows);
+
+      fork
+        if_dma_agent();
+        flt_dma_agent();
+        cnn_bias_dma_agent();
+        of_dma_agent();
+      join_none
+
+      issue_loaded_layer_descriptions();
+      pulse_cnn_start();
+      wait_cnn_done_and_ack();
+      wait_cnn_ofbuf_dma_done(total_exp_rows);
+      repeat (20) @(posedge clk);
+      compare_loaded_layer_outputs(tc_name);
+
+      disable fork;
+      repeat (10) @(posedge clk);
+    end
+  endtask
+
+  task automatic issue_layer_description();
+    int watchdog;
+    begin
+      // New control protocol:
+      // 1) Only write layer_description when CNN is idle.
+      clear_cnn_done_if_pending();
+      watchdog = 0;
+      while (cnn_cpu_accel_busy_o !== 1'b0) begin
         @(posedge clk);
         #1;
+        watchdog++;
+        if (watchdog > 500000) begin
+          $fatal(1, "CNN busy timeout before writing layer_description");
+        end
       end
+
+      @(negedge clk);
+      cnn_table_vld_i = 1'b1;
+
       watchdog = 0;
-      while (inf_table_rdy_o !== 1'b1) begin
+      while (cnn_table_rdy_o !== 1'b1) begin
+        @(posedge clk);
+        #1;
+        watchdog++;
+        if (watchdog > 500000) begin
+          $fatal(1, "TABLE instruction timeout: cnn_table_rdy_o did not assert");
+        end
+      end
+
+      @(negedge clk);
+      cnn_table_vld_i = 1'b0;
+    end
+  endtask
+
+  task automatic pulse_cnn_start();
+    begin
+      @(negedge clk);
+      cnn_cpu_accel_start_i = 1'b1;
+      @(negedge clk);
+      cnn_cpu_accel_start_i = 1'b0;
+    end
+  endtask
+
+  task automatic wait_cnn_done_and_ack();
+    int watchdog;
+    begin
+      // Ignore any stale level; after start, first observe busy, then wait done.
+      watchdog = 0;
+      while (cnn_cpu_accel_busy_o !== 1'b1) begin
         @(posedge clk);
         #1;
         watchdog++;
         if (watchdog > 64) begin
-          $fatal(1, "TABLE instruction timeout: inf_table_rdy_o did not assert");
+          $fatal(1, "CNN busy timeout after cnn_cpu_accel_start_i pulse");
         end
       end
+
+      watchdog = 0;
+      while (cnn_cpu_accel_done_o !== 1'b1) begin
+        #20000;
+        watchdog++;
+        if (watchdog > 500) begin
+          $fatal(1, "CNN done timeout: cnn_cpu_accel_done_o did not assert");
+        end
+      end
+
       @(negedge clk);
-      inf_table_vld_i = 1'b0;
+      cnn_cpu_receive_interupt_i = 1'b1;
+      @(negedge clk);
+      cnn_cpu_receive_interupt_i = 1'b0;
+    end
+  endtask
+
+  task automatic issue_inftructions();
+    begin
+      issue_layer_description();
+      // 2) After all layer descriptions for this run have been written, pulse start.
+      pulse_cnn_start();
+      // 3) Wait for done, then pulse receive_interupt.
+      wait_cnn_done_and_ack();
+    end
+  endtask
+
+  task automatic issue_inftructions_no_wait_done();
+    begin
+      issue_layer_description();
+      pulse_cnn_start();
     end
   endtask
 
@@ -1427,108 +1900,24 @@ module CNN_accel_tb;
     input int    if_zp,
     input int    fl_zp
   );
-    int align_w;
-    int iftiles;
-    int ifparr_tail;
-    int ofparr_tail;
-    int total_oftiles;
-    int oftiles_tail;
-    int wp;
-    int normal_burst;
-    int bias_block_real;
-    int bias_tail_real;
-    int bias_burst;
-    int bias_tail_burst;
-    int bias_h0_lanes;
-    int bias_lane0;
-    int bias_tail_full_tile;
-    int bias_tail_mod;
-    int bias_tail_lane0;
     begin
-      $display("\n========== RUN %s ==========", tc_name);
-
-      if (stride > 7)
-        $fatal(1, "%s: invalid testcase, stride=%0d exceeds 3-bit field", tc_name, stride);
-      if (padding > 3)
-        $fatal(1, "%s: invalid testcase, padding=%0d exceeds 2-bit field", tc_name, padding);
-      if ((stride > kw) || (stride > kh))
-        $fatal(1, "%s: invalid testcase, stride=%0d > filter=(%0d,%0d)", tc_name, stride, kw, kh);
-      if ((padding >= kw) || (padding >= kh))
-        $fatal(1, "%s: invalid testcase, padding=%0d must be < filter=(%0d,%0d)", tc_name, padding, kw, kh);
-      if ((w + 2 * padding < kw) || (h + 2 * padding < kh))
-        $fatal(1, "%s: invalid testcase, padded ifmap smaller than filter", tc_name);
-
-      clear_all_memories();
-
-      current_if_base   = 0;
-      current_flt_base  = 8192;
-      current_bias_base = 32768;
-      current_of_base   = 0;
-      current_w         = w;
-      current_h         = h;
-      current_ci        = ci;
-      current_co        = co;
-      current_kw        = kw;
-      current_kh        = kh;
-      current_stride    = stride;
-      current_padding   = padding;
-      current_ifparr    = ifparr;
-      current_ofparr    = ofparr;
-      current_oftile    = oftile;
-      current_ifc_zp    = if_zp;
-      current_fltc_zp   = fl_zp;
-      current_mult      = 3;
-      current_mult_shift = 2;
-      current_alphamult = 1;
-      current_alphamult_shift = 3;
-      current_zpy       = 0;
-      current_qmin      = -128;
-      current_qmax      = 127;
-      current_is_leaky_relu = co % 2;
-
-      fill_ifmap_external_memory(current_if_base, w, h, ci);
-      fill_filter_external_memory(current_flt_base, kw, kh, ci, co, ifparr, ofparr);
-      fill_bias_external_memory(current_bias_base, co, ofparr, oftile);
-      build_expected_output();
-      $display("%s: exp_dma_rows=%0d exp_out_count=%0d",
-         tc_name, exp_pkt_count, exp_out_count);
-      align_w      = align_even(w);
-      iftiles      = ceil_div(ci, ifparr);
-      ifparr_tail  = ((ci % ifparr) == 0) ? ifparr : (ci % ifparr);
-      ofparr_tail  = ((co % ofparr) == 0) ? ofparr : (co % ofparr);
-      total_oftiles = ceil_div(co, ofparr);
-      oftiles_tail = ((total_oftiles % oftile) == 0) ? oftile : (total_oftiles % oftile);
-      wp           = ((w + 2 * padding - kh) / stride) * stride + kh - 1;
-      normal_burst = kw * kh;
-      bias_block_real      = ofparr * oftile;
-      bias_tail_real       = ((co % bias_block_real) == 0) ? bias_block_real : (co % bias_block_real);
-      bias_burst           = ((co < bias_block_real)) ? bias_tail_real : bias_block_real;
-      bias_tail_burst      = bias_tail_real;
-      bias_h0_lanes        = ceil_div(ofparr, M);
-      
-      bias_tail_full_tile  = bias_tail_real / ofparr;
-      bias_tail_mod        = bias_tail_real % ofparr;
-      bias_tail_lane0      = bias_tail_full_tile * bias_h0_lanes + ceil_div(bias_tail_mod, M);
-      bias_lane0           = ((co < bias_block_real)) ? bias_tail_lane0 : bias_h0_lanes * oftile;
-
-      program_table_instruction(tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile);
-
-      fork
-        if_dma_agent();
-        flt_dma_agent();
-        bias_dma_agent();
-        of_dma_agent();
-      join_none
-
-      issue_inftructions();
-      wait_ofbuf_dma_done(exp_pkt_count);
-      repeat (20) @(posedge clk);
-      compare_outputs(tc_name);
-
-      disable fork;
-      repeat (10) @(posedge clk);
+      clear_layer_configs();
+      add_layer_cfg(tc_name, w, h, ci, co, kw, kh, stride, padding,
+                    ifparr, ofparr, oftile, if_zp, fl_zp);
+      run_loaded_layers(tc_name);
     end
   endtask
+
+  task automatic run_case_multi_smoke();
+    begin
+      clear_layer_configs();
+      add_layer_cfg("ML0_3x3_even",       10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);
+      add_layer_cfg("ML1_pointwise_tail", 11, 11, 3, 5, 1, 1, 1, 0, 2, 4, 2, 3, 1);
+      // add_layer_cfg("ML2_stride2",        8,  8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
+      run_loaded_layers("TC_MULTI_3_LAYERS_ONE_START");
+    end
+  endtask
+
 
 
 
@@ -1650,11 +2039,11 @@ module CNN_accel_tb;
       fork
         if_dma_agent();
         flt_dma_agent();
-        bias_dma_agent();
+        cnn_bias_dma_agent();
         of_dma_agent();
       join_none
 
-      issue_inftructions();
+      issue_inftructions_no_wait_done();
 
       if (abort_packets > 0) begin
         watchdog = 0;
@@ -1687,20 +2076,22 @@ module CNN_accel_tb;
 
       // Hold all TB-driven interfaces idle during the rest of reset.
       clear_table_interface();
-      ifbuf_dma_rdycfg_i = 1'b0;
-      fltbuf_dma_rdycfg_i = 1'b0;
-      bias_dma_rdycfg_i = 1'b0;
-      ifbuf_dma_vld_i = 1'b0;
-      fltbuf_dma_vld_i = 1'b0;
-      bias_dma_vld_i = 1'b0;
-      ifbuf_dma_data_i = '0;
-      fltbuf_dma_data_i = '0;
-      bias_dma_data_i = '0;
-      ifbuf_dma_tlast_i = 1'b0;
-      fltbuf_dma_tlast_i = 1'b0;
-      bias_dma_tlast_i = 1'b0;
-      ofbuf_dma_rdycfg_i = 1'b0;
-      ofbuf_dma_rdy_i    = 1'b0;
+      cnn_cpu_accel_start_i = 1'b0;
+      cnn_cpu_receive_interupt_i = 1'b0;
+      cnn_ifbuf_dma_rdycfg_i = 1'b0;
+      cnn_fltbuf_dma_rdycfg_i = 1'b0;
+      cnn_bias_dma_rdycfg_i = 1'b0;
+      cnn_ifbuf_dma_vld_i = 1'b0;
+      cnn_fltbuf_dma_vld_i = 1'b0;
+      cnn_bias_dma_vld_i = 1'b0;
+      cnn_ifbuf_dma_data_i = '0;
+      cnn_fltbuf_dma_data_i = '0;
+      cnn_bias_dma_data_i = '0;
+      cnn_ifbuf_dma_tlast_i = 1'b0;
+      cnn_fltbuf_dma_tlast_i = 1'b0;
+      cnn_bias_dma_tlast_i = 1'b0;
+      cnn_ofbuf_dma_rdycfg_i = 1'b0;
+      cnn_ofbuf_dma_rdy_i    = 1'b0;
 
       repeat (6) @(posedge clk);
       rst_n = 1'b1;
@@ -1744,72 +2135,77 @@ module CNN_accel_tb;
     .clk(clk),
     .rst_n(rst_n),
 
-    .inf_table_vld_i(inf_table_vld_i),
-    .inf_table_rdy_o(inf_table_rdy_o),
-    .inf_table_ifheight_i(inf_table_ifheight_i),
-    .inf_table_ifchannel_i(inf_table_ifchannel_i),
-    .inf_table_ofchannel_i(inf_table_ofchannel_i),
-    .inf_table_hf_i(inf_table_hf_i),
-    .inf_table_stride_i(inf_table_stride_i),
-    .inf_table_padding_i(inf_table_padding_i),
-    .inf_table_ifparr_i(inf_table_ifparr_i),
-    .inf_table_oftile_i(inf_table_oftile_i),
-    .inf_table_ofparr_i(inf_table_ofparr_i),
-    .inf_table_ifbaddr_i(inf_table_ifbaddr_i),
-    .inf_table_fltbaddr_i(inf_table_fltbaddr_i),
-    .inf_table_bias_baddr_i(inf_table_bias_baddr_i),
-    .inf_table_ofbaddr_i(inf_table_ofbaddr_i),
-    .inf_table_ifc_zp_i(inf_table_ifc_zp_i),
-    .inf_table_fltc_zp_i(inf_table_fltc_zp_i),
-    .inf_table_mult_i(inf_table_mult_i),
-    .inf_table_mult_shift_i(inf_table_mult_shift_i),
-    .inf_table_alphamult_i(inf_table_alphamult_i),
-    .inf_table_alphamult_shift_i(inf_table_alphamult_shift_i),
-    .inf_table_zpy_i(inf_table_zpy_i),
-    .inf_table_qmin_i(inf_table_qmin_i),
-    .inf_table_qmax_i(inf_table_qmax_i),
-    .inf_table_is_leaky_ReLU_i(inf_table_is_leaky_ReLU_i),
+    .cnn_cpu_accel_busy_o(cnn_cpu_accel_busy_o),
+    .cnn_cpu_accel_start_i(cnn_cpu_accel_start_i),
+    .cnn_cpu_accel_done_o(cnn_cpu_accel_done_o),
+    .cnn_cpu_receive_interupt_i(cnn_cpu_receive_interupt_i),
 
-    .ifbuf_dma_rdycfg_i(ifbuf_dma_rdycfg_i),
-    .ifbuf_dma_vld_i(ifbuf_dma_vld_i),
-    .ifbuf_dma_data_i(ifbuf_dma_data_i),
-    .ifbuf_dma_tlast_i(ifbuf_dma_tlast_i),
-    .ifbuf_dma_vldcfg_o(ifbuf_dma_vldcfg_o),
-    .ifbuf_dma_burst_o(ifbuf_dma_burst_o),
-    .ifbuf_dma_baddr_o(ifbuf_dma_baddr_o),
-    .ifbuf_dma_rdy_o(ifbuf_dma_rdy_o),
+    .cnn_table_vld_i(cnn_table_vld_i),
+    .cnn_table_rdy_o(cnn_table_rdy_o),
+    .cnn_table_ifheight_i(cnn_table_ifheight_i),
+    .cnn_table_ifchannel_i(cnn_table_ifchannel_i),
+    .cnn_table_ofchannel_i(cnn_table_ofchannel_i),
+    .cnn_table_hf_i(cnn_table_hf_i),
+    .cnn_table_stride_i(cnn_table_stride_i),
+    .cnn_table_padding_i(cnn_table_padding_i),
+    .cnn_table_ifparr_i(cnn_table_ifparr_i),
+    .cnn_table_oftile_i(cnn_table_oftile_i),
+    .cnn_table_ofparr_i(cnn_table_ofparr_i),
+    .cnn_table_ifbaddr_i(cnn_table_ifbaddr_i),
+    .cnn_table_fltbaddr_i(cnn_table_fltbaddr_i),
+    .cnn_table_bias_baddr_i(cnn_table_bias_baddr_i),
+    .cnn_table_ofbaddr_i(cnn_table_ofbaddr_i),
+    .cnn_table_ifc_zp_i(cnn_table_ifc_zp_i),
+    .cnn_table_fltc_zp_i(cnn_table_fltc_zp_i),
+    .cnn_table_mult_i(cnn_table_mult_i),
+    .cnn_table_mult_shift_i(cnn_table_mult_shift_i),
+    .cnn_table_alphamult_i(cnn_table_alphamult_i),
+    .cnn_table_alphamult_shift_i(cnn_table_alphamult_shift_i),
+    .cnn_table_zpy_i(cnn_table_zpy_i),
+    .cnn_table_qmin_i(cnn_table_qmin_i),
+    .cnn_table_qmax_i(cnn_table_qmax_i),
+    .cnn_table_is_leaky_ReLU_i(cnn_table_is_leaky_ReLU_i),
 
-    .fltbuf_dma_rdycfg_i(fltbuf_dma_rdycfg_i),
-    .fltbuf_dma_vld_i(fltbuf_dma_vld_i),
-    .fltbuf_dma_data_i(fltbuf_dma_data_i),
-    .fltbuf_dma_tlast_i(fltbuf_dma_tlast_i),
-    .fltbuf_dma_vldcfg_o(fltbuf_dma_vldcfg_o),
-    .fltbuf_dma_burst_o(fltbuf_dma_burst_o),
-    .fltbuf_dma_baddr_o(fltbuf_dma_baddr_o),
-    .fltbuf_dma_rdy_o(fltbuf_dma_rdy_o),
+    .cnn_ifbuf_dma_rdycfg_i(cnn_ifbuf_dma_rdycfg_i),
+    .cnn_ifbuf_dma_vld_i(cnn_ifbuf_dma_vld_i),
+    .cnn_ifbuf_dma_data_i(cnn_ifbuf_dma_data_i),
+    .cnn_ifbuf_dma_tlast_i(cnn_ifbuf_dma_tlast_i),
+    .cnn_ifbuf_dma_vldcfg_o(cnn_ifbuf_dma_vldcfg_o),
+    .cnn_ifbuf_dma_burst_o(cnn_ifbuf_dma_burst_o),
+    .cnn_ifbuf_dma_baddr_o(cnn_ifbuf_dma_baddr_o),
+    .cnn_ifbuf_dma_rdy_o(cnn_ifbuf_dma_rdy_o),
 
-    .bias_dma_rdycfg_i(bias_dma_rdycfg_i),
-    .bias_dma_vldcfg_o(bias_dma_vldcfg_o),
-    .bias_dma_burst_o(bias_dma_burst_o),
-    .bias_dma_baddr_o(bias_dma_baddr_o),
-    .bias_dma_vld_i(bias_dma_vld_i),
-    .bias_dma_data_i(bias_dma_data_i),
-    .bias_dma_tlast_i(bias_dma_tlast_i),
-    .bias_dma_rdy_o(bias_dma_rdy_o),
+    .cnn_fltbuf_dma_rdycfg_i(cnn_fltbuf_dma_rdycfg_i),
+    .cnn_fltbuf_dma_vld_i(cnn_fltbuf_dma_vld_i),
+    .cnn_fltbuf_dma_data_i(cnn_fltbuf_dma_data_i),
+    .cnn_fltbuf_dma_tlast_i(cnn_fltbuf_dma_tlast_i),
+    .cnn_fltbuf_dma_vldcfg_o(cnn_fltbuf_dma_vldcfg_o),
+    .cnn_fltbuf_dma_burst_o(cnn_fltbuf_dma_burst_o),
+    .cnn_fltbuf_dma_baddr_o(cnn_fltbuf_dma_baddr_o),
+    .cnn_fltbuf_dma_rdy_o(cnn_fltbuf_dma_rdy_o),
 
-    .ofbuf_dma_rdycfg_i(ofbuf_dma_rdycfg_i),
-    .ofbuf_dma_vldcfg_o(ofbuf_dma_vldcfg_o),
-    .ofbuf_dma_burst_o(ofbuf_dma_burst_o),
-    .ofbuf_dma_baddr_o(ofbuf_dma_baddr_o),
-    .ofbuf_dma_vld_o(ofbuf_dma_vld_o),
-    .ofbuf_dma_data_o(ofbuf_dma_data_o),
-    .ofbuf_dma_tlast_o(ofbuf_dma_tlast_o),
-    .ofbuf_dma_rdy_i(ofbuf_dma_rdy_i),
+    .cnn_bias_dma_rdycfg_i(cnn_bias_dma_rdycfg_i),
+    .cnn_bias_dma_vldcfg_o(cnn_bias_dma_vldcfg_o),
+    .cnn_bias_dma_burst_o(cnn_bias_dma_burst_o),
+    .cnn_bias_dma_baddr_o(cnn_bias_dma_baddr_o),
+    .cnn_bias_dma_vld_i(cnn_bias_dma_vld_i),
+    .cnn_bias_dma_data_i(cnn_bias_dma_data_i),
+    .cnn_bias_dma_tlast_i(cnn_bias_dma_tlast_i),
+    .cnn_bias_dma_rdy_o(cnn_bias_dma_rdy_o),
 
-    .comp_pa_done_compute_o(comp_pa_done_compute_o),
-    .ifbuf_comp_end_layer_o(ifbuf_comp_end_layer_o),
-    .ifbuf_comp_end_layer_real_o(ifbuf_comp_end_layer_real_o),
-    .fltbuf_comp_donepass_o(fltbuf_comp_donepass_o)
+    .cnn_ofbuf_dma_rdycfg_i(cnn_ofbuf_dma_rdycfg_i),
+    .cnn_ofbuf_dma_vldcfg_o(cnn_ofbuf_dma_vldcfg_o),
+    .cnn_ofbuf_dma_burst_o(cnn_ofbuf_dma_burst_o),
+    .cnn_ofbuf_dma_baddr_o(cnn_ofbuf_dma_baddr_o),
+    .cnn_ofbuf_dma_vld_o(cnn_ofbuf_dma_vld_o),
+    .cnn_ofbuf_dma_data_o(cnn_ofbuf_dma_data_o),
+    .cnn_ofbuf_dma_tlast_o(cnn_ofbuf_dma_tlast_o),
+    .cnn_ofbuf_dma_rdy_i(cnn_ofbuf_dma_rdy_i),
+
+    .cnn_comp_pa_done_compute_o(cnn_comp_pa_done_compute_o),
+    .cnn_ifbuf_comp_end_layer_o(cnn_ifbuf_comp_end_layer_o),
+    .cnn_ifbuf_comp_end_layer_real_o(cnn_ifbuf_comp_end_layer_real_o),
+    .cnn_fltbuf_comp_donepass_o(cnn_fltbuf_comp_donepass_o)
   );
 
   // =========================================================
@@ -1823,41 +2219,47 @@ module CNN_accel_tb;
 
     clear_table_interface();
 
-    ifbuf_dma_rdycfg_i = 1'b0;
-    fltbuf_dma_rdycfg_i = 1'b0;
-    bias_dma_rdycfg_i = 1'b0;
-    ofbuf_dma_rdycfg_i = 1'b0;
-    ofbuf_dma_rdy_i = 1'b0;
-    ifbuf_dma_vld_i = 1'b0;
-    fltbuf_dma_vld_i = 1'b0;
-    bias_dma_vld_i = 1'b0;
-    ifbuf_dma_data_i = '0;
-    fltbuf_dma_data_i = '0;
-    bias_dma_data_i = '0;
-    ifbuf_dma_tlast_i = 1'b0;
-    fltbuf_dma_tlast_i = 1'b0;
-    bias_dma_tlast_i = 1'b0;
+    cnn_cpu_accel_start_i = 1'b0;
+    cnn_cpu_receive_interupt_i = 1'b0;
+
+    cnn_ifbuf_dma_rdycfg_i = 1'b0;
+    cnn_fltbuf_dma_rdycfg_i = 1'b0;
+    cnn_bias_dma_rdycfg_i = 1'b0;
+    cnn_ofbuf_dma_rdycfg_i = 1'b0;
+    cnn_ofbuf_dma_rdy_i = 1'b0;
+    cnn_ifbuf_dma_vld_i = 1'b0;
+    cnn_fltbuf_dma_vld_i = 1'b0;
+    cnn_bias_dma_vld_i = 1'b0;
+    cnn_ifbuf_dma_data_i = '0;
+    cnn_fltbuf_dma_data_i = '0;
+    cnn_bias_dma_data_i = '0;
+    cnn_ifbuf_dma_tlast_i = 1'b0;
+    cnn_fltbuf_dma_tlast_i = 1'b0;
+    cnn_bias_dma_tlast_i = 1'b0;
 
     clear_all_memories();
     apply_reset();
     //tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,zp,zp
     // Direct table interface: keep original testcase values; no LUT retargeting.
     
+    // Multi-layer smoke: ghi nhiều layer_description riêng biệt, sau đó mới pulse start.
+    // run_case_multi_smoke();
+
     // 1) Ifmap kích thước chẵn, burst filter chẵn
-    // //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
-    // run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
+    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
+    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
 
-    // // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
-    // // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2
-    // // run_case("TC1_odd_ifmap_align_and_padding", 5, 5, 8, 4, 3, 3, 1, 1, 1, 2, 2, 3, 1);
+    // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
+    // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2
+    run_case("TC1_odd_ifmap_align_and_padding", 5, 5, 8, 4, 3, 3, 1, 1, 1, 2, 2, 3, 1);
 
-    // // 3) 1 burst filter le -> phai co them 1 word pad
-    // // ifmap 7x7, Ci=3, Co=10, kernel 3x3, ifparr=3, ofparr=1, oftile=3, padding = 1, stride = 1
-    // run_case("TC2_odd_filter_burst_need_pad", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5);
+    // 3) 1 burst filter le -> phai co them 1 word pad
+    // ifmap 7x7, Ci=3, Co=10, kernel 3x3, ifparr=3, ofparr=1, oftile=3, padding = 1, stride = 1
+    run_case("TC2_odd_filter_burst_need_pad", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5);
 
     // 4) So filter song song = 1 tile, stride = 2, padding = 2
     // ifmap 8x8, Ci=11, Co=3, kernel 3x3, ifparr=1, ofparr=3, oftile=1, padding=2, stride=2
-    // run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
+    run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
 
     // 5) 1x1 pointwise, 2 block output-channel, test ofparr_tail
     // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=4, oftile=1
@@ -1918,4 +2320,3 @@ module CNN_accel_tb;
     // #9000 $finish;
   end
 endmodule
-

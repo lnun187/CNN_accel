@@ -20,7 +20,7 @@ module fifo_bram #(
     wire                empty;
     wire [WIDTH-1:0]    data_mem;
     assign vld_o = !empty;
-       fifo 
+       fifo_n
        #(
        .DATA_WIDTH(WIDTH),
        .FF_TYPE(2),

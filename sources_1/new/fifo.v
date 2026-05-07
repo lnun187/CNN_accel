@@ -1,4 +1,4 @@
-module fifo
+module fifo_n
 #(
     parameter  DATA_WIDTH    = 8,
     parameter  FIFO_DEPTH    = 32,

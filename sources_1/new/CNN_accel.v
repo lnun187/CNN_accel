@@ -23,18 +23,18 @@
 module CNN_accel#(
     parameter DATA_WIDTH    = 8,
     parameter ACC_WIDTH     = 32,
-    parameter IFBUF_DEPTH   = 300,
-    parameter FLTBUF_DEPTH  = 2304,
+    parameter IFBUF_DEPTH   = 224,
+    parameter FLTBUF_DEPTH  = 3456,
     parameter COMP_DEPTH    = 12,
     parameter FIFO_DEPTH    = 12,
     parameter OFBUF_DEPTH   = 896,
-    parameter K             = 8,
+    parameter K             = 4,
     parameter M             = 2,
     parameter PE_PER_PU     = 12,
-    parameter PPDEPTH       = 640,
+    parameter PPDEPTH       = 224,
     parameter BURSTL_IFMAP = 8,
     parameter BURSTL_FILTER = 10,
-    parameter BURSTL_BIAS = 5,
+    parameter BURSTL_BIAS = 7,
     parameter BURSTL_OFMAP = 8
 )(
     input               clk,
@@ -43,92 +43,125 @@ module CNN_accel#(
     // =========================================================
     // TABLE instruction interface
     // =========================================================
-    input                               inf_table_vld_i,
-    output                              inf_table_rdy_o,
-    input           [7:0]               inf_table_ifheight_i,
-    input           [10:0]              inf_table_ifchannel_i,
-    input           [10:0]              inf_table_ofchannel_i,
-    input           [3:0]               inf_table_hf_i,
-    input           [2:0]               inf_table_stride_i,
-    input           [1:0]               inf_table_padding_i,
-    input           [2:0]               inf_table_ifparr_i,
-    input           [1:0]               inf_table_oftile_i,
-    input           [4:0]               inf_table_ofparr_i,
-    input           [23:0]              inf_table_ifbaddr_i,
-    input           [23:0]              inf_table_fltbaddr_i,
-    input           [23:0]              inf_table_bias_baddr_i,
-    input           [23:0]              inf_table_ofbaddr_i,
-    input  signed   [DATA_WIDTH-1:0]    inf_table_ifc_zp_i,
-    input  signed   [DATA_WIDTH-1:0]    inf_table_fltc_zp_i,
-    input  signed   [31:0]              inf_table_mult_i,
-    input           [5:0]               inf_table_mult_shift_i,
-    input  signed   [31:0]              inf_table_alphamult_i,
-    input           [5:0]               inf_table_alphamult_shift_i,
-    input  signed   [7:0]               inf_table_zpy_i,
-    input  signed   [7:0]               inf_table_qmin_i,
-    input  signed   [7:0]               inf_table_qmax_i,
-    input                               inf_table_is_leaky_ReLU_i,
+    input                               cnn_table_vld_i,
+    output                              cnn_table_rdy_o,
+    input           [7:0]               cnn_table_ifheight_i,
+    input           [10:0]              cnn_table_ifchannel_i,
+    input           [10:0]              cnn_table_ofchannel_i,
+    input           [3:0]               cnn_table_hf_i,
+    input           [2:0]               cnn_table_stride_i,
+    input           [1:0]               cnn_table_padding_i,
+    input           [2:0]               cnn_table_ifparr_i,
+    input           [1:0]               cnn_table_oftile_i,
+    input           [4:0]               cnn_table_ofparr_i,
+    input           [23:0]              cnn_table_ifbaddr_i,
+    input           [23:0]              cnn_table_fltbaddr_i,
+    input           [23:0]              cnn_table_bias_baddr_i,
+    input           [23:0]              cnn_table_ofbaddr_i,
+    input  signed   [DATA_WIDTH-1:0]    cnn_table_ifc_zp_i,
+    input  signed   [DATA_WIDTH-1:0]    cnn_table_fltc_zp_i,
+    input  signed   [31:0]              cnn_table_mult_i,
+    input           [5:0]               cnn_table_mult_shift_i,
+    input  signed   [31:0]              cnn_table_alphamult_i,
+    input           [5:0]               cnn_table_alphamult_shift_i,
+    input  signed   [7:0]               cnn_table_zpy_i,
+    input  signed   [7:0]               cnn_table_qmin_i,
+    input  signed   [7:0]               cnn_table_qmax_i,
+    input                               cnn_table_is_leaky_ReLU_i,
 
-    // output                              accel_busy,
-    // output                              accel_done, //interupt
-    // input                               cpu_receive_interupt,
-    // input                               accel_start,
+    // =========================================================
+    // cnn cpu interface
+    // =========================================================
+
+    output                              cnn_cpu_accel_busy_o, //status
+    input                               cnn_cpu_accel_start_i,
+    output                              cnn_cpu_accel_done_o, //interupt
+    input                               cnn_cpu_receive_interupt_i,
 
     // =========================================================
     // IFBUF DMA side
     // =========================================================
-    input                   ifbuf_dma_rdycfg_i, //dma rdy to receive config from ifbuf
-    input                   ifbuf_dma_vld_i, //dma has data to send ifbuf
-    input  [DATA_WIDTH-1:0] ifbuf_dma_data_i,
-    input                   ifbuf_dma_tlast_i,
-    output                  ifbuf_dma_vldcfg_o, //ifbuf has valid config
-    output [BURSTL_IFMAP-1:0]            ifbuf_dma_burst_o, //length of data, it will be align to even
-    output [23:0]           ifbuf_dma_baddr_o, //base address of data need to read
-    output                  ifbuf_dma_rdy_o,
+    input                   cnn_ifbuf_dma_rdycfg_i, //dma rdy to receive config from ifbuf
+    input                   cnn_ifbuf_dma_vld_i, //dma has data to send ifbuf
+    input  [DATA_WIDTH-1:0] cnn_ifbuf_dma_data_i,
+    input                   cnn_ifbuf_dma_tlast_i,
+    output                  cnn_ifbuf_dma_vldcfg_o, //ifbuf has valid config
+    output [BURSTL_IFMAP-1:0]            cnn_ifbuf_dma_burst_o, //length of data, it will be align to even
+    output [23:0]           cnn_ifbuf_dma_baddr_o, //base address of data need to read
+    output                  cnn_ifbuf_dma_rdy_o,
 
     // =========================================================
     // FLTBUF DMA side
     // =========================================================
-    input                   fltbuf_dma_rdycfg_i,
-    input                   fltbuf_dma_vld_i,
-    input  [DATA_WIDTH-1:0] fltbuf_dma_data_i,
-    input                   fltbuf_dma_tlast_i,
-    output                  fltbuf_dma_vldcfg_o,
-    output [BURSTL_FILTER-1:0]            fltbuf_dma_burst_o,
-    output [23:0]           fltbuf_dma_baddr_o,
-    output                  fltbuf_dma_rdy_o,
+    input                   cnn_fltbuf_dma_rdycfg_i,
+    input                   cnn_fltbuf_dma_vld_i,
+    input  [DATA_WIDTH-1:0] cnn_fltbuf_dma_data_i,
+    input                   cnn_fltbuf_dma_tlast_i,
+    output                  cnn_fltbuf_dma_vldcfg_o,
+    output [BURSTL_FILTER-1:0]            cnn_fltbuf_dma_burst_o,
+    output [23:0]           cnn_fltbuf_dma_baddr_o,
+    output                  cnn_fltbuf_dma_rdy_o,
 
     // =========================================================
     // BIAS BUF DMA side
     // =========================================================
-    input                           bias_dma_rdycfg_i,
-    output                          bias_dma_vldcfg_o,
-    output          [BURSTL_BIAS-1:0]           bias_dma_burst_o, 
-    output          [23:0]          bias_dma_baddr_o,
-    input                           bias_dma_vld_i,
-    input   signed  [31:0]          bias_dma_data_i,
-    input                           bias_dma_tlast_i,
-    output                          bias_dma_rdy_o,
+    input                           cnn_bias_dma_rdycfg_i,
+    output                          cnn_bias_dma_vldcfg_o,
+    output          [BURSTL_BIAS-1:0]           cnn_bias_dma_burst_o, 
+    output          [23:0]          cnn_bias_dma_baddr_o,
+    input                           cnn_bias_dma_vld_i,
+    input           [7:0]           cnn_bias_dma_data_i,
+    input                           cnn_bias_dma_tlast_i,
+    output                          cnn_bias_dma_rdy_o,
     // =========================================================
     // OFBUF DMA side
     // =========================================================
-    input                           ofbuf_dma_rdycfg_i,
-    output                          ofbuf_dma_vldcfg_o,
-    output [BURSTL_OFMAP-1:0]       ofbuf_dma_burst_o,
-    output [23:0]                   ofbuf_dma_baddr_o,
-    output                          ofbuf_dma_vld_o,
-    output [DATA_WIDTH-1:0]         ofbuf_dma_data_o,
-    output                          ofbuf_dma_tlast_o,
-    input                           ofbuf_dma_rdy_i,
+    input                           cnn_ofbuf_dma_rdycfg_i,
+    output                          cnn_ofbuf_dma_vldcfg_o,
+    output [BURSTL_OFMAP-1:0]       cnn_ofbuf_dma_burst_o,
+    output [23:0]                   cnn_ofbuf_dma_baddr_o,
+    output                          cnn_ofbuf_dma_vld_o,
+    output [DATA_WIDTH-1:0]         cnn_ofbuf_dma_data_o,
+    output                          cnn_ofbuf_dma_tlast_o,
+    input                           cnn_ofbuf_dma_rdy_i,
 
     // =========================================================
     // Optional debug / status
     // =========================================================
-    output                    comp_pa_done_compute_o,
-    output                    ifbuf_comp_end_layer_o,
-    output                    ifbuf_comp_end_layer_real_o, 
-    output                    fltbuf_comp_donepass_o
+    output                    cnn_comp_pa_done_compute_o,
+    output                    cnn_ifbuf_comp_end_layer_o,
+    output                    cnn_ifbuf_comp_end_layer_real_o, 
+    output                    cnn_fltbuf_comp_donepass_o
 );
+
+    // =========================================================
+    // Instruction table -> layer_info wires
+    // =========================================================
+    wire                            table_inf_vld_w;
+    wire                            table_inf_rdy_w;
+    wire [7:0]                      table_inf_ifheight_w;
+    wire [10:0]                     table_inf_ifchannel_w;
+    wire [10:0]                     table_inf_ofchannel_w;
+    wire [3:0]                      table_inf_hf_w;
+    wire [2:0]                      table_inf_stride_w;
+    wire [1:0]                      table_inf_padding_w;
+    wire [2:0]                      table_inf_ifparr_w;
+    wire [1:0]                      table_inf_oftile_w;
+    wire [4:0]                      table_inf_ofparr_w;
+    wire [23:0]                     table_inf_ifbaddr_w;
+    wire [23:0]                     table_inf_fltbaddr_w;
+    wire [23:0]                     table_inf_bias_baddr_w;
+    wire [23:0]                     table_inf_ofbaddr_w;
+    wire signed [DATA_WIDTH-1:0]    table_inf_ifc_zp_w;
+    wire signed [DATA_WIDTH-1:0]    table_inf_fltc_zp_w;
+    wire signed [31:0]              table_inf_mult_w;
+    wire [5:0]                      table_inf_mult_shift_w;
+    wire signed [31:0]              table_inf_alphamult_w;
+    wire [5:0]                      table_inf_alphamult_shift_w;
+    wire signed [7:0]               table_inf_zpy_w;
+    wire signed [7:0]               table_inf_qmin_w;
+    wire signed [7:0]               table_inf_qmax_w;
+    wire                            table_inf_is_leaky_ReLU_w;
 
     // =========================================================
     // Internal instruction wires driven by layer_info
@@ -196,7 +229,7 @@ module CNN_accel#(
     localparam FLTBUF_INF_PAYLOAD_WIDTH = 79 + DATA_WIDTH;
     localparam BIAS_INF_PAYLOAD_WIDTH   = 63;
     localparam COMP_INF_PAYLOAD_WIDTH   = 118 + (2*DATA_WIDTH);
-    localparam OFBUF_INF_PAYLOAD_WIDTH  = 115;
+    localparam OFBUF_INF_PAYLOAD_WIDTH  = 99;
 
     // Raw layer_info -> IFBUF instruction channel
     wire                            ifbuf_inf_vld_li_w;
@@ -270,7 +303,6 @@ module CNN_accel#(
     // Raw layer_info -> OFBUF instruction channel
     wire                            ofbuf_inf_vld_li_w;
     wire                            ofbuf_inf_rdy_li_w;
-    wire [23:0]                     ofbuf_inf_ofbaddr_li_w;
     wire [23:0]                     ofbuf_inf_ofbaddr_l0_li_w;
     wire [23:0]                     ofbuf_inf_ofbaddr_l1_li_w;
     wire [7:0]                      ofbuf_inf_ofwidth_li_w;
@@ -282,7 +314,6 @@ module CNN_accel#(
     wire [4:0]                      ofbuf_inf_ofc_bl_tail_l1_li_w;
     wire [OFBUF_INF_PAYLOAD_WIDTH-1:0] ofbuf_inf_payload_li_w;
     wire [OFBUF_INF_PAYLOAD_WIDTH-1:0] ofbuf_inf_payload_w;
-    wire [23:0]                     ofbuf_inf_ofbaddr_w;
     wire [23:0]                     ofbuf_inf_ofbaddr_l0_w;
     wire [23:0]                     ofbuf_inf_ofbaddr_l1_w;
     wire [7:0]                      ofbuf_inf_ofwidth_w;
@@ -306,8 +337,8 @@ module CNN_accel#(
     wire                    ifbuf_comp_end_layer_real_w;
     wire                    comp_ifbuf_rdy_w;
 
-    wire [K*DATA_WIDTH+5:0] ifbuf_comp_payload_w;
-    wire [K*DATA_WIDTH+5:0] ifbuf_comp_payload_buf_w;
+    wire [K*DATA_WIDTH+4:0] ifbuf_comp_payload_w;
+    wire [K*DATA_WIDTH+4:0] ifbuf_comp_payload_buf_w;
     wire                    ifbuf_comp_vld_buf_w;
     wire                    ifbuf_comp_rdy_buf_w;
     wire                    ifbuf_comp_end_row_buf_w;
@@ -346,11 +377,105 @@ module CNN_accel#(
 
     // Current filter_buf RTL only exposes one scalar ready input.
     // Best-effort integration: only pop weights when both PA branches are ready.
+    //===================================================================================
+    //===================================================================================
+    reg accel_busy;
+    reg accel_done;
+    wire accel_start;
+    assign cnn_cpu_accel_busy_o = accel_busy;
+    posedge_detection f(
+        .clk(clk),
+        .rst_n(rst_n),
+        .signal_i(cnn_cpu_accel_start_i),
+        .signal_o(accel_start)
+    );
+    assign cnn_cpu_accel_done_o = accel_done;
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            accel_busy <=  0;
+        end else begin
+            if(accel_start) accel_busy <=  1;
+            else if(accel_done) accel_busy <= 0;
+        end
+    end
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            accel_done <=  0;
+        end else begin
+            if(cnn_cpu_receive_interupt_i) accel_done <= 0;
+            else if(!(ofbuf_inf_vld_li_w || table_inf_vld_w) && ofbuf_inf_rdy_w && accel_busy) accel_done <=  1;
+        end
+    end
+    //===================================================================================
+    //===================================================================================
     assign fltbuf_comp_rdy_w = &comp_fltbuf_rdy_w;
 
-    assign ifbuf_comp_end_layer_o = ifbuf_comp_end_layer_w;
-    assign ifbuf_comp_end_layer_real_o = ifbuf_comp_end_layer_real_w;
-    assign fltbuf_comp_donepass_o = fltbuf_comp_donepass_w;
+    assign cnn_ifbuf_comp_end_layer_o = ifbuf_comp_end_layer_w;
+    assign cnn_ifbuf_comp_end_layer_real_o = ifbuf_comp_end_layer_real_w;
+    assign cnn_fltbuf_comp_donepass_o = fltbuf_comp_donepass_w;
+
+    // =========================================================
+    // INSTRUCTION TABLE: CNN_accel -> instruction_table -> layer_info
+    // =========================================================
+    instruction_table #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .FIFO_DEPTH(12)
+    ) u_instruction_table (
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .table_cnn_vld_i(cnn_table_vld_i),
+        .table_cnn_rdy_o(cnn_table_rdy_o),
+        .table_cnn_ifheight_i(cnn_table_ifheight_i),
+        .table_cnn_ifchannel_i(cnn_table_ifchannel_i),
+        .table_cnn_ofchannel_i(cnn_table_ofchannel_i),
+        .table_cnn_hf_i(cnn_table_hf_i),
+        .table_cnn_stride_i(cnn_table_stride_i),
+        .table_cnn_padding_i(cnn_table_padding_i),
+        .table_cnn_ifparr_i(cnn_table_ifparr_i),
+        .table_cnn_oftile_i(cnn_table_oftile_i),
+        .table_cnn_ofparr_i(cnn_table_ofparr_i),
+        .table_cnn_ifbaddr_i(cnn_table_ifbaddr_i),
+        .table_cnn_fltbaddr_i(cnn_table_fltbaddr_i),
+        .table_cnn_bias_baddr_i(cnn_table_bias_baddr_i),
+        .table_cnn_ofbaddr_i(cnn_table_ofbaddr_i),
+        .table_cnn_ifc_zp_i(cnn_table_ifc_zp_i),
+        .table_cnn_fltc_zp_i(cnn_table_fltc_zp_i),
+        .table_cnn_mult_i(cnn_table_mult_i),
+        .table_cnn_mult_shift_i(cnn_table_mult_shift_i),
+        .table_cnn_alphamult_i(cnn_table_alphamult_i),
+        .table_cnn_alphamult_shift_i(cnn_table_alphamult_shift_i),
+        .table_cnn_zpy_i(cnn_table_zpy_i),
+        .table_cnn_qmin_i(cnn_table_qmin_i),
+        .table_cnn_qmax_i(cnn_table_qmax_i),
+        .table_cnn_is_leaky_ReLU_i(cnn_table_is_leaky_ReLU_i),
+
+        .table_inf_vld_o(table_inf_vld_w),
+        .table_inf_rdy_i(table_inf_rdy_w),
+        .table_inf_ifheight_o(table_inf_ifheight_w),
+        .table_inf_ifchannel_o(table_inf_ifchannel_w),
+        .table_inf_ofchannel_o(table_inf_ofchannel_w),
+        .table_inf_hf_o(table_inf_hf_w),
+        .table_inf_stride_o(table_inf_stride_w),
+        .table_inf_padding_o(table_inf_padding_w),
+        .table_inf_ifparr_o(table_inf_ifparr_w),
+        .table_inf_oftile_o(table_inf_oftile_w),
+        .table_inf_ofparr_o(table_inf_ofparr_w),
+        .table_inf_ifbaddr_o(table_inf_ifbaddr_w),
+        .table_inf_fltbaddr_o(table_inf_fltbaddr_w),
+        .table_inf_bias_baddr_o(table_inf_bias_baddr_w),
+        .table_inf_ofbaddr_o(table_inf_ofbaddr_w),
+        .table_inf_ifc_zp_o(table_inf_ifc_zp_w),
+        .table_inf_fltc_zp_o(table_inf_fltc_zp_w),
+        .table_inf_mult_o(table_inf_mult_w),
+        .table_inf_mult_shift_o(table_inf_mult_shift_w),
+        .table_inf_alphamult_o(table_inf_alphamult_w),
+        .table_inf_alphamult_shift_o(table_inf_alphamult_shift_w),
+        .table_inf_zpy_o(table_inf_zpy_w),
+        .table_inf_qmin_o(table_inf_qmin_w),
+        .table_inf_qmax_o(table_inf_qmax_w),
+        .table_inf_is_leaky_ReLU_o(table_inf_is_leaky_ReLU_w)
+    );
 
     // =========================================================
     // LAYER INFO
@@ -361,31 +486,31 @@ module CNN_accel#(
         .clk(clk),
         .rst_n(rst_n),
 
-        .inf_table_vld_i(inf_table_vld_i),
-        .inf_table_rdy_o(inf_table_rdy_o),
-        .inf_table_ifheight_i(inf_table_ifheight_i),
-        .inf_table_ifchannel_i(inf_table_ifchannel_i),
-        .inf_table_ofchannel_i(inf_table_ofchannel_i),
-        .inf_table_hf_i(inf_table_hf_i),
-        .inf_table_stride_i(inf_table_stride_i),
-        .inf_table_padding_i(inf_table_padding_i),
-        .inf_table_ifparr_i(inf_table_ifparr_i),
-        .inf_table_oftile_i(inf_table_oftile_i),
-        .inf_table_ofparr_i(inf_table_ofparr_i),
-        .inf_table_ifbaddr_i(inf_table_ifbaddr_i),
-        .inf_table_fltbaddr_i(inf_table_fltbaddr_i),
-        .inf_table_bias_baddr_i(inf_table_bias_baddr_i),
-        .inf_table_ofbaddr_i(inf_table_ofbaddr_i),
-        .inf_table_ifc_zp_i(inf_table_ifc_zp_i),
-        .inf_table_fltc_zp_i(inf_table_fltc_zp_i),
-        .inf_table_mult_i(inf_table_mult_i),
-        .inf_table_mult_shift_i(inf_table_mult_shift_i),
-        .inf_table_alphamult_i(inf_table_alphamult_i),
-        .inf_table_alphamult_shift_i(inf_table_alphamult_shift_i),
-        .inf_table_zpy_i(inf_table_zpy_i),
-        .inf_table_qmin_i(inf_table_qmin_i),
-        .inf_table_qmax_i(inf_table_qmax_i),
-        .inf_table_is_leaky_ReLU_i(inf_table_is_leaky_ReLU_i),
+        .inf_table_vld_i(table_inf_vld_w),
+        .inf_table_rdy_o(table_inf_rdy_w),
+        .inf_table_ifheight_i(table_inf_ifheight_w),
+        .inf_table_ifchannel_i(table_inf_ifchannel_w),
+        .inf_table_ofchannel_i(table_inf_ofchannel_w),
+        .inf_table_hf_i(table_inf_hf_w),
+        .inf_table_stride_i(table_inf_stride_w),
+        .inf_table_padding_i(table_inf_padding_w),
+        .inf_table_ifparr_i(table_inf_ifparr_w),
+        .inf_table_oftile_i(table_inf_oftile_w),
+        .inf_table_ofparr_i(table_inf_ofparr_w),
+        .inf_table_ifbaddr_i(table_inf_ifbaddr_w),
+        .inf_table_fltbaddr_i(table_inf_fltbaddr_w),
+        .inf_table_bias_baddr_i(table_inf_bias_baddr_w),
+        .inf_table_ofbaddr_i(table_inf_ofbaddr_w),
+        .inf_table_ifc_zp_i(table_inf_ifc_zp_w),
+        .inf_table_fltc_zp_i(table_inf_fltc_zp_w),
+        .inf_table_mult_i(table_inf_mult_w),
+        .inf_table_mult_shift_i(table_inf_mult_shift_w),
+        .inf_table_alphamult_i(table_inf_alphamult_w),
+        .inf_table_alphamult_shift_i(table_inf_alphamult_shift_w),
+        .inf_table_zpy_i(table_inf_zpy_w),
+        .inf_table_qmin_i(table_inf_qmin_w),
+        .inf_table_qmax_i(table_inf_qmax_w),
+        .inf_table_is_leaky_ReLU_i(table_inf_is_leaky_ReLU_w),
 
         .inf_ifbuf_rdy_i(ifbuf_inf_rdy_li_w),
         .inf_ifbuf_vld_o(ifbuf_inf_vld_li_w),
@@ -444,7 +569,6 @@ module CNN_accel#(
 
         .inf_ofbuf_rdy_i(ofbuf_inf_rdy_li_w),
         .inf_ofbuf_vld_o(ofbuf_inf_vld_li_w),
-        .inf_ofbuf_ofbaddr_o(ofbuf_inf_ofbaddr_li_w),
         .inf_ofbuf_ofbaddr_l0_o(ofbuf_inf_ofbaddr_l0_li_w),
         .inf_ofbuf_ofbaddr_l1_o(ofbuf_inf_ofbaddr_l1_li_w),
         .inf_ofbuf_ofwidth_o(ofbuf_inf_ofwidth_li_w),
@@ -638,7 +762,6 @@ module CNN_accel#(
     } = comp_inf_payload_w;
 
     assign ofbuf_inf_payload_li_w = {
-        ofbuf_inf_ofbaddr_li_w,
         ofbuf_inf_ofbaddr_l0_li_w,
         ofbuf_inf_ofbaddr_l1_li_w,
         ofbuf_inf_ofwidth_li_w,
@@ -667,7 +790,6 @@ module CNN_accel#(
     );
 
     assign {
-        ofbuf_inf_ofbaddr_w,
         ofbuf_inf_ofbaddr_l0_w,
         ofbuf_inf_ofbaddr_l1_w,
         ofbuf_inf_ofwidth_w,
@@ -705,14 +827,14 @@ module CNN_accel#(
         .ifbuf_inf_ifc_zp_i(ifbuf_inf_ifc_zp_i),
         .ifbuf_inf_rdy_o(ifbuf_inf_rdy_o),
 
-        .ifbuf_dma_rdycfg_i(ifbuf_dma_rdycfg_i),
-        .ifbuf_dma_vld_i(ifbuf_dma_vld_i),
-        .ifbuf_dma_data_i(ifbuf_dma_data_i),
-        .ifbuf_dma_tlast_i(ifbuf_dma_tlast_i),
-        .ifbuf_dma_vldcfg_o(ifbuf_dma_vldcfg_o),
-        .ifbuf_dma_burst_o(ifbuf_dma_burst_o),
-        .ifbuf_dma_baddr_o(ifbuf_dma_baddr_o),
-        .ifbuf_dma_rdy_o(ifbuf_dma_rdy_o),
+        .ifbuf_dma_rdycfg_i(cnn_ifbuf_dma_rdycfg_i),
+        .ifbuf_dma_vld_i(cnn_ifbuf_dma_vld_i),
+        .ifbuf_dma_data_i(cnn_ifbuf_dma_data_i),
+        .ifbuf_dma_tlast_i(cnn_ifbuf_dma_tlast_i),
+        .ifbuf_dma_vldcfg_o(cnn_ifbuf_dma_vldcfg_o),
+        .ifbuf_dma_burst_o(cnn_ifbuf_dma_burst_o),
+        .ifbuf_dma_baddr_o(cnn_ifbuf_dma_baddr_o),
+        .ifbuf_dma_rdy_o(cnn_ifbuf_dma_rdy_o),
 
         .ifbuf_comp_rdy_i(comp_ifbuf_rdy_w),
         .ifbuf_comp_vld_o(ifbuf_comp_vld_w),
@@ -736,7 +858,7 @@ module CNN_accel#(
     
     skid_buffer #(
         .SBUF_TYPE(0),
-        .DATA_WIDTH(K*DATA_WIDTH + 6)
+        .DATA_WIDTH(K*DATA_WIDTH + 5)
     ) skide_ifbuf_computation (
         .clk(clk),
         .rst_n(rst_n),
@@ -787,14 +909,14 @@ module CNN_accel#(
         .fltbuf_inf_height_i(fltbuf_inf_height_w),
         .zp(fltbuf_inf_zp_w),
 
-        .fltbuf_dma_rdycfg_i(fltbuf_dma_rdycfg_i),
-        .fltbuf_dma_vld_i(fltbuf_dma_vld_i),
-        .fltbuf_dma_data_i(fltbuf_dma_data_i),
-        .fltbuf_dma_tlast_i(fltbuf_dma_tlast_i),
-        .fltbuf_dma_vldcfg_o(fltbuf_dma_vldcfg_o),
-        .fltbuf_dma_burst_o(fltbuf_dma_burst_o),
-        .fltbuf_dma_baddr_o(fltbuf_dma_baddr_o),
-        .fltbuf_dma_rdy_o(fltbuf_dma_rdy_o),
+        .fltbuf_dma_rdycfg_i(cnn_fltbuf_dma_rdycfg_i),
+        .fltbuf_dma_vld_i(cnn_fltbuf_dma_vld_i),
+        .fltbuf_dma_data_i(cnn_fltbuf_dma_data_i),
+        .fltbuf_dma_tlast_i(cnn_fltbuf_dma_tlast_i),
+        .fltbuf_dma_vldcfg_o(cnn_fltbuf_dma_vldcfg_o),
+        .fltbuf_dma_burst_o(cnn_fltbuf_dma_burst_o),
+        .fltbuf_dma_baddr_o(cnn_fltbuf_dma_baddr_o),
+        .fltbuf_dma_rdy_o(cnn_fltbuf_dma_rdy_o),
 
         .fltbuf_comp_rdy_i(fltbuf_comp_rdy_w),
         .fltbuf_comp_vld_o(fltbuf_comp_vld_w),
@@ -824,14 +946,14 @@ module CNN_accel#(
         .bias_inf_burstlen_lane0_i(bias_inf_burstlen_lane0_i),
         .bias_inf_burstlen_tail_lane0_i(bias_inf_burstlen_tail_lane0_i),
 
-        .bias_dma_rdycfg_i(bias_dma_rdycfg_i),
-        .bias_dma_vldcfg_o(bias_dma_vldcfg_o),
-        .bias_dma_burst_o(bias_dma_burst_o), 
-        .bias_dma_baddr_o(bias_dma_baddr_o),
-        .bias_dma_vld_i(bias_dma_vld_i),
-        .bias_dma_data_i(bias_dma_data_i),
-        .bias_dma_tlast_i(bias_dma_tlast_i),
-        .bias_dma_rdy_o(bias_dma_rdy_o),
+        .bias_dma_rdycfg_i(cnn_bias_dma_rdycfg_i),
+        .bias_dma_vldcfg_o(cnn_bias_dma_vldcfg_o),
+        .bias_dma_burst_o(cnn_bias_dma_burst_o), 
+        .bias_dma_baddr_o(cnn_bias_dma_baddr_o),
+        .bias_dma_vld_i(cnn_bias_dma_vld_i),
+        .bias_dma_data_i(cnn_bias_dma_data_i),
+        .bias_dma_tlast_i(cnn_bias_dma_tlast_i),
+        .bias_dma_rdy_o(cnn_bias_dma_rdy_o),
         
         .bias_scale_rdy_i(comp_bias_rdy_w),
         .bias_scale_data_o(comp_bias_data_w),
@@ -894,7 +1016,7 @@ module CNN_accel#(
         .comp_ofbuf_rdy_i(comp_ofbuf_rdy_w),
         .comp_ofbuf_vld_o(comp_ofbuf_vld_w),
         .comp_ofbuf_data_o(comp_ofbuf_data_w),
-        .comp_pa_done_compute_o(comp_pa_done_compute_o)
+        .comp_pa_done_compute_o(cnn_comp_pa_done_compute_o)
     );
 
     genvar gi;
@@ -931,7 +1053,6 @@ module CNN_accel#(
         .rst_n(rst_n),
 
         .ofbuf_inf_vld_i(ofbuf_inf_vld_w),
-        .ofbuf_inf_ofbaddr_i(ofbuf_inf_ofbaddr_w),
         .ofbuf_inf_ofbaddr_l0_i(ofbuf_inf_ofbaddr_l0_w),
         .ofbuf_inf_ofbaddr_l1_i(ofbuf_inf_ofbaddr_l1_w),
         .ofbuf_inf_ofwidth_i(ofbuf_inf_ofwidth_w),
@@ -943,14 +1064,14 @@ module CNN_accel#(
         .ofbuf_inf_ofc_bl_tail_l1_i(ofbuf_inf_ofc_bl_tail_l1_w),
         .ofbuf_inf_rdy_o(ofbuf_inf_rdy_w),
 
-        .ofbuf_dma_rdycfg_i(ofbuf_dma_rdycfg_i),
-        .ofbuf_dma_vldcfg_o(ofbuf_dma_vldcfg_o),
-        .ofbuf_dma_burst_o(ofbuf_dma_burst_o),
-        .ofbuf_dma_baddr_o(ofbuf_dma_baddr_o),
-        .ofbuf_dma_vld_o(ofbuf_dma_vld_o),
-        .ofbuf_dma_data_o(ofbuf_dma_data_o),
-        .ofbuf_dma_tlast_o(ofbuf_dma_tlast_o),
-        .ofbuf_dma_rdy_i(ofbuf_dma_rdy_i),
+        .ofbuf_dma_rdycfg_i(cnn_ofbuf_dma_rdycfg_i),
+        .ofbuf_dma_vldcfg_o(cnn_ofbuf_dma_vldcfg_o),
+        .ofbuf_dma_burst_o(cnn_ofbuf_dma_burst_o),
+        .ofbuf_dma_baddr_o(cnn_ofbuf_dma_baddr_o),
+        .ofbuf_dma_vld_o(cnn_ofbuf_dma_vld_o),
+        .ofbuf_dma_data_o(cnn_ofbuf_dma_data_o),
+        .ofbuf_dma_tlast_o(cnn_ofbuf_dma_tlast_o),
+        .ofbuf_dma_rdy_i(cnn_ofbuf_dma_rdy_i),
 
         .ofbuf_comp_vld_i(ofbuf_comp_vld_w),
         .ofbuf_comp_rdy_o(ofbuf_comp_rdy_w),
@@ -958,4 +1079,3 @@ module CNN_accel#(
     );
 
 endmodule
-

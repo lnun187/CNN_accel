@@ -30,7 +30,6 @@ module ofbuf#(
 
     // Giao tiếp info layer
     input                           ofbuf_inf_vld_i,
-    input       [23:0]              ofbuf_inf_ofbaddr_i,        //dia chi bat dau store ofmap cua layer
     input       [23:0]              ofbuf_inf_ofbaddr_l0_i,     //dia chi bat dau store ofmap cua lane 0
     input       [23:0]              ofbuf_inf_ofbaddr_l1_i,     //dia chi bat dau store ofmap cua lane 1
     input       [7:0]               ofbuf_inf_ofwidth_i,        //chieu dai va chieu rong cua channel
@@ -58,8 +57,7 @@ module ofbuf#(
     input       [M*DATA_WIDTH-1:0]  ofbuf_comp_data_i          //2 khoi FIFO trong ofbuf nhan gia tri tuong ung
     );
     //2FIFO moi FIOFO 896 bytes
-
-    reg     [23:0]              ofbaddr_reg;        
+   
     reg     [23:0]              ofbaddr_l0_reg;     
     reg     [23:0]              ofbaddr_l1_reg;     
     reg     [7:0]               ofwidth_reg;        
@@ -181,7 +179,6 @@ module ofbuf#(
 
     always @(posedge clk) begin
         if(ofbuf_inf_rdy_o) begin
-            ofbaddr_reg             <=      ofbuf_inf_ofbaddr_i;
             ofbaddr_l0_reg          <=      ofbuf_inf_ofbaddr_l0_i; 
             ofbaddr_l1_reg          <=      ofbuf_inf_ofbaddr_l1_i;
             ofwidth_reg             <=      ofbuf_inf_ofwidth_i;
@@ -228,11 +225,14 @@ module ofbuf#(
 
     always @(posedge clk) begin
         if(ofbuf_inf_rdy_o) begin
-            end_row_q   <= 0;
-            tlast_q     <= 0;
+            vld_dma_q   <= 0;
         end else if((rdy_cfg_q && vld_cfg_dma_q) || rdy_fifo || !vld_dma_q) begin
-            data_dma_q  <= data_dma_d;
             vld_dma_q   <= vld_dma_d && !(rdy_cfg_q && vld_cfg_dma_q);
+        end
+    end
+    always @(posedge clk) begin
+        if((rdy_cfg_q && vld_cfg_dma_q) || rdy_fifo || !vld_dma_q) begin
+            data_dma_q  <= data_dma_d;
         end
     end
     always @(posedge clk) begin

@@ -114,7 +114,6 @@ module layer_info #(
     //ofbuf info - coming soon
     input                               inf_ofbuf_rdy_i,
     output                              inf_ofbuf_vld_o,
-    output          [23:0]              inf_ofbuf_ofbaddr_o,       
     output          [23:0]              inf_ofbuf_ofbaddr_l0_o,    
     output          [23:0]              inf_ofbuf_ofbaddr_l1_o,    
     output          [7:0]               inf_ofbuf_ofwidth_o,       
@@ -430,7 +429,6 @@ module layer_info #(
     wire                [10:0]              bias_tail_lane0;
     wire                [10:0]              bias_lane0;
 
-    wire                [23:0]              ofbaddr_d;       
     wire                [23:0]              ofbaddr_l0_d;    
     wire                [23:0]              ofbaddr_l1_d;       
     wire                [15:0]              ofsize_d;  
@@ -438,15 +436,70 @@ module layer_info #(
     wire                [15:0]              ofsize_d2;        
     wire                [4:0]               ofc_bl_l1_d;     
     wire                [4:0]               ofc_bl_tail_l1_d;
-    
+    // -----------------------------------------------------------------------------
+    // Output feature map size / base address calculation
+    // Written as explicit hardware stages to avoid long arithmetic expressions.
+    // -----------------------------------------------------------------------------
+
+    wire [15:0] ofwidth_ext_d;
+    wire [15:0] ofwidth_lsb_ext_d;
+    wire [16:0] ofwidth_plus_lsb_d;
+
+    wire [7:0]  ifblock_minus1_d;
+
+    wire [18:0] bias_lane0_mul_ifblock_d;
+    wire [18:0] bias_tail_lane0_ext_d;
+    wire [19:0] bias_lane0_offset_d;
+
+    wire [35:0] ofsize_mul_bias_offset_d;
+    wire [35:0] ofbaddr_base_ext_d;
+    wire [36:0] ofbaddr_l1_sum_d;
+
+    assign ofbaddr_l0_d = inf_table_ofbaddr_i;
+
+    // ofsize_d1 = ofwidth_d
+    assign ofwidth_ext_d = {8'd0, ofwidth_d};
+    assign ofsize_d1     = ofwidth_ext_d;
+
+    // ofsize_d2 = ofwidth_d + ofwidth_d[0]
+    // Do not write {8'd0, (ofwidth_d[0] + ofwidth_d)}
+    // because the inner add can be evaluated as only 8 bits.
+    assign ofwidth_lsb_ext_d   = {15'd0, ofwidth_d[0]};
+    assign ofwidth_plus_lsb_d  = {1'b0, ofwidth_ext_d} + {1'b0, ofwidth_lsb_ext_d};
+    assign ofsize_d2           = ofwidth_plus_lsb_d[15:0];
+
+    // ofsize_d = ofsize_d1 * ofsize_d2
+    assign ofsize_d = ofsize_d1 * ofsize_d2;
+
+    // ifblock_d is 7 bits.
+    // Extend before subtracting to avoid ambiguous arithmetic width.
+    assign ifblock_minus1_d = {1'b0, ifblock_d} - 8'd1;
+
+    // lane offset = bias_lane0 * (ifblock_d - 1) + bias_tail_lane0
+    // bias_lane0          : 11 bits
+    // ifblock_minus1_d    : 8 bits
+    // multiply result     : 19 bits
+    // bias_tail_lane0     : 11 bits, extended to 19 bits
+    assign bias_lane0_mul_ifblock_d = bias_lane0 * ifblock_minus1_d;
+    assign bias_tail_lane0_ext_d    = {8'd0, bias_tail_lane0};
+    assign bias_lane0_offset_d      = {1'b0, bias_lane0_mul_ifblock_d}
+                                    + {1'b0, bias_tail_lane0_ext_d};
+
+    // byte/element offset = ofsize_d * lane_offset
+    // ofsize_d            : 16 bits
+    // bias_lane0_offset_d : 20 bits
+    // multiply result     : 36 bits
+    assign ofsize_mul_bias_offset_d = ofsize_d * bias_lane0_offset_d;
+
+    // final base address
+    assign ofbaddr_base_ext_d = {12'd0, inf_table_ofbaddr_i};
+    assign ofbaddr_l1_sum_d   = {1'b0, ofbaddr_base_ext_d}
+                            + {1'b0, ofsize_mul_bias_offset_d};
+
+    assign ofbaddr_l1_d = ofbaddr_l1_sum_d[23:0];
     assign ofc_bl_l1_d      = burstlen_d - burstlen_lane0_d;
     assign ofc_bl_tail_l1_d = burstlen_tail_d - burstlen_tail_lane0_d;
-    assign ofbaddr_d        = inf_table_ofbaddr_i;
-    assign ofbaddr_l0_d     = inf_table_ofbaddr_i;
-    assign ofbaddr_l1_d     = inf_table_ofbaddr_i + ofsize_d * (bias_lane0 * (ifblock_d - 1) + bias_tail_lane0);
-    assign ofsize_d1        = {8'd0,ofwidth_d};
-    assign ofsize_d2        = {8'd0,(ofwidth_d[0] + ofwidth_d)};
-    assign ofsize_d         = ofsize_d1 * ofsize_d2;
+    
     assign ifparr_ext       = {1'b0, inf_table_ifparr_i};
     assign ofparr_ext       = inf_table_ofparr_i;
     assign oftile_ext       = {2'b00, inf_table_oftile_i};
@@ -550,7 +603,6 @@ module layer_info #(
     reg    signed       [7:0]               qmax_q;
     reg                                     is_leaky_ReLU_q;
 
-    reg                 [23:0]              ofbaddr_q;       
     reg                 [23:0]              ofbaddr_l0_q;    
     reg                 [23:0]              ofbaddr_l1_q;       
     reg                 [15:0]              ofsize_q;   
@@ -593,7 +645,6 @@ module layer_info #(
             qmin_q                    <= qmin_d;
             qmax_q                    <= qmax_d;
             is_leaky_ReLU_q           <= is_leaky_ReLU_d;
-            ofbaddr_q                 <= ofbaddr_d;   
             ofbaddr_l0_q              <= ofbaddr_l0_d;
             ofbaddr_l1_q              <= ofbaddr_l1_d;
             ofsize_q                  <= ofsize_d;    
@@ -657,7 +708,6 @@ module layer_info #(
 
     assign inf_ofbuf_vld_o                  = of_vld;
     assign inf_ofbuf_ofwidth_o              = ofwidth_q;
-    assign inf_ofbuf_ofbaddr_o              = ofbaddr_q;
     assign inf_ofbuf_ofbaddr_l0_o           = ofbaddr_l0_q;
     assign inf_ofbuf_ofbaddr_l1_o           = ofbaddr_l1_q;
     assign inf_ofbuf_ofsize_o               = ofsize_q;
@@ -666,4 +716,16 @@ module layer_info #(
     assign inf_ofbuf_ofc_bl_tail_l0_o       = burstlen_tail_lane0_q;
     assign inf_ofbuf_ofc_bl_l1_o            = ofc_bl_l1_q;
     assign inf_ofbuf_ofc_bl_tail_l1_o       = ofc_bl_tail_l1_q;
+    (* keep = "false" *) wire _unused_sink; 
+    
+    assign _unused_sink = &{
+        hf_square[7],
+        ifblock_calc[10:7],
+        iftiles_calc[10:7],
+        ofwidth_calc[11:8],
+        wp_calc[11:9],
+        ofbaddr_l1_sum_d[36:24],
+        ofwidth_plus_lsb_d[16]
+
+    };
 endmodule

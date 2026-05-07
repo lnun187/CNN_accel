@@ -39,10 +39,10 @@ module bias_buffer #(
 
     input                           bias_dma_rdycfg_i,
     output                          bias_dma_vldcfg_o,
-    output          [4:0]           bias_dma_burst_o, 
+    output          [6:0]           bias_dma_burst_o, 
     output          [23:0]          bias_dma_baddr_o,
     input                           bias_dma_vld_i,
-    input   signed  [31:0]          bias_dma_data_i,
+    input           [7:0]           bias_dma_data_i,
     input                           bias_dma_tlast_i,
     output                          bias_dma_rdy_o,
     
@@ -64,7 +64,7 @@ module bias_buffer #(
 
     reg                         inf_rdy_dly;
     reg                         inf_rdy_dly_2;
-    reg         [4:0]           burst_length;
+    reg         [6:0]           burst_length;
     reg         [4:0]           burst_length_real;
     reg         [31:0]          base_addr;
     reg         [10:0]          ch_cnt_nxt_swp;
@@ -118,8 +118,8 @@ module bias_buffer #(
     always @(posedge clk) begin
         if(swap_en || inf_rdy_dly) begin
             burst_length        <= (inf_rdy_dly || !is_tail_cfg) ? 
-                                    bias_inf_burstlen_reg + bias_inf_burstlen_reg[0] : 
-                                    bias_inf_burstlen_tail_reg + bias_inf_burstlen_tail_reg[0];
+                                    {bias_inf_burstlen_reg, 2'b00}: 
+                                    {bias_inf_burstlen_tail_reg, 2'b00};
             burst_length_real   <= (inf_rdy_dly || !is_tail_cfg) ? 
                                     bias_inf_burstlen_reg : 
                                     bias_inf_burstlen_tail_reg;
@@ -164,6 +164,32 @@ module bias_buffer #(
         end
     end
     //-------------------------------------------WRITE CONTROL------------------------------------------------
+    reg [1:0] cnt_byte;
+    reg [31:0] bias_full;
+    reg dma_vld_dly;
+    reg dma_tlast_dly;
+    genvar bidx;
+    generate
+        for(bidx = 0; bidx < 4; bidx = bidx + 1) begin
+            always @(posedge clk) begin
+                if(bias_dma_vld_i) begin
+                    bias_full[bidx*8 +: 8] <= (bidx == 0) ? bias_dma_data_i : bias_full[(bidx-1)*8 +: 8];
+                end
+            end
+        end
+    
+    endgenerate
+    always @(posedge clk) begin
+        if(inf_rdy_dly) begin
+            cnt_byte <= 0;
+        end else if(bias_dma_vld_i) begin
+            cnt_byte <= cnt_byte + 1;
+        end
+    end
+    always @(posedge clk) begin
+        dma_vld_dly <= bias_dma_vld_i;
+        dma_tlast_dly <= bias_dma_tlast_i;
+    end
     assign swap_en = done_write && !(bias_scale_vld_o[1] || bias_scale_vld_o[0]);
     always @(posedge clk) begin
         if(bias_dma_tlast_i && bias_dma_vld_i) begin
@@ -173,16 +199,16 @@ module bias_buffer #(
         end
     end
     always @(posedge clk) begin
-        if((bias_dma_tlast_i && bias_dma_vld_i) || inf_rdy_dly) begin
+        if((dma_tlast_dly && dma_vld_dly && !(|cnt_byte)) || inf_rdy_dly) begin
             count_bias <= 0;
-        end else if(bias_dma_vld_i) begin
+        end else if(dma_vld_dly && !(|cnt_byte)) begin
             count_bias <= count_bias + 1;
         end
     end
     always @(posedge clk) begin
-        if((bias_dma_tlast_i && bias_dma_vld_i) || inf_rdy_dly) begin
+        if((dma_tlast_dly && dma_vld_dly && !(|cnt_byte)) || inf_rdy_dly) begin
             is_lane_1 <= 0;
-        end else if(bias_dma_vld_i && ((count_bias + 1) == bias_inf_burstlen_lane0_reg || ((count_bias + 1) == bias_inf_burstlen_tail_lane0_reg && is_tail_write))) begin
+        end else if(dma_vld_dly && !(|cnt_byte) && ((count_bias + 1) == bias_inf_burstlen_lane0_reg || ((count_bias + 1) == bias_inf_burstlen_tail_lane0_reg && is_tail_write))) begin
             is_lane_1 <= 1;
         end
     end
@@ -192,11 +218,11 @@ module bias_buffer #(
         .clk(clk),
         .rst_n(rst_n),
         .id_i(id),
-        .wr_en(bias_dma_vld_i && !is_lane_1 && (!bias_dma_tlast_i || !burst_length_real[0])),
+        .wr_en(dma_vld_dly && !(|cnt_byte) && !is_lane_1),
         .rd_en(bias_scale_rdy_i[0]),
         .is_wr_back(cnt_height_rd1 != bias_inf_ifwidth_reg - 1),
         .clr_i(1'b0),
-        .data_i(bias_dma_data_i),
+        .data_i(bias_full),
         .data_o(bias_scale_data_o[DATA_WIDTH-1:0]),
         .vld_o(bias_scale_vld_o[0])
     );
@@ -206,11 +232,11 @@ module bias_buffer #(
         .clk(clk),
         .rst_n(rst_n),
         .id_i(id),
-        .wr_en(bias_dma_vld_i && is_lane_1 && (!bias_dma_tlast_i || !burst_length_real[0])),
+        .wr_en(dma_vld_dly && !(|cnt_byte) && is_lane_1),
         .rd_en(bias_scale_rdy_i[1]),
         .is_wr_back(cnt_height_rd2 != bias_inf_ifwidth_reg - 1),
         .clr_i(1'b0),
-        .data_i(bias_dma_data_i),
+        .data_i(bias_full),
         .data_o(bias_scale_data_o[2*DATA_WIDTH-1:DATA_WIDTH]),
         .vld_o(bias_scale_vld_o[1])
     );
@@ -287,7 +313,7 @@ module ping_pong_bias #(
     assign data_o   = id_i ? data_o2 : data_o1;
     assign vld_o    = id_i ? !empty2 : !empty1;
     
-    fifo #(
+    fifo_n #(
        .DATA_WIDTH(WIDTH),
        .FF_TYPE(0),
        .FF_NUM(2),
@@ -307,7 +333,7 @@ module ping_pong_bias #(
         .counter(),
         .rst_n(rst_n)
     );
-    fifo #(
+    fifo_n #(
        .DATA_WIDTH(WIDTH),
        .FF_TYPE(0),
        .FF_NUM(2),
