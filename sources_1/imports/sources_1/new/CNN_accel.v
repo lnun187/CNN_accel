@@ -123,15 +123,8 @@ module CNN_accel#(
     output                          cnn_ofbuf_dma_vld_o,
     output [DATA_WIDTH-1:0]         cnn_ofbuf_dma_data_o,
     output                          cnn_ofbuf_dma_tlast_o,
-    input                           cnn_ofbuf_dma_rdy_i,
+    input                           cnn_ofbuf_dma_rdy_i
 
-    // =========================================================
-    // Optional debug / status
-    // =========================================================
-    output                    cnn_comp_pa_done_compute_o,
-    output                    cnn_ifbuf_comp_end_layer_o,
-    output                    cnn_ifbuf_comp_end_layer_real_o, 
-    output                    cnn_fltbuf_comp_donepass_o
 );
 
     // =========================================================
@@ -410,9 +403,6 @@ module CNN_accel#(
     //===================================================================================
     assign fltbuf_comp_rdy_w = &comp_fltbuf_rdy_w;
 
-    assign cnn_ifbuf_comp_end_layer_o = ifbuf_comp_end_layer_w;
-    assign cnn_ifbuf_comp_end_layer_real_o = ifbuf_comp_end_layer_real_w;
-    assign cnn_fltbuf_comp_donepass_o = fltbuf_comp_donepass_w;
 
     // =========================================================
     // INSTRUCTION TABLE: CNN_accel -> instruction_table -> layer_info
@@ -1016,7 +1006,7 @@ module CNN_accel#(
         .comp_ofbuf_rdy_i(comp_ofbuf_rdy_w),
         .comp_ofbuf_vld_o(comp_ofbuf_vld_w),
         .comp_ofbuf_data_o(comp_ofbuf_data_w),
-        .comp_pa_done_compute_o(cnn_comp_pa_done_compute_o)
+        .comp_pa_done_compute_o()
     );
 
     genvar gi;

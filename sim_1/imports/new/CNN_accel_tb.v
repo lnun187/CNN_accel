@@ -94,7 +94,7 @@ module CNN_accel_tb;
 
   logic                  cnn_bias_dma_rdycfg_i;
   wire                   cnn_bias_dma_vldcfg_o;
-  wire [4:0]             cnn_bias_dma_burst_o;
+  wire [6:0]             cnn_bias_dma_burst_o;
   wire [23:0]            cnn_bias_dma_baddr_o;
   logic                  cnn_bias_dma_vld_i;
   logic           [7:0]     cnn_bias_dma_data_i;
@@ -109,11 +109,6 @@ module CNN_accel_tb;
   wire [DATA_WIDTH-1:0]  cnn_ofbuf_dma_data_o;
   wire                   cnn_ofbuf_dma_tlast_o;
   logic                  cnn_ofbuf_dma_rdy_i;
-
-  wire                     cnn_comp_pa_done_compute_o;
-  wire                     cnn_ifbuf_comp_end_layer_o;
-  wire                     cnn_ifbuf_comp_end_layer_real_o;
-  wire                     cnn_fltbuf_comp_donepass_o;
 
   // =========================================================
   // CNN CPU control interface
@@ -2200,12 +2195,7 @@ module CNN_accel_tb;
     .cnn_ofbuf_dma_vld_o(cnn_ofbuf_dma_vld_o),
     .cnn_ofbuf_dma_data_o(cnn_ofbuf_dma_data_o),
     .cnn_ofbuf_dma_tlast_o(cnn_ofbuf_dma_tlast_o),
-    .cnn_ofbuf_dma_rdy_i(cnn_ofbuf_dma_rdy_i),
-
-    .cnn_comp_pa_done_compute_o(cnn_comp_pa_done_compute_o),
-    .cnn_ifbuf_comp_end_layer_o(cnn_ifbuf_comp_end_layer_o),
-    .cnn_ifbuf_comp_end_layer_real_o(cnn_ifbuf_comp_end_layer_real_o),
-    .cnn_fltbuf_comp_donepass_o(cnn_fltbuf_comp_donepass_o)
+    .cnn_ofbuf_dma_rdy_i(cnn_ofbuf_dma_rdy_i)
   );
 
   // =========================================================

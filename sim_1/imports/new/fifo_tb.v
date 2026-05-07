@@ -32,7 +32,7 @@ module fifo_tb;
 
     integer fail_count = 0;
 
-    fifo #(
+    fifo_n #(
         .DATA_WIDTH (DATA_WIDTH),
         .FIFO_DEPTH (FIFO_DEPTH),
         .FF_TYPE    (0),
@@ -54,7 +54,7 @@ module fifo_tb;
         .rst_n          (rst_n)
     );
 
-    fifo #(
+    fifo_n #(
         .DATA_WIDTH (DATA_WIDTH),
         .FIFO_DEPTH (FIFO_DEPTH),
         .FF_TYPE    (1),
@@ -76,7 +76,7 @@ module fifo_tb;
         .rst_n          (rst_n)
     );
 
-    fifo #(
+    fifo_n #(
         .DATA_WIDTH (DATA_WIDTH),
         .FIFO_DEPTH (FIFO_DEPTH),
         .FF_TYPE    (2),

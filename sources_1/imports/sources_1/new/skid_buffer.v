@@ -145,7 +145,7 @@ else if (SBUF_TYPE == 1) begin : OPT_BWD_TIMING
     assign fifo_wr_en = in_hs & ((~fifo_empty) | (~out_hs));
     assign fifo_rd_en = out_hs;
 
-    fifo #(
+    fifo_n #(
         .DATA_WIDTH(DATA_WIDTH),
         .FF_TYPE(0),
         .FIFO_DEPTH(4)
