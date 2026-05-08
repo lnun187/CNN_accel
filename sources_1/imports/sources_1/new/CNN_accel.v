@@ -123,8 +123,15 @@ module CNN_accel#(
     output                          cnn_ofbuf_dma_vld_o,
     output [DATA_WIDTH-1:0]         cnn_ofbuf_dma_data_o,
     output                          cnn_ofbuf_dma_tlast_o,
-    input                           cnn_ofbuf_dma_rdy_i
+    input                           cnn_ofbuf_dma_rdy_i,
 
+    // =========================================================
+    // Optional debug / status
+    // =========================================================
+    output                    cnn_comp_pa_done_compute_o,
+    output                    cnn_ifbuf_comp_end_layer_o,
+    output                    cnn_ifbuf_comp_end_layer_real_o, 
+    output                    cnn_fltbuf_comp_donepass_o
 );
 
     // =========================================================
@@ -396,13 +403,16 @@ module CNN_accel#(
             accel_done <=  0;
         end else begin
             if(cnn_cpu_receive_interupt_i) accel_done <= 0;
-            else if(!(ofbuf_inf_vld_li_w || table_inf_vld_w) && ofbuf_inf_rdy_w && accel_busy) accel_done <=  1;
+            else if(!(ofbuf_inf_vld_w || table_inf_vld_w) && ofbuf_inf_rdy_w && accel_busy) accel_done <=  1;
         end
     end
     //===================================================================================
     //===================================================================================
     assign fltbuf_comp_rdy_w = &comp_fltbuf_rdy_w;
 
+    assign cnn_ifbuf_comp_end_layer_o = ifbuf_comp_end_layer_w;
+    assign cnn_ifbuf_comp_end_layer_real_o = ifbuf_comp_end_layer_real_w;
+    assign cnn_fltbuf_comp_donepass_o = fltbuf_comp_donepass_w;
 
     // =========================================================
     // INSTRUCTION TABLE: CNN_accel -> instruction_table -> layer_info
@@ -441,7 +451,7 @@ module CNN_accel#(
         .table_cnn_is_leaky_ReLU_i(cnn_table_is_leaky_ReLU_i),
 
         .table_inf_vld_o(table_inf_vld_w),
-        .table_inf_rdy_i(table_inf_rdy_w),
+        .table_inf_rdy_i(table_inf_rdy_w && accel_busy), //change .table_inf_rdy_i(table_inf_rdy_w),
         .table_inf_ifheight_o(table_inf_ifheight_w),
         .table_inf_ifchannel_o(table_inf_ifchannel_w),
         .table_inf_ofchannel_o(table_inf_ofchannel_w),
@@ -476,7 +486,7 @@ module CNN_accel#(
         .clk(clk),
         .rst_n(rst_n),
 
-        .inf_table_vld_i(table_inf_vld_w),
+        .inf_table_vld_i(table_inf_vld_w && accel_busy),//change  .inf_table_vld_i(table_inf_vld_w),
         .inf_table_rdy_o(table_inf_rdy_w),
         .inf_table_ifheight_i(table_inf_ifheight_w),
         .inf_table_ifchannel_i(table_inf_ifchannel_w),
@@ -1006,7 +1016,7 @@ module CNN_accel#(
         .comp_ofbuf_rdy_i(comp_ofbuf_rdy_w),
         .comp_ofbuf_vld_o(comp_ofbuf_vld_w),
         .comp_ofbuf_data_o(comp_ofbuf_data_w),
-        .comp_pa_done_compute_o()
+        .comp_pa_done_compute_o(cnn_comp_pa_done_compute_o)
     );
 
     genvar gi;

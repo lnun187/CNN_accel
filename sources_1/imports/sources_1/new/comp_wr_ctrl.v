@@ -75,7 +75,7 @@ module comp_wr_ctrl#(
     );
     assign cwc_pu_done_compute_layer_o = end_layer_real && !(|cwc_pp_vld_i);
     assign cwc_pp_rdy_o         = {PE_PER_PU{cwc_scale_rdy_i && cwc_scale_vld_o}} & (1'b1 << id);
-    assign end_data_id          = |cwc_pp_end_data_i;
+    assign end_data_id          = cwc_pp_end_data_i[id]; //change assign end_data_id          = |cwc_pp_end_data_i;
     assign vld_id               = (id < PE_PER_PU) ? cwc_pp_vld_i[id] && !pp_clear_reg[id]: 1'b0;
     assign cwc_scale_vld_o      = vld_id;
     assign cwc_pp_pe_is_read_o  = {PE_PER_PU{~end_layer}};

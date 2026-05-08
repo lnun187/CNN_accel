@@ -211,7 +211,7 @@ module ofbuf#(
     always @(posedge clk) begin
         if(ofbuf_inf_rdy_o) begin
             count_row_q <= 0;
-        end else if((rdy_fifo || !vld_dma_q && ofbuf_dma_rdycfg_i) && vld_dma_d) begin //change end else if((rdy_fifo || !vld_dma_q) && vld_dma_d) begin
+        end else if((rdy_fifo || !vld_dma_q && !(rdy_cfg_q && vld_cfg_dma_q) ) && vld_dma_d) begin //change end else if((rdy_fifo || !vld_dma_q) && vld_dma_d) begin
             count_row_q <= (count_row_q == ofwidth_reg - 1) ? 0 : count_row_q + 1;
         end
     end

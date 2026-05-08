@@ -94,7 +94,8 @@ module scale_ReLU #(
     wire signed     [31:0]          data_stage_9_d;
     wire signed     [7:0]           data_stage_10_d;
 
-    assign scale_bias_rdy_o     = !bias_vld_q || (count_w_q == scale_inf_width_reg - 1);
+    
+    assign scale_bias_rdy_o     = !bias_vld_q || ((count_w_q == scale_inf_width_reg - 1) && scale_comp_rdy_o && scale_comp_vld_i);//change assign scale_bias_rdy_o     = !bias_vld_q || (count_w_q == scale_inf_width_reg - 1)
     assign scale_comp_rdy_o     = bias_vld_q && (!data_vld_q[10] || scale_ofbuf_rdy_i);
     assign scale_ofbuf_data_o   = data_stage_10_q;
     assign scale_ofbuf_vld_o    = data_vld_q[10];
@@ -118,8 +119,8 @@ module scale_ReLU #(
     always @(posedge clk) begin
         if(!rst_n) begin
             bias_vld_q <= 0;
-        end else if(!bias_vld_q || (count_w_q == scale_inf_width_reg - 1)) begin
-            bias_vld_q <= scale_bias_rdy_o && scale_bias_vld_i;
+        end else if(scale_bias_rdy_o) begin
+            bias_vld_q <= scale_bias_vld_i; //change
         end
     end
     always @(posedge clk) begin
