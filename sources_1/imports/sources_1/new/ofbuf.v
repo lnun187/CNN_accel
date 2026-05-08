@@ -211,7 +211,7 @@ module ofbuf#(
     always @(posedge clk) begin
         if(ofbuf_inf_rdy_o) begin
             count_row_q <= 0;
-        end else if((rdy_fifo || !vld_dma_q) && vld_dma_d) begin
+        end else if((rdy_fifo || !vld_dma_q && ofbuf_dma_rdycfg_i) && vld_dma_d) begin //change end else if((rdy_fifo || !vld_dma_q) && vld_dma_d) begin
             count_row_q <= (count_row_q == ofwidth_reg - 1) ? 0 : count_row_q + 1;
         end
     end
@@ -245,21 +245,21 @@ module ofbuf#(
         end
     end
     always @(posedge clk) begin
-        if(inf_rdy_dly || (tlast_d && ofbuf_dma_rdy_i)) begin
+        if(inf_rdy_dly || (tlast_d && ofbuf_dma_rdy_i)) begin 
             rdy_cfg_q <= 1;
-        end else if(vld_cfg_q && vld_dma_d && rdy_cfg_q) begin
+        end else if(vld_cfg_q && vld_dma_d && change_config) begin //change end else if(vld_cfg_q && vld_dma_d && rdy_cfg_q) begin
             rdy_cfg_q <= 0;
         end
     end
     always @(posedge clk) begin
-        if(vld_cfg_q && vld_dma_d && rdy_cfg_q) begin
+        if(vld_cfg_q && vld_dma_d && change_config) begin //change if(vld_cfg_q && vld_dma_d && rdy_cfg_q) begin
             vld_cfg_dma_q <= 1;
         end else if(ofbuf_dma_rdycfg_i || inf_rdy_q) begin
             vld_cfg_dma_q <= 0;
         end
     end
     always @(posedge clk) begin
-        if(vld_cfg_q && vld_dma_d && rdy_cfg_q) begin
+        if(vld_cfg_q && vld_dma_d && change_config) begin //change if(vld_cfg_q && vld_dma_d && rdy_cfg_q) begin
             baddr_cfg_q <= baddr_cfg_d;
         end
     end
