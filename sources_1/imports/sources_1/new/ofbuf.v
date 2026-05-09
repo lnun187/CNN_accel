@@ -137,7 +137,10 @@ module ofbuf#(
     assign data_dma_d           = id_cfg_q ? fifo_data_l1 : fifo_data_l0;
     assign tlast_d              = ofwidth_reg[0] ? end_row_q : end_row_d_q;
     assign ofbuf_comp_rdy_o     = {!fifo_full_l1, !fifo_full_l0};
-    assign rdy_fifo             = ((rdy_cfg_q && !vld_cfg_dma_q) || !rdy_cfg_q) && ofbuf_dma_rdy_i && !(tlast_d && ofwidth_reg[0]);
+    assign rdy_fifo = !(rdy_cfg_q && vld_cfg_dma_q) &&
+                  (!vld_dma_q ||
+                   (ofbuf_dma_rdy_i && !(tlast_d && ofwidth_reg[0])));
+    
     assign ofbuf_dma_burst_o    = burst_q;
     assign ofbuf_dma_baddr_o    = baddr_cfg_q;
     assign ofbuf_dma_vld_o      = vld_dma_q;
@@ -211,7 +214,7 @@ module ofbuf#(
     always @(posedge clk) begin
         if(ofbuf_inf_rdy_o) begin
             count_row_q <= 0;
-        end else if((rdy_fifo || !vld_dma_q && !(rdy_cfg_q && vld_cfg_dma_q) ) && vld_dma_d) begin //change end else if((rdy_fifo || !vld_dma_q) && vld_dma_d) begin
+        end else if(rdy_fifo && vld_dma_d) begin //change end else if((rdy_fifo || !vld_dma_q) && vld_dma_d) begin
             count_row_q <= (count_row_q == ofwidth_reg - 1) ? 0 : count_row_q + 1;
         end
     end

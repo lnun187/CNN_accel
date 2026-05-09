@@ -81,7 +81,7 @@ module scale_ReLU #(
     reg  signed     [31:0]          data_stage_9_q;
     reg  signed     [7:0]           data_stage_10_q;
 
-    wire                            pipe_en;
+    wire            [10:0]          pipe_rdy;
     wire signed     [31:0]          data_stage_0_d;
     wire signed     [63:0]          data_stage_1_d;
     wire signed     [63:0]          data_stage_2_d;
@@ -96,10 +96,19 @@ module scale_ReLU #(
 
     
     assign scale_bias_rdy_o     = !bias_vld_q || ((count_w_q == scale_inf_width_reg - 1) && scale_comp_rdy_o && scale_comp_vld_i);//change assign scale_bias_rdy_o     = !bias_vld_q || (count_w_q == scale_inf_width_reg - 1)
-    assign scale_comp_rdy_o     = bias_vld_q && (!data_vld_q[10] || scale_ofbuf_rdy_i);
+    assign scale_comp_rdy_o     = bias_vld_q && pipe_rdy[0];
     assign scale_ofbuf_data_o   = data_stage_10_q;
     assign scale_ofbuf_vld_o    = data_vld_q[10];
-    assign pipe_en              = !data_vld_q[10] || scale_ofbuf_rdy_i;
+
+    // Per-stage ready chain.
+    // pipe_rdy[i] = 1 when stage i can accept new data because:
+    //   1) stage i is empty, or
+    //   2) some downstream stage can move/accept, or
+    //   3) the output buffer is ready.
+    // Expanded form:
+    //   pipe_rdy[i] = !data_vld_q[i] || !data_vld_q[i+1] || ... ||
+    //                 !data_vld_q[10] || scale_ofbuf_rdy_i
+    assign pipe_rdy[10] = !data_vld_q[10] || scale_ofbuf_rdy_i;
     always @(posedge clk) begin
         if (scale_bias_vld_i && scale_bias_rdy_o) begin
             scale_inf_width_reg <= scale_inf_width_i;
@@ -139,16 +148,30 @@ module scale_ReLU #(
 
     genvar stage;
     generate
-        for(stage = 0; stage  < 11; stage = stage + 1) begin
-            always @(posedge clk) begin
-                if(!rst_n) begin
-                    data_vld_q[stage] <= 0;
-                end else if(pipe_en) begin
-                    data_vld_q[stage] <= (stage == 0) ? (bias_vld_q && scale_comp_vld_i) : data_vld_q[stage-1];
-                end
-            end
+        for(stage = 0; stage < 10; stage = stage + 1) begin : gen_pipe_rdy
+            assign pipe_rdy[stage] = !data_vld_q[stage] || pipe_rdy[stage+1];
         end
     endgenerate
+
+    // Valid pipeline. Each stage has its own ready condition instead of using
+    // one global pipe_en for all 11 stages.
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            data_vld_q <= 11'd0;
+        end else begin
+            if(pipe_rdy[0])  data_vld_q[0]  <= bias_vld_q && scale_comp_vld_i;
+            if(pipe_rdy[1])  data_vld_q[1]  <= data_vld_q[0];
+            if(pipe_rdy[2])  data_vld_q[2]  <= data_vld_q[1];
+            if(pipe_rdy[3])  data_vld_q[3]  <= data_vld_q[2];
+            if(pipe_rdy[4])  data_vld_q[4]  <= data_vld_q[3];
+            if(pipe_rdy[5])  data_vld_q[5]  <= data_vld_q[4];
+            if(pipe_rdy[6])  data_vld_q[6]  <= data_vld_q[5];
+            if(pipe_rdy[7])  data_vld_q[7]  <= data_vld_q[6];
+            if(pipe_rdy[8])  data_vld_q[8]  <= data_vld_q[7];
+            if(pipe_rdy[9])  data_vld_q[9]  <= data_vld_q[8];
+            if(pipe_rdy[10]) data_vld_q[10] <= data_vld_q[9];
+        end
+    end
     
     //======================================================================================
     // Pipeline data-path combinational logic
@@ -235,45 +258,65 @@ module scale_ReLU #(
 
     //======================================================================================
     // Pipeline data registers
-    // All stage registers are grouped in one always block and are advanced only when pipe_en
-    // is asserted. This preserves the original stall condition:
-    //      pipe_en = !data_vld_q[10] || scale_ofbuf_rdy_i
+    // Each stage register advances independently when its own pipe_rdy bit is asserted.
+    // This lets bubbles move through the pipeline instead of freezing all stages until
+    // only the final stage can move.
     //======================================================================================
     always @(posedge clk) begin
-        if(pipe_en) begin
+        if(pipe_rdy[0]) begin
             // STAGE 0 register: bias-added data
             data_stage_0_q       <= data_stage_0_d;
+        end
 
+        if(pipe_rdy[1]) begin
             // STAGE 1 register: multiplier result
             data_stage_1_q       <= data_stage_1_d;
+        end
 
+        if(pipe_rdy[2]) begin
             // STAGE 2 register: rounded multiplier result
             data_stage_2_q       <= data_stage_2_d;
+        end
 
+        if(pipe_rdy[3]) begin
             // STAGE 3 register: shifted multiplier result
             data_stage_3_q       <= data_stage_3_d;
+        end
 
+        if(pipe_rdy[4]) begin
             // STAGE 4 register: signed 32-bit clamped result
             data_stage_4_q       <= data_stage_4_d;
+        end
 
+        if(pipe_rdy[5]) begin
             // STAGE 5 registers: alpha multiply path and original-value cross path
             data_stage_5_q       <= data_stage_5_d;
             data_stage_5_cross_q <= data_stage_4_q;
+        end
 
+        if(pipe_rdy[6]) begin
             // STAGE 6 registers: rounded alpha path and original-value cross path
             data_stage_6_q       <= data_stage_6_d;
             data_stage_6_cross_q <= data_stage_5_cross_q;
+        end
 
+        if(pipe_rdy[7]) begin
             // STAGE 7 registers: shifted alpha path and original-value cross path
             data_stage_7_q       <= data_stage_7_d;
             data_stage_7_cross_q <= data_stage_6_cross_q;
+        end
 
+        if(pipe_rdy[8]) begin
             // STAGE 8 register: ReLU / leaky-ReLU selected data
             data_stage_8_q       <= data_stage_8_d;
+        end
 
+        if(pipe_rdy[9]) begin
             // STAGE 9 register: zero-point adjusted data
             data_stage_9_q       <= data_stage_9_d;
+        end
 
+        if(pipe_rdy[10]) begin
             // STAGE 10 register: final quantized output data
             data_stage_10_q      <= data_stage_10_d;
         end
