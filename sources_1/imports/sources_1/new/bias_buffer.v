@@ -22,7 +22,8 @@
 
 module bias_buffer #(
     parameter   DATA_WIDTH = 32,
-    parameter   M = 2
+    parameter   M = 2, 
+    parameter   BIAS_DEPTH = 25
 )(
     input                           clk,
     input                           rst_n,
@@ -213,7 +214,8 @@ module bias_buffer #(
         end
     end
     ping_pong_bias #(
-        .WIDTH(DATA_WIDTH)
+        .WIDTH(DATA_WIDTH),
+        .BIAS_DEPTH(BIAS_DEPTH)
     ) pp_bram1 (
         .clk(clk),
         .rst_n(rst_n),
@@ -227,7 +229,8 @@ module bias_buffer #(
         .vld_o(bias_scale_vld_o[0])
     );
     ping_pong_bias #(
-        .WIDTH(DATA_WIDTH)
+        .WIDTH(DATA_WIDTH),
+        .BIAS_DEPTH(BIAS_DEPTH)
     ) pp_bram2 (
         .clk(clk),
         .rst_n(rst_n),
@@ -282,7 +285,8 @@ module bias_buffer #(
 endmodule
 
 module ping_pong_bias #(
-    parameter WIDTH = 32
+    parameter WIDTH = 32,
+    parameter BIAS_DEPTH = 30
 )(
     input               clk,
     input               rst_n,
@@ -317,7 +321,7 @@ module ping_pong_bias #(
        .DATA_WIDTH(WIDTH),
        .FF_TYPE(0),
        .FF_NUM(2),
-       .FIFO_DEPTH(8)
+       .FIFO_DEPTH(BIAS_DEPTH)
        ) bias_fifo1 (
         .clk(clk),
         .data_i(rd_en1 && !empty1 ? data_o1 : data_i1),
@@ -337,7 +341,7 @@ module ping_pong_bias #(
        .DATA_WIDTH(WIDTH),
        .FF_TYPE(0),
        .FF_NUM(2),
-       .FIFO_DEPTH(8)
+       .FIFO_DEPTH(BIAS_DEPTH)
        ) bias_fifo2 (
         .clk(clk),
         .data_i(rd_en2 && !empty2 ? data_o2 : data_i2),

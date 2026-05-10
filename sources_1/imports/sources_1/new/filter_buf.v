@@ -80,7 +80,7 @@ module filter_buf #(
     reg [6:0]   fltsize_rd_cnt;
     reg [6:0]   iftiles_rd_cnt;
     reg [3:0]   oftiles_rd_cnt;
-    reg [5:0]   ifblock_rd_cnt;
+    reg [6:0]   ifblock_rd_cnt;
     reg [7:0]   height_rd_cnt;
     reg [7:0]   height_reg;
     reg         end_layer;
@@ -96,7 +96,7 @@ module filter_buf #(
     reg [4:0]   filter_wr_cnt;
     reg [6:0]   iftiles_wr_cnt;
     reg [3:0]   oftiles_wr_cnt;
-    reg [5:0]   ifblock_wr_cnt;
+    reg [6:0]   ifblock_wr_cnt;
     wire        wr_val;
     wire        last_channel_wr;
     wire        last_fltsize_wr;
@@ -112,7 +112,7 @@ module filter_buf #(
     wire        iftiles_cfg_cnt_en;
     reg [3:0]   oftiles_cfg_cnt;
     wire        oftiles_cfg_cnt_en;
-    reg [5:0]   ifblock_cfg_cnt;
+    reg [6:0]   ifblock_cfg_cnt;
     wire        ifblock_cfg_cnt_en;
     reg [3:0]   actual_channel;
     reg [4:0]   actual_filter;
@@ -308,7 +308,7 @@ module filter_buf #(
     wire [3:0] filter_rd_cnt_after;
     wire [6:0] iftiles_rd_cnt_after;
     wire [3:0] oftiles_rd_cnt_after;
-    wire [5:0] ifblock_rd_cnt_after;
+    wire [6:0] ifblock_rd_cnt_after;
     wire       last_ifblock_rd_after;
     wire       last_oftile_rd_after;
     wire [4:0] actual_rd_filter_after;

@@ -24,7 +24,7 @@ module CNN_accel_tb;
   localparam int WIDTH      = 8;
   localparam int DATA_WIDTH = WIDTH;
   localparam int ACC_WIDTH  = 32;
-  localparam int K          = 8;
+  localparam int K          = 4;
   localparam int M          = 2;
 
   localparam int MAX_MEM = 65536;
@@ -2211,7 +2211,6 @@ module CNN_accel_tb;
 
     cnn_cpu_accel_start_i = 1'b0;
     cnn_cpu_receive_interupt_i = 1'b0;
-
     cnn_ifbuf_dma_rdycfg_i = 1'b0;
     cnn_fltbuf_dma_rdycfg_i = 1'b0;
     cnn_bias_dma_rdycfg_i = 1'b0;
@@ -2229,59 +2228,60 @@ module CNN_accel_tb;
 
     clear_all_memories();
     apply_reset();
-    //tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,zp,zp
-    // Direct table interface: keep original testcase values; no LUT retargeting.
+    
+    // Tham số: tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile, zp_if, zp_flt
     
     // Multi-layer smoke: ghi nhiều layer_description riêng biệt, sau đó mới pulse start.
     // run_case_multi_smoke();
 
     // 1) Ifmap kích thước chẵn, burst filter chẵn
-    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=4, oftile = 1, padding = 2, stride = 1
-    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 4, 1, 0, 0);  
+    //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=2 (<= 6/3), oftile = 1, padding = 2, stride = 1
+    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 2, 1, 0, 0);
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
     // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2
     run_case("TC1_odd_ifmap_align_and_padding", 5, 5, 8, 4, 3, 3, 1, 1, 1, 2, 2, 3, 1);
 
     // 3) 1 burst filter le -> phai co them 1 word pad
-    // ifmap 7x7, Ci=3, Co=10, kernel 3x3, ifparr=3, ofparr=1, oftile=3, padding = 1, stride = 1
-    run_case("TC2_odd_filter_burst_need_pad", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5);
+    // ifmap 7x7, Ci=3, Co=10, kernel 3x3, ifparr=1, ofparr=1, oftile=2 (<= 2), padding = 1, stride = 1
+    run_case("TC2_odd_filter_burst_need_pad", 7, 7, 3, 10, 3, 3, 1, 1, 1, 1, 2, 4, 5);
 
     // 4) So filter song song = 1 tile, stride = 2, padding = 2
-    // ifmap 8x8, Ci=11, Co=3, kernel 3x3, ifparr=1, ofparr=3, oftile=1, padding=2, stride=2
-    run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
+    // ifmap 8x8, Ci=11, Co=3, kernel 3x3, ifparr=1, ofparr=2 (<= 6/3), oftile=1, padding=2, stride=2
+    run_case("TC3_single_tile_stride2_pad2", 8, 8, 11, 3, 3, 3, 2, 2, 1, 2, 1, 2, 6);
 
     // 5) 1x1 pointwise, 2 block output-channel, test ofparr_tail
-    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=4, oftile=1
-    run_case("TC4_pointwise_ofparr_tail_2block", 11, 11, 3, 5, 1, 1, 1, 0, 2, 4, 1, 3, 3);
+    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=1, ofparr=4 (<= 6/1), oftile=1
+    run_case("TC4_pointwise_ofparr_tail_2block", 11, 11, 3, 5, 1, 1, 1, 0, 1, 4, 1, 3, 3);
 
     // 6) 1x1 pointwise, gop du output-channel vao 1 block, test oftiles_tail = 2
-    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=2, ofparr=4, oftile=2
-    run_case("TC5_pointwise_oftile_tail", 11, 11, 3, 5, 1, 1, 1, 0, 2, 4, 2, 3, 1);
+    // ifmap 11x11, Ci=3, Co=5, kernel 1x1, padding=0, stride=1, ifparr=1, ofparr=4, oftile=2
+    run_case("TC5_pointwise_oftile_tail", 11, 11, 3, 5, 1, 1, 1, 0, 1, 4, 2, 3, 1);
 
-    // 7) Kernel lon 5x5, stride=3 (< filter), padding=1, test ifparr/ofparr tail dong thoi
-    // ifmap 22x22, Ci=5, Co=7, kernel 5x5, ifparr=2, ofparr=3, oftile=1
-    run_case("TC6_5x5_stride3_tail_mix", 22, 22, 5, 7, 5, 5, 3, 1, 2, 3, 1, 3, 2);
+    // 7) Dùng kernel 3x3 thay vì 5x5 (do hf max=3), stride=3, padding=1
+    // ifmap 22x22, Ci=5, Co=7, kernel 3x3, ifparr=1, ofparr=2 (<= 6/3), oftile=1
+    run_case("TC6_3x3_stride3_tail_mix", 22, 22, 5, 7, 3, 3, 3, 1, 1, 2, 1, 3, 2);
 
     // 8) stride = filter size, khong overlap receptive field
-    // ifmap 9x9, Ci=4, Co=6, kernel 1x1, stride=1, padding=0, ifparr=2, ofparr=2, oftile=2
-    run_case("TC7_stride_eq_filter", 9, 9, 4, 6, 1, 1, 1, 0, 2, 4, 2, 2, 3);
+    // ifmap 9x9, Ci=4, Co=6, kernel 1x1, stride=1, padding=0, ifparr=1, ofparr=4, oftile=2
+    run_case("TC7_stride_eq_filter", 9, 9, 4, 6, 1, 1, 1, 0, 1, 4, 2, 2, 3);
 
     // 9) padding lon nhung van nho hon filter, de cover case near-upper-bound
     // ifmap 11x11, Ci=2, Co=4, kernel 3x3, stride=1, padding=2, ifparr=1, ofparr=2, oftile=1
     run_case("TC8_padding_near_filter", 11, 11, 2, 4, 3, 3, 1, 2, 1, 2, 1, 4, 6);
 
-    // 10) Kernel 7x7, stride=2, padding=3 (same-like), test burst lon hon va output tile tail
-    // ifmap 13x13, Ci=3, Co=5, kernel 7x7, ifparr=3, ofparr=2, oftile=2
-    run_case("TC9_7x7_large_kernel_tail", 13, 13, 3, 5, 7, 7, 2, 3, 3, 2, 2, 1, 3);
+    // 10) Dùng kernel 3x3 thay vì 7x7, pad=2 (do pad phải < kernel), stride=2
+    // ifmap 13x13, Ci=3, Co=5, kernel 3x3, ifparr=1, ofparr=2 (<= 6/3), oftile=2
+    run_case("TC9_3x3_kernel_tail", 13, 13, 3, 5, 3, 3, 2, 2, 1, 2, 2, 1, 3);
 
-    // 11) ifmap nho, filter bang ifmap, output 1 diem moi channel
-    // ifmap 11x11, Ci=3, Co=3, kernel 5x5, stride=1, padding=0, ifparr=2, ofparr=2, oftile=1
-    run_case("TC10_filter_equal_ifmap", 11, 11, 3, 3, 5, 5, 1, 0, 2, 2, 1, 1, 2);
+    // 11) ifmap nho, dùng kernel 3x3 thay vì 5x5, output 1 diem moi channel
+    // ifmap 11x11, Ci=3, Co=3, kernel 3x3, stride=1, padding=0, ifparr=1, ofparr=2 (<= 6/3), oftile=1
+    run_case("TC10_filter_3x3", 11, 11, 3, 3, 3, 3, 1, 0, 1, 2, 1, 1, 2);
 
     // 12) Ket hop stride = filter va padding < filter, sat hon voi CNN thuc te
     // ifmap 11x11, Ci=3, Co=4, kernel 3x3, stride=3, padding=2, ifparr=1, ofparr=2, oftile=2
     run_case("TC11_stride_eq_filter_pad_lt_filter", 11, 11, 3, 4, 3, 3, 3, 2, 1, 2, 2, 3, 5);
+
 
     // =====================================================
     // Reset-abort fault-tolerance checks
@@ -2291,18 +2291,18 @@ module CNN_accel_tb;
     // =====================================================
 
     // A) Reset rat som sau khi issue inftruction: cover loi FSM/DMA config dang bat dau.
-    run_case_abort_reset("RST_ABORT_A_early_TC2", 7, 7, 3, 10, 3, 3, 1, 1, 3, 1, 3, 4, 5, 35, 0); 
-    run_case("RST_RECOVER_A_next_no_extra_reset_TC3", 8, 8, 11, 3, 3, 3, 2, 2, 1, 3, 1, 2, 6);
+    run_case_abort_reset("RST_ABORT_A_early_TC2", 7, 7, 3, 10, 3, 3, 1, 1, 1, 1, 2, 4, 5, 35, 0); 
+    run_case("RST_RECOVER_A_next_no_extra_reset_TC3", 8, 8, 11, 3, 3, 3, 2, 2, 1, 2, 1, 2, 6);
 
-    // // B) Reset giua compute sau mot khoang clock: cover loi partial-sum/cache dang co du lieu cu.
-    run_case_abort_reset("RST_ABORT_B_mid_compute_TC6", 22, 22, 5, 7, 5, 5, 3, 1, 2, 3, 1, 3, 2, 2200, 11);
-    run_case("RST_RECOVER_B_next_no_extra_reset_TC7", 9, 9, 4, 6, 1, 1, 1, 0, 2, 4, 2, 2, 3);
+    // B) Reset giua compute sau mot khoang clock: cover loi partial-sum/cache dang co du lieu cu. (Đổi TC6 xuống kernel 3x3)
+    run_case_abort_reset("RST_ABORT_B_mid_compute_TC6", 22, 22, 5, 7, 3, 3, 3, 1, 1, 2, 1, 3, 2, 2200, 11);
+    run_case("RST_RECOVER_B_next_no_extra_reset_TC7", 9, 9, 4, 6, 1, 1, 1, 0, 1, 4, 2, 2, 3);
 
-    // C) Reset sau khi da co output packet dau tien nhung chua complete: cover loi output/scale pipeline.
+    // C) Reset sau khi da co output packet dau tien nhung chua complete: cover loi output/scale pipeline. (Đổi TC9, TC10 xuống 3x3)
     // abort_cycles o day la watchdog toi da de doi packet dau tien.
-    run_case_abort_reset("RST_ABORT_C_after_first_output_TC9", 13, 13, 3, 5, 7, 7, 2, 3, 3, 2, 2, 1, 3, 10000, 20);
-    run_case("RST_RECOVER_C_next_no_extra_reset_TC10", 11, 11, 3, 3, 5, 5, 1, 0, 2, 2, 1, 1, 2);
-
+    run_case_abort_reset("RST_ABORT_C_after_first_output_TC9", 13, 13, 3, 5, 3, 3, 2, 2, 1, 2, 2, 1, 3, 10000, 20);
+    run_case("RST_RECOVER_C_next_no_extra_reset_TC10", 11, 11, 3, 3, 3, 3, 1, 0, 1, 2, 1, 1, 2);
+    
     $display("\nAll requested environment-only and reset-abort testcases completed.");
     $finish;
   end

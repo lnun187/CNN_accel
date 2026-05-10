@@ -174,7 +174,7 @@ module comp_pu #(
         for(j = 0; j < K; j = j + 1) begin: gen_fltc
             filter_cache #(
             .WIDTH(WIDTH),
-            .DEPTH(11),
+            .DEPTH(DEPTH),
             .PE_PER_PU(PE_PER_PU)
         ) flt_cache_uut (
             .clk                        (clk),

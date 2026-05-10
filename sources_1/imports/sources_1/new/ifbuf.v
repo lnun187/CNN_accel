@@ -93,8 +93,8 @@ module ifbuf #(
     reg         vld;
     reg         en_config;
     wire        en_config_rst;
-    reg [5:0]   ifblock_count;
-    reg [5:0]   ifblock_count_r;
+    reg [6:0]   ifblock_count;
+    reg [6:0]   ifblock_count_r;
     wire        ifblock_count_en;
     wire        ifblock_count_r_en;
     reg [8:0]   height_config;
