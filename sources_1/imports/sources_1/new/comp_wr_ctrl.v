@@ -44,6 +44,7 @@ module comp_wr_ctrl#(
     input                           cwc_scale_rdy_i,
     output                          cwc_scale_vld_o,
     output  [WIDTH-1:0]             cwc_scale_data_o,
+    output                          cwc_pu_done_compute_row_o,
     output                          cwc_pu_done_compute_o,
     output                          cwc_pu_done_compute_layer_o
     );
@@ -60,7 +61,7 @@ module comp_wr_ctrl#(
     // reg     [PE_PER_PU-1:0]         is_read_reg;
     wire    [PE_PER_PU-1:0]         pp_clear_nxt;
     // wire    [PE_PER_PU-1:0]         is_read_nxt;
-
+    reg     [1:0]                   vld_id_dly;
     wire                            is_add_cwc_inf_padding_i_data;
     wire                            vld_id;
     wire                            vld_id_nxt;
@@ -72,6 +73,12 @@ module comp_wr_ctrl#(
         .rst_n(rst_n),
         .signal_i(end_layer && !(|cwc_pp_vld_i)),
         .signal_o(cwc_pu_done_compute_o)
+    );
+    posedge_detection b(
+        .clk(clk),
+        .rst_n(rst_n),
+        .signal_i(!(|cwc_pp_vld_i)),
+        .signal_o(cwc_pu_done_compute_row_o)
     );
     assign cwc_pu_done_compute_layer_o = end_layer_real && !(|cwc_pp_vld_i);
     assign cwc_pp_rdy_o         = {PE_PER_PU{cwc_scale_rdy_i && cwc_scale_vld_o}} & (1'b1 << id);
@@ -91,7 +98,10 @@ module comp_wr_ctrl#(
     always @(posedge clk) begin
         if(!rst_n) begin
             end_layer <= 0;
+            vld_id_dly <= 0;
         end else begin
+            vld_id_dly[1] <= vld_id_dly[0];
+            vld_id_dly[0] <= vld_id || cwc_pu_swap_en_i;
             if(cwc_pu_swap_en_i) begin
                 end_layer   <= cwc_pe_end_layer_nxt_i;
             end
@@ -112,7 +122,7 @@ module comp_wr_ctrl#(
             if(cwc_pu_swap_en_i) begin
                 id          <= cwc_inf_hf_i - 1;
             end 
-            else if(!vld_id || end_data_id && vld_id && cwc_scale_rdy_i) begin
+            else if(!(vld_id ) || end_data_id && vld_id && cwc_scale_rdy_i) begin
                 id          <= id_nxt;
             end
         end

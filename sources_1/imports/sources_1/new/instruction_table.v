@@ -16,7 +16,7 @@ module instruction_table #(
     input          [2:0]               table_cnn_stride_i,
     input          [1:0]               table_cnn_padding_i,
     input          [2:0]               table_cnn_ifparr_i,
-    input          [1:0]               table_cnn_oftile_i,
+    input          [2:0]               table_cnn_oftile_i,
     input          [4:0]               table_cnn_ofparr_i,
     input          [23:0]              table_cnn_ifbaddr_i,
     input          [23:0]              table_cnn_fltbaddr_i,
@@ -32,6 +32,10 @@ module instruction_table #(
     input signed   [7:0]               table_cnn_qmin_i,
     input signed   [7:0]               table_cnn_qmax_i,
     input                              table_cnn_is_leaky_ReLU_i,
+    input                              table_cnn_is_use_pool_i,
+    input                              table_cnn_is_max_pool_i,
+    input          [4:0]               table_cnn_pool_size_i,
+    input                              table_cnn_is_stride_over_i,
 
     output                              table_inf_vld_o,
     input                               table_inf_rdy_i,
@@ -42,7 +46,7 @@ module instruction_table #(
     output          [2:0]               table_inf_stride_o,
     output          [1:0]               table_inf_padding_o,
     output          [2:0]               table_inf_ifparr_o,
-    output          [1:0]               table_inf_oftile_o,
+    output          [2:0]               table_inf_oftile_o,
     output          [4:0]               table_inf_ofparr_o,
     output          [23:0]              table_inf_ifbaddr_o,
     output          [23:0]              table_inf_fltbaddr_o,
@@ -57,9 +61,13 @@ module instruction_table #(
     output signed   [7:0]               table_inf_zpy_o,
     output signed   [7:0]               table_inf_qmin_o,
     output signed   [7:0]               table_inf_qmax_o,
-    output                              table_inf_is_leaky_ReLU_o
+    output                              table_inf_is_leaky_ReLU_o,
+    output                              table_inf_is_use_pool_o,
+    output                              table_inf_is_max_pool_o,
+    output          [4:0]               table_inf_pool_size_o,
+    output                              table_inf_is_stride_over_o
 );
-    localparam TABLE_PAYLOAD_WIDTH = 246 + (2*DATA_WIDTH);
+    localparam TABLE_PAYLOAD_WIDTH = 254 + (2*DATA_WIDTH);
 
     wire [TABLE_PAYLOAD_WIDTH-1:0] table_cnn_data_in;
     wire [TABLE_PAYLOAD_WIDTH-1:0] table_cnn_data_out;
@@ -90,7 +98,11 @@ module instruction_table #(
                                 table_cnn_zpy_i,
                                 table_cnn_qmin_i,
                                 table_cnn_qmax_i,
-                                table_cnn_is_leaky_ReLU_i
+                                table_cnn_is_leaky_ReLU_i,
+                                table_cnn_is_use_pool_i,
+                                table_cnn_is_max_pool_i,
+                                table_cnn_pool_size_i,
+                                table_cnn_is_stride_over_i
                                 };
 
     assign {table_inf_ifheight_o,
@@ -115,7 +127,11 @@ module instruction_table #(
             table_inf_zpy_o,
             table_inf_qmin_o,
             table_inf_qmax_o,
-            table_inf_is_leaky_ReLU_o
+            table_inf_is_leaky_ReLU_o,
+            table_inf_is_use_pool_o,
+            table_inf_is_max_pool_o,
+            table_inf_pool_size_o,
+            table_inf_is_stride_over_o
             } = table_cnn_data_out;
     fifo_n #(
        .DATA_WIDTH(TABLE_PAYLOAD_WIDTH),

@@ -57,7 +57,7 @@ module CNN_accel_tb;
   logic           [2:0]               cnn_table_stride_i;
   logic           [1:0]               cnn_table_padding_i;
   logic           [2:0]               cnn_table_ifparr_i;
-  logic           [1:0]               cnn_table_oftile_i;
+  logic           [2:0]               cnn_table_oftile_i;
   logic           [4:0]               cnn_table_ofparr_i;
   logic           [23:0]              cnn_table_ifbaddr_i;
   logic           [23:0]              cnn_table_fltbaddr_i;
@@ -73,6 +73,10 @@ module CNN_accel_tb;
   logic signed    [7:0]               cnn_table_qmin_i;
   logic signed    [7:0]               cnn_table_qmax_i;
   logic                               cnn_table_is_leaky_ReLU_i;
+  logic                               cnn_table_is_use_pool_i;
+  logic                               cnn_table_is_max_pool_i;
+  logic           [4:0]               cnn_table_pool_size_i;
+  logic                               cnn_table_is_stride_over_i;
 
   logic                  cnn_ifbuf_dma_rdycfg_i;
   logic                  cnn_ifbuf_dma_vld_i;
@@ -165,6 +169,11 @@ module CNN_accel_tb;
   int current_qmin;
   int current_qmax;
   int current_is_leaky_relu;
+  int current_is_use_pool;
+  int current_is_max_pool;
+  int current_pool_size;
+  int current_pool_stride;
+  int current_is_stride_over;
 
   // =========================================================
   // Multi-layer testcase description storage
@@ -183,6 +192,11 @@ module CNN_accel_tb;
   int    layer_oftile     [0:MAX_LAYERS_TB-1];
   int    layer_if_zp      [0:MAX_LAYERS_TB-1];
   int    layer_fl_zp      [0:MAX_LAYERS_TB-1];
+  int    layer_is_use_pool[0:MAX_LAYERS_TB-1];
+  int    layer_is_max_pool[0:MAX_LAYERS_TB-1];
+  int    layer_pool_size  [0:MAX_LAYERS_TB-1];
+  int    layer_pool_stride[0:MAX_LAYERS_TB-1];
+  int    layer_is_stride_over[0:MAX_LAYERS_TB-1];
   int    layer_if_base    [0:MAX_LAYERS_TB-1];
   int    layer_flt_base   [0:MAX_LAYERS_TB-1];
   int    layer_bias_base  [0:MAX_LAYERS_TB-1];
@@ -232,6 +246,38 @@ module CNN_accel_tb;
     return (w + 2 * padding - kw) / stride + 1;
   endfunction
 
+  function automatic int calc_pool_out_dim(
+    input int of_width,
+    input int is_use_pool,
+    input int pool_size,
+    input int pool_stride,
+    input int is_stride_over
+  );
+    int pool_num;
+    int pool_den;
+    begin
+      if (!is_use_pool) begin
+        return of_width;
+      end
+
+      if (pool_size <= 0) begin
+        return of_width;
+      end
+
+      pool_den = pool_stride;
+      if (pool_den <= 0) begin
+        pool_den = 1;
+      end
+
+      pool_num = is_stride_over ? of_width : (of_width - 1);
+      if (pool_num < 0) begin
+        pool_num = 0;
+      end
+
+      return ceil_div(pool_num, pool_den);
+    end
+  endfunction
+
   function automatic int calc_if_words(
     input int w,
     input int h,
@@ -254,7 +300,29 @@ module CNN_accel_tb;
     begin
       ho = calc_of_h(h, kh, stride, padding);
       wo = calc_of_w(w, kw, stride, padding);
+      ho = calc_pool_out_dim(ho, current_is_use_pool, current_pool_size,
+                             current_pool_stride, current_is_stride_over);
+      wo = calc_pool_out_dim(wo, current_is_use_pool, current_pool_size,
+                             current_pool_stride, current_is_stride_over);
       return co * ho * align_even(wo);
+    end
+  endfunction
+
+  function automatic int derive_is_stride_over(
+    input string tc_name,
+    input int pool_size,
+    input int pool_stride
+  );
+    begin
+      if (pool_size == pool_stride) begin
+        return 1;
+      end
+      if (pool_size == (pool_stride + 1)) begin
+        return 0;
+      end
+      $fatal(1, "%s: invalid pooling stride relation. Need pool_size == pool_stride or pool_size == pool_stride + 1, got pool_size=%0d pool_stride=%0d",
+             tc_name, pool_size, pool_stride);
+      return 0;
     end
   endfunction
 
@@ -295,12 +363,16 @@ module CNN_accel_tb;
       cnn_table_fltc_zp_i = '0;
       cnn_table_mult_i = '0;
       cnn_table_mult_shift_i = '0;
-      cnn_table_alphamult_i = '0;
+      cnn_table_alphamult_i = '1;
       cnn_table_alphamult_shift_i = '0;
       cnn_table_zpy_i = '0;
       cnn_table_qmin_i = -128;
       cnn_table_qmax_i = 127;
-      cnn_table_is_leaky_ReLU_i = 1'b0;
+      cnn_table_is_leaky_ReLU_i = 1'b1;
+      cnn_table_is_use_pool_i = 1'b0;
+      cnn_table_is_max_pool_i = 1'b0;
+      cnn_table_pool_size_i = 5'd1;
+      cnn_table_is_stride_over_i = 1'b1;
     end
   endtask
 
@@ -337,7 +409,7 @@ module CNN_accel_tb;
       if (ifparr > 7) begin
         $fatal(1, "%s: ifparr=%0d exceeds cnn_table_ifparr_i[2:0]", tc_name, ifparr);
       end
-      if (oftile > 3) begin
+      if (oftile > 7) begin
         $fatal(1, "%s: oftile=%0d exceeds cnn_table_oftile_i[1:0]", tc_name, oftile);
       end
       if (ofparr > 31) begin
@@ -352,7 +424,7 @@ module CNN_accel_tb;
       cnn_table_stride_i           = stride[2:0];
       cnn_table_padding_i          = padding[1:0];
       cnn_table_ifparr_i           = ifparr[2:0];
-      cnn_table_oftile_i           = oftile[1:0];
+      cnn_table_oftile_i           = oftile[2:0];
       cnn_table_ofparr_i           = ofparr[4:0];
       cnn_table_ifbaddr_i          = current_if_base[23:0];
       cnn_table_fltbaddr_i         = current_flt_base[23:0];
@@ -368,6 +440,10 @@ module CNN_accel_tb;
       cnn_table_qmin_i             = current_qmin[7:0];
       cnn_table_qmax_i             = current_qmax[7:0];
       cnn_table_is_leaky_ReLU_i    = current_is_leaky_relu[0];
+      cnn_table_is_use_pool_i      = current_is_use_pool[0];
+      cnn_table_is_max_pool_i      = current_is_max_pool[0];
+      cnn_table_pool_size_i        = current_pool_size[4:0];
+      cnn_table_is_stride_over_i   = current_is_stride_over[0];
     end
   endtask
 
@@ -491,7 +567,12 @@ module CNN_accel_tb;
       current_zpy = 0;
       current_qmin = -128;
       current_qmax = 127;
-      current_is_leaky_relu = 0;
+      current_is_leaky_relu = 1;
+      current_is_use_pool = 0;
+      current_is_max_pool = 0;
+      current_pool_size = 1;
+      current_pool_stride = 1;
+      current_is_stride_over = 1;
     end
   endtask
 
@@ -993,6 +1074,7 @@ module CNN_accel_tb;
     logic [WIDTH-1:0] if_t [0:MAX_C-1][0:MAX_H-1][0:MAX_W-1];
     logic [WIDTH-1:0] flt_t[0:MAX_F-1][0:MAX_C-1][0:MAX_KSZ-1][0:MAX_KSZ-1];
     logic [WIDTH-1:0] of_t [0:MAX_F-1][0:MAX_H-1][0:MAX_W-1];
+    logic [WIDTH-1:0] pool_t [0:MAX_F-1][0:MAX_H-1][0:MAX_W-1];
 
     logic [M*WIDTH-1:0] pkt_word;
     logic [M-1:0]       pkt_vld;
@@ -1002,7 +1084,16 @@ module CNN_accel_tb;
     int co_idx, ci_idx, h_idx, w_idx;
     int oh, ow;
     int ho, wo;
+    int pho, pwo;
     int ih, iw;
+    int ph, pw;
+    int py, px;
+    int src_h, src_w;
+    int pool_stride_eff;
+    int signed pool_acc;
+    int signed pool_max;
+    int signed pool_val;
+    int signed pooled;
 
     int total_cols;
     int full_cols;
@@ -1060,6 +1151,14 @@ module CNN_accel_tb;
 
       ho = (current_h + 2 * current_padding - current_kh) / current_stride + 1;
       wo = (current_w + 2 * current_padding - current_kw) / current_stride + 1;
+      pool_stride_eff = current_is_stride_over ? current_pool_size : (current_pool_size - 1);
+      if (pool_stride_eff <= 0) begin
+        pool_stride_eff = 1;
+      end
+      pho = calc_pool_out_dim(ho, current_is_use_pool, current_pool_size,
+                              current_pool_stride, current_is_stride_over);
+      pwo = calc_pool_out_dim(wo, current_is_use_pool, current_pool_size,
+                              current_pool_stride, current_is_stride_over);
 
       // =====================================================
       // Golden convolution value, unchanged
@@ -1098,6 +1197,46 @@ module CNN_accel_tb;
       end
 
       // =====================================================
+      // Golden pooling value. Pooling is applied after scale/ReLU.
+      // For edge windows that run past the OFMAP width, only valid
+      // source cells contribute; average mode still divides by pool_size^2,
+      // matching max_avg_pooling.
+      // =====================================================
+      for (co_idx = 0; co_idx < current_co; co_idx++) begin
+        for (ph = 0; ph < pho; ph++) begin
+          for (pw = 0; pw < pwo; pw++) begin
+            if (!current_is_use_pool) begin
+              pool_t[co_idx][ph][pw] = of_t[co_idx][ph][pw];
+            end else begin
+              pool_acc = 0;
+              pool_max = -128;
+
+              for (py = 0; py < current_pool_size; py++) begin
+                for (px = 0; px < current_pool_size; px++) begin
+                  src_h = ph * pool_stride_eff + py;
+                  src_w = pw * pool_stride_eff + px;
+                  if ((src_h < ho) && (src_w < wo)) begin
+                    pool_val = $signed(of_t[co_idx][src_h][src_w]);
+                    pool_acc += pool_val;
+                    if (pool_val > pool_max) begin
+                      pool_max = pool_val;
+                    end
+                  end
+                end
+              end
+
+              if (current_is_max_pool) begin
+                pooled = pool_max;
+              end else begin
+                pooled = pool_acc / (current_pool_size * current_pool_size);
+              end
+              pool_t[co_idx][ph][pw] = pooled[WIDTH-1:0];
+            end
+          end
+        end
+      end
+
+      // =====================================================
       // Expected memory layout for OFBUF DMA output
       // Memory order: column -> row -> channel
       // Address mapping checked later:
@@ -1108,12 +1247,12 @@ module CNN_accel_tb;
       // at the end of each row. The checker skips that cell.
       // =====================================================
       exp_out_count = 0;
-      exp_pkt_count = current_co * ho;  // one completed DMA row per output channel row
+      exp_pkt_count = current_co * pho;  // one completed DMA row per output channel row
 
       for (co_idx = 0; co_idx < current_co; co_idx++) begin
-        for (oh = 0; oh < ho; oh++) begin
-          for (ow = 0; ow < wo; ow++) begin
-            exp_out_mem[exp_out_count] = of_t[co_idx][oh][ow];
+        for (oh = 0; oh < pho; oh++) begin
+          for (ow = 0; ow < pwo; ow++) begin
+            exp_out_mem[exp_out_count] = pool_t[co_idx][oh][ow];
             exp_out_count = exp_out_count + 1;
           end
         end
@@ -1464,6 +1603,16 @@ module CNN_accel_tb;
       if ((layer_w[layer_idx] + 2 * layer_padding[layer_idx] < layer_kw[layer_idx]) ||
           (layer_h[layer_idx] + 2 * layer_padding[layer_idx] < layer_kh[layer_idx]))
         $fatal(1, "%s[L%0d]: padded ifmap smaller than filter", tc_name, layer_idx);
+      if (layer_is_use_pool[layer_idx]) begin
+        if ((layer_pool_size[layer_idx] <= 0) || (layer_pool_size[layer_idx] > 31))
+          $fatal(1, "%s[L%0d]: invalid pool_size=%0d", tc_name, layer_idx, layer_pool_size[layer_idx]);
+        if ((layer_pool_stride[layer_idx] <= 0) || (layer_pool_stride[layer_idx] > 31))
+          $fatal(1, "%s[L%0d]: invalid pool_stride=%0d", tc_name, layer_idx, layer_pool_stride[layer_idx]);
+        if (!((layer_pool_size[layer_idx] == layer_pool_stride[layer_idx]) ||
+              (layer_pool_size[layer_idx] == (layer_pool_stride[layer_idx] + 1))))
+          $fatal(1, "%s[L%0d]: invalid pooling stride relation pool_size=%0d pool_stride=%0d",
+                 tc_name, layer_idx, layer_pool_size[layer_idx], layer_pool_stride[layer_idx]);
+      end
     end
   endtask
 
@@ -1486,6 +1635,11 @@ module CNN_accel_tb;
         layer_oftile[l]     = 0;
         layer_if_zp[l]      = 0;
         layer_fl_zp[l]      = 0;
+        layer_is_use_pool[l] = 0;
+        layer_is_max_pool[l] = 0;
+        layer_pool_size[l]   = 1;
+        layer_pool_stride[l] = 1;
+        layer_is_stride_over[l] = 1;
         layer_if_base[l]    = 0;
         layer_flt_base[l]   = 0;
         layer_bias_base[l]  = 0;
@@ -1537,7 +1691,35 @@ module CNN_accel_tb;
       layer_oftile[l]  = oftile;
       layer_if_zp[l]   = if_zp;
       layer_fl_zp[l]   = fl_zp;
+      layer_is_use_pool[l] = 0;
+      layer_is_max_pool[l] = 0;
+      layer_pool_size[l]   = 1;
+      layer_pool_stride[l] = 1;
+      layer_is_stride_over[l] = 1;
       num_loaded_layers++;
+    end
+  endtask
+
+  task automatic set_last_layer_pool_cfg(
+    input string tc_name,
+    input int    is_use_pool,
+    input int    is_max_pool,
+    input int    pool_size,
+    input int    pool_stride
+  );
+    int l;
+    begin
+      if (num_loaded_layers <= 0) begin
+        $fatal(1, "%s: cannot set pooling before add_layer_cfg", tc_name);
+      end
+      l = num_loaded_layers - 1;
+
+      layer_is_use_pool[l] = is_use_pool;
+      layer_is_max_pool[l] = is_max_pool;
+      layer_pool_size[l]   = is_use_pool ? pool_size : 1;
+      layer_pool_stride[l] = is_use_pool ? pool_stride : 1;
+      layer_is_stride_over[l] = is_use_pool ?
+        derive_is_stride_over(tc_name, pool_size, pool_stride) : 1;
     end
   endtask
 
@@ -1560,14 +1742,19 @@ module CNN_accel_tb;
       current_oftile    = layer_oftile[layer_idx];
       current_ifc_zp    = layer_if_zp[layer_idx];
       current_fltc_zp   = layer_fl_zp[layer_idx];
+      current_is_use_pool = layer_is_use_pool[layer_idx];
+      current_is_max_pool = layer_is_max_pool[layer_idx];
+      current_pool_size   = layer_pool_size[layer_idx];
+      current_pool_stride = layer_pool_stride[layer_idx];
+      current_is_stride_over = layer_is_stride_over[layer_idx];
       current_mult      = 3;
       current_mult_shift = 2;
       current_alphamult = 1;
-      current_alphamult_shift = 3;
+      current_alphamult_shift = 0;
       current_zpy       = 0;
       current_qmin      = -128;
       current_qmax      = 127;
-      current_is_leaky_relu = layer_co[layer_idx] % 2;
+      current_is_leaky_relu = 1;
     end
   endtask
 
@@ -1620,12 +1807,14 @@ module CNN_accel_tb;
         layer_exp_values[l] = exp_out_count;
         total_exp_rows += layer_exp_rows[l];
 
-        $display("%s[L%0d:%s]: IF base=%0d words=%0d, FLT base=%0d words=%0d, BIAS base=%0d words=%0d, OF base=%0d words=%0d, exp_rows=%0d exp_values=%0d",
+        $display("%s[L%0d:%s]: IF base=%0d words=%0d, FLT base=%0d words=%0d, BIAS base=%0d words=%0d, OF base=%0d words=%0d, pool(use=%0d max=%0d size=%0d stride=%0d over=%0d), exp_rows=%0d exp_values=%0d",
                  tc_name, l, layer_name[l],
                  layer_if_base[l], layer_if_words[l],
                  layer_flt_base[l], layer_flt_words[l],
                  layer_bias_base[l], layer_bias_words[l],
                  layer_of_base[l], layer_of_words[l],
+                 layer_is_use_pool[l], layer_is_max_pool[l],
+                 layer_pool_size[l], layer_pool_stride[l], layer_is_stride_over[l],
                  layer_exp_rows[l], layer_exp_values[l]);
 
         next_if_base   = layer_if_base[l]   + layer_if_words[l]   + BASE_ALIGN;
@@ -1666,6 +1855,10 @@ module CNN_accel_tb;
 
       ho = calc_of_h(current_h, current_kh, current_stride, current_padding);
       wo = calc_of_w(current_w, current_kw, current_stride, current_padding);
+      ho = calc_pool_out_dim(ho, current_is_use_pool, current_pool_size,
+                             current_pool_stride, current_is_stride_over);
+      wo = calc_pool_out_dim(wo, current_is_use_pool, current_pool_size,
+                             current_pool_stride, current_is_stride_over);
       align_wo = align_even(wo);
 
       if (exp_out_count != layer_exp_values[layer_idx]) begin
@@ -1837,6 +2030,10 @@ module CNN_accel_tb;
     begin
       ho = (current_h + 2 * current_padding - current_kh) / current_stride + 1;
       wo = (current_w + 2 * current_padding - current_kw) / current_stride + 1;
+      ho = calc_pool_out_dim(ho, current_is_use_pool, current_pool_size,
+                             current_pool_stride, current_is_stride_over);
+      wo = calc_pool_out_dim(wo, current_is_use_pool, current_pool_size,
+                             current_pool_stride, current_is_stride_over);
       align_wo = align_even(wo);
 
       if (exp_out_count != current_co * ho * wo) begin
@@ -1899,6 +2096,36 @@ module CNN_accel_tb;
       clear_layer_configs();
       add_layer_cfg(tc_name, w, h, ci, co, kw, kh, stride, padding,
                     ifparr, ofparr, oftile, if_zp, fl_zp);
+      run_loaded_layers(tc_name);
+    end
+  endtask
+
+  task automatic run_case_pool(
+    input string tc_name,
+    input int    w,
+    input int    h,
+    input int    ci,
+    input int    co,
+    input int    kw,
+    input int    kh,
+    input int    stride,
+    input int    padding,
+    input int    ifparr,
+    input int    ofparr,
+    input int    oftile,
+    input int    if_zp,
+    input int    fl_zp,
+    input int    is_use_pool,
+    input int    is_max_pool,
+    input int    pool_size,
+    input int    pool_stride
+  );
+    begin
+      clear_layer_configs();
+      add_layer_cfg(tc_name, w, h, ci, co, kw, kh, stride, padding,
+                    ifparr, ofparr, oftile, if_zp, fl_zp);
+      set_last_layer_pool_cfg(tc_name, is_use_pool, is_max_pool,
+                              pool_size, pool_stride);
       run_loaded_layers(tc_name);
     end
   endtask
@@ -1997,11 +2224,16 @@ module CNN_accel_tb;
       current_mult      = 3;
       current_mult_shift = 2;
       current_alphamult = 1;
-      current_alphamult_shift = 3;
+      current_alphamult_shift = 0;
       current_zpy       = 0;
       current_qmin      = -128;
       current_qmax      = 127;
-      current_is_leaky_relu = co % 2;
+      current_is_leaky_relu = 1;
+      current_is_use_pool = 0;
+      current_is_max_pool = 0;
+      current_pool_size = 1;
+      current_pool_stride = 1;
+      current_is_stride_over = 1;
 
       fill_ifmap_external_memory(current_if_base, w, h, ci);
       fill_filter_external_memory(current_flt_base, kw, kh, ci, co, ifparr, ofparr);
@@ -2160,6 +2392,10 @@ module CNN_accel_tb;
     .cnn_table_qmin_i(cnn_table_qmin_i),
     .cnn_table_qmax_i(cnn_table_qmax_i),
     .cnn_table_is_leaky_ReLU_i(cnn_table_is_leaky_ReLU_i),
+    .cnn_table_is_use_pool_i(cnn_table_is_use_pool_i),
+    .cnn_table_is_max_pool_i(cnn_table_is_max_pool_i),
+    .cnn_table_pool_size_i(cnn_table_pool_size_i),
+    .cnn_table_is_stride_over_i(cnn_table_is_stride_over_i),
 
     .cnn_ifbuf_dma_rdycfg_i(cnn_ifbuf_dma_rdycfg_i),
     .cnn_ifbuf_dma_vld_i(cnn_ifbuf_dma_vld_i),
@@ -2236,7 +2472,56 @@ module CNN_accel_tb;
 
     // 1) Ifmap kích thước chẵn, burst filter chẵn
     //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=2 (<= 6/3), oftile = 1, padding = 2, stride = 1
-    run_case("TC0_even_ifmap_even_burst", 10, 10, 1, 4, 3, 3, 1, 2, 1, 2, 1, 0, 0);
+    run_case("TC0_even_ifmap_even_burst", 5, 5, 4, 4, 5, 5, 1, 0, 4, 1, 4, 0, 0);
+  // $finish;
+    // Pooling interface/scoreboard coverage.
+    // run_case_pool parameters:
+    // tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,
+    // if_zp, fl_zp, is_use_pool, is_max_pool, pool_size, pool_stride.
+    // pool_stride rule: stride_over=1 when pool_size==pool_stride,
+    // stride_over=0 when pool_size==pool_stride+1.
+    // TC_POOL_NONE_EXPLICIT:
+    // w=6, h=6, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // is_use_pool=0, is_max_pool=0, pool_size=1, pool_stride=1.
+    // conv_ofwidth=6, pool_ofwidth=6.
+    // run_case_pool("TC_POOL_NONE_EXPLICIT", 6, 6, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+    //               0, 0, 1, 1);
+    // TC_POOL_MAX_3x3_STRIDE3:
+    // w=6, h=6, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // is_use_pool=1, is_max_pool=1, pool_size=3, pool_stride=3.
+    // conv_ofwidth=6, pool_ofwidth=2.
+    // run_case_pool("TC_POOL_MAX_3x3_STRIDE3", 6, 6, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+    //               1, 1, 3, 3);
+    // // TC_POOL_AVG_2x2_TAIL_STRIDE2:
+    // // w=5, h=5, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // // is_use_pool=1, is_max_pool=0, pool_size=2, pool_stride=2.
+    // // conv_ofwidth=5, pool_ofwidth=3.
+    // run_case_pool("TC_POOL_AVG_2x2_TAIL_STRIDE2", 5, 5, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+    //               1, 0, 2, 2);
+    // // TC_POOL_GLOBAL_MAX:
+    // // w=5, h=5, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // // is_use_pool=1, is_max_pool=1, pool_size=5, pool_stride=5.
+    // // conv_ofwidth=5, pool_ofwidth=1.
+    // run_case_pool("TC_POOL_GLOBAL_MAX", 5, 5, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+    //               1, 1, 5, 5);
+    // // TC_POOL_GLOBAL_AVG:
+    // // w=7, h=7, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // // is_use_pool=1, is_max_pool=0, pool_size=7, pool_stride=7.
+    // // conv_ofwidth=7, pool_ofwidth=1.
+    // run_case_pool("TC_POOL_GLOBAL_AVG", 7, 7, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+    //               1, 0, 7, 7);
+    // // TC_POOL_MAX_3x3_OVERLAP_TAIL:
+    // // w=8, h=8, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // // is_use_pool=1, is_max_pool=1, pool_size=3, pool_stride=2.
+    // // conv_ofwidth=8, pool_ofwidth=4.
+    // run_case_pool("TC_POOL_MAX_3x3_OVERLAP_TAIL", 8, 8, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+    //               1, 1, 3, 2);
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
     // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2
@@ -2307,6 +2592,6 @@ module CNN_accel_tb;
     $finish;
   end
   initial begin
-    // #9000 $finish;
+    // #10000 $finish;
   end
 endmodule

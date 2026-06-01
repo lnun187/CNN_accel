@@ -60,7 +60,9 @@ module computation #(
     output [M*WIDTH-1:0] comp_ofbuf_data_o,
     
     // Tín hiệu báo xong - Lấy từ PU[0]
-    output                  comp_pa_done_compute_o
+    output                  comp_pa_done_compute_o,
+    output [M-1:0]          comp_pa_done_compute_vec_o,
+    output [M-1:0]          comp_pa_done_compute_layer_vec_o
 );
 
     // ==========================================
@@ -77,8 +79,11 @@ module computation #(
 
     // Tín hiệu rdy và done compute gom từ các PU
     wire [M-1:0]        pu_ifc_rdy_m;
+    wire [M-1:0]        pu_pa_done_compute_row_m;
     wire [M-1:0]        pu_pa_done_compute_m;
     wire [M-1:0]        pu_pa_done_compute_layer_m;
+    wire [M-1:0]        scale_done_compute_m;
+    wire [M-1:0]        scale_done_compute_layer_m;
 
     reg             [3:0]           comp_inf_hf_reg;
     reg             [2:0]           comp_inf_stride_reg;
@@ -158,8 +163,10 @@ module computation #(
     // Chỉ báo rdy cho cache khi tất cả M PUs đều sẵn sàng
     assign pu_ifc_rdy_w = pu_ifc_rdy_m[0]; 
     
-    // Gán tín hiệu done compute từ PU 0 ra ngoài theo yêu cầu
-    assign comp_pa_done_compute_o = pu_pa_done_compute_m[0];
+    // Done signals that leave computation are aligned with scaled data.
+    assign comp_pa_done_compute_o = scale_done_compute_layer_m[0];
+    assign comp_pa_done_compute_vec_o = scale_done_compute_m;
+    assign comp_pa_done_compute_layer_vec_o = scale_done_compute_layer_m;
     wire comp_ifbuf_rdy_w;
     assign comp_ifbuf_rdy_o = comp_ifbuf_rdy_w && comp_rdy;
     // ==========================================
@@ -258,6 +265,7 @@ module computation #(
                 .pu_scale_data_o(comp_scale_data_w[(i+1)*ACC_WIDTH-1 : i*ACC_WIDTH]),
                 
                 // Tín hiệu done (Xuất ra mảng rồi lấy phần tử 0)
+                .pu_pa_done_compute_row_o(pu_pa_done_compute_row_m[i]),
                 .pu_pa_done_compute_o(pu_pa_done_compute_m[i]),
                 .pu_pa_done_compute_layer_o(pu_pa_done_compute_layer_m[i])
             );
@@ -285,11 +293,15 @@ module computation #(
 
                 .scale_comp_data_i(comp_scale_data_w[(i+1)*ACC_WIDTH-1 : i*ACC_WIDTH]),
                 .scale_comp_vld_i(comp_scale_vld_w[i]),
+                .scale_comp_done_compute_i(pu_pa_done_compute_row_m[i]),
+                .scale_comp_done_compute_layer_i(pu_pa_done_compute_m[i]),
                 .scale_comp_rdy_o(scale_comp_rdy_w[i]),
 
                 .scale_ofbuf_rdy_i(comp_ofbuf_rdy_i[i]),
                 .scale_ofbuf_data_o(comp_ofbuf_data_o[WIDTH*i +: WIDTH]),
-                .scale_ofbuf_vld_o(comp_ofbuf_vld_o[i])
+                .scale_ofbuf_vld_o(comp_ofbuf_vld_o[i]),
+                .scale_ofbuf_done_compute_o(scale_done_compute_m[i]),
+                .scale_ofbuf_done_compute_layer_o(scale_done_compute_layer_m[i])
             );
         end
     endgenerate

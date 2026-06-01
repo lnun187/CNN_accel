@@ -43,11 +43,15 @@ module scale_ReLU #(
 
     input   signed  [DATA_IN_WIDTH-1:0]         scale_comp_data_i,
     input                                       scale_comp_vld_i,
+    input                                       scale_comp_done_compute_i,
+    input                                       scale_comp_done_compute_layer_i,
     output                                      scale_comp_rdy_o,
 
     input                                       scale_ofbuf_rdy_i,
     output  signed  [DATA_OUT_WIDTH-1:0]        scale_ofbuf_data_o,
-    output                                      scale_ofbuf_vld_o
+    output                                      scale_ofbuf_vld_o,
+    output                                      scale_ofbuf_done_compute_o,
+    output                                      scale_ofbuf_done_compute_layer_o
     );
 
     reg             [7:0]                       scale_inf_width_reg;
@@ -66,6 +70,8 @@ module scale_ReLU #(
     reg  signed     [63:0]                      round_value_alpha;
 
     reg             [10:0]          data_vld_q; //Pipeline 11 STAGES
+    reg             [9:0]           done_compute_q;       // Pipeline 10 STAGES
+    reg             [9:0]           done_compute_layer_q; // Pipeline 10 STAGES
     reg  signed     [31:0]          data_stage_0_q;
     reg  signed     [63:0]          data_stage_1_q;
     reg  signed     [63:0]          data_stage_2_q;
@@ -99,6 +105,8 @@ module scale_ReLU #(
     assign scale_comp_rdy_o     = bias_vld_q && pipe_rdy[0];
     assign scale_ofbuf_data_o   = data_stage_10_q;
     assign scale_ofbuf_vld_o    = data_vld_q[10];
+    assign scale_ofbuf_done_compute_o       = done_compute_q[9];
+    assign scale_ofbuf_done_compute_layer_o = done_compute_layer_q[9];
 
     // Per-stage ready chain.
     // pipe_rdy[i] = 1 when stage i can accept new data because:
@@ -170,6 +178,56 @@ module scale_ReLU #(
             if(pipe_rdy[8])  data_vld_q[8]  <= data_vld_q[7];
             if(pipe_rdy[9])  data_vld_q[9]  <= data_vld_q[8];
             if(pipe_rdy[10]) data_vld_q[10] <= data_vld_q[9];
+        end
+    end
+
+    // Done pipeline is one stage shorter than the data pipeline. Each done
+    // stage advances with the ready condition of the next data stage.
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            done_compute_q       <= 10'd0;
+            done_compute_layer_q <= 10'd0;
+        end else begin
+            if(pipe_rdy[1]) begin
+                done_compute_q[0]       <= scale_comp_done_compute_i;
+                done_compute_layer_q[0] <= scale_comp_done_compute_layer_i;
+            end
+            if(pipe_rdy[2]) begin
+                done_compute_q[1]       <= done_compute_q[0];
+                done_compute_layer_q[1] <= done_compute_layer_q[0];
+            end
+            if(pipe_rdy[3]) begin
+                done_compute_q[2]       <= done_compute_q[1];
+                done_compute_layer_q[2] <= done_compute_layer_q[1];
+            end
+            if(pipe_rdy[4]) begin
+                done_compute_q[3]       <= done_compute_q[2];
+                done_compute_layer_q[3] <= done_compute_layer_q[2];
+            end
+            if(pipe_rdy[5]) begin
+                done_compute_q[4]       <= done_compute_q[3];
+                done_compute_layer_q[4] <= done_compute_layer_q[3];
+            end
+            if(pipe_rdy[6]) begin
+                done_compute_q[5]       <= done_compute_q[4];
+                done_compute_layer_q[5] <= done_compute_layer_q[4];
+            end
+            if(pipe_rdy[7]) begin
+                done_compute_q[6]       <= done_compute_q[5];
+                done_compute_layer_q[6] <= done_compute_layer_q[5];
+            end
+            if(pipe_rdy[8]) begin
+                done_compute_q[7]       <= done_compute_q[6];
+                done_compute_layer_q[7] <= done_compute_layer_q[6];
+            end
+            if(pipe_rdy[9]) begin
+                done_compute_q[8]       <= done_compute_q[7];
+                done_compute_layer_q[8] <= done_compute_layer_q[7];
+            end
+            if(pipe_rdy[10]) begin
+                done_compute_q[9]       <= done_compute_q[8];
+                done_compute_layer_q[9] <= done_compute_layer_q[8];
+            end
         end
     end
     

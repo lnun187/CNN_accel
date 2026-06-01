@@ -24,7 +24,7 @@ module CNN_accel#(
     parameter DATA_WIDTH    = 8,
     parameter ACC_WIDTH     = 32,
     parameter IFBUF_DEPTH   = 224,
-    parameter FLTBUF_DEPTH  = 3456,
+    parameter FLTBUF_DEPTH  = 4700,
     parameter COMP_DEPTH    = 12,
     parameter FIFO_DEPTH    = 12,
     parameter OFBUF_DEPTH   = 896,
@@ -52,7 +52,7 @@ module CNN_accel#(
     input           [2:0]               cnn_table_stride_i,
     input           [1:0]               cnn_table_padding_i,
     input           [2:0]               cnn_table_ifparr_i,
-    input           [1:0]               cnn_table_oftile_i,
+    input           [2:0]               cnn_table_oftile_i,
     input           [4:0]               cnn_table_ofparr_i,
     input           [23:0]              cnn_table_ifbaddr_i,
     input           [23:0]              cnn_table_fltbaddr_i,
@@ -68,6 +68,10 @@ module CNN_accel#(
     input  signed   [7:0]               cnn_table_qmin_i,
     input  signed   [7:0]               cnn_table_qmax_i,
     input                               cnn_table_is_leaky_ReLU_i,
+    input                               cnn_table_is_use_pool_i,
+    input                               cnn_table_is_max_pool_i,
+    input           [4:0]               cnn_table_pool_size_i,
+    input                               cnn_table_is_stride_over_i,
 
     // =========================================================
     // cnn cpu interface
@@ -146,7 +150,7 @@ module CNN_accel#(
     wire [2:0]                      table_inf_stride_w;
     wire [1:0]                      table_inf_padding_w;
     wire [2:0]                      table_inf_ifparr_w;
-    wire [1:0]                      table_inf_oftile_w;
+    wire [2:0]                      table_inf_oftile_w;
     wire [4:0]                      table_inf_ofparr_w;
     wire [23:0]                     table_inf_ifbaddr_w;
     wire [23:0]                     table_inf_fltbaddr_w;
@@ -162,6 +166,10 @@ module CNN_accel#(
     wire signed [7:0]               table_inf_qmin_w;
     wire signed [7:0]               table_inf_qmax_w;
     wire                            table_inf_is_leaky_ReLU_w;
+    wire                            table_inf_is_use_pool_w;
+    wire                            table_inf_is_max_pool_w;
+    wire [4:0]                      table_inf_pool_size_w;
+    wire                            table_inf_is_stride_over_w;
 
     // =========================================================
     // Internal instruction wires driven by layer_info
@@ -175,7 +183,7 @@ module CNN_accel#(
     wire [6:0]                      ifbuf_inf_ifblock_i;
     wire [3:0]                      ifbuf_inf_oftiles_i;
     wire [3:0]                      ifbuf_inf_oftiles_tail_i;
-    wire [6:0]                      ifbuf_inf_iftiles_i;
+    wire [7:0]                      ifbuf_inf_iftiles_i;
     wire [8:0]                      ifbuf_inf_wp_i;
     wire [1:0]                      ifbuf_inf_padding_i;
     wire signed [DATA_WIDTH-1:0]    ifbuf_inf_ifc_zp_i;
@@ -191,7 +199,7 @@ module CNN_accel#(
     wire [4:0]                      fltbuf_inf_ofparr_tail_i;
     wire [3:0]                      fltbuf_inf_oftiles_i;
     wire [3:0]                      fltbuf_inf_oftiles_tail_i;
-    wire [6:0]                      fltbuf_inf_iftiles_i;
+    wire [7:0]                      fltbuf_inf_iftiles_i;
     wire                            fltbuf_inf_rdy_o;
 
     wire                            bias_inf_vld_i;
@@ -229,6 +237,7 @@ module CNN_accel#(
     localparam FLTBUF_INF_PAYLOAD_WIDTH = 79 + DATA_WIDTH;
     localparam BIAS_INF_PAYLOAD_WIDTH   = 63;
     localparam COMP_INF_PAYLOAD_WIDTH   = 118 + (2*DATA_WIDTH);
+    localparam POOL_INF_PAYLOAD_WIDTH   = 26;
     localparam OFBUF_INF_PAYLOAD_WIDTH  = 99;
 
     // Raw layer_info -> IFBUF instruction channel
@@ -242,7 +251,7 @@ module CNN_accel#(
     wire [6:0]                      ifbuf_inf_ifblock_li_w;
     wire [3:0]                      ifbuf_inf_oftiles_li_w;
     wire [3:0]                      ifbuf_inf_oftiles_tail_li_w;
-    wire [6:0]                      ifbuf_inf_iftiles_li_w;
+    wire [7:0]                      ifbuf_inf_iftiles_li_w;
     wire [8:0]                      ifbuf_inf_wp_li_w;
     wire [1:0]                      ifbuf_inf_padding_li_w;
     wire signed [DATA_WIDTH-1:0]    ifbuf_inf_ifc_zp_li_w;
@@ -261,7 +270,7 @@ module CNN_accel#(
     wire [4:0]                      fltbuf_inf_ofparr_tail_li_w;
     wire [3:0]                      fltbuf_inf_oftiles_li_w;
     wire [3:0]                      fltbuf_inf_oftiles_tail_li_w;
-    wire [6:0]                      fltbuf_inf_iftiles_li_w;
+    wire [7:0]                      fltbuf_inf_iftiles_li_w;
     wire [7:0]                      fltbuf_inf_height_w;
     wire signed [DATA_WIDTH-1:0]    fltbuf_inf_zp_w;
     wire [FLTBUF_INF_PAYLOAD_WIDTH-1:0] fltbuf_inf_payload_li_w;
@@ -299,6 +308,26 @@ module CNN_accel#(
     wire                            comp_inf_is_leaky_ReLU_li_w;
     wire [COMP_INF_PAYLOAD_WIDTH-1:0] comp_inf_payload_li_w;
     wire [COMP_INF_PAYLOAD_WIDTH-1:0] comp_inf_payload_w;
+
+    // Raw layer_info -> POOL instruction channel
+    wire                            pool_inf_vld_li_w;
+    wire                            pool_inf_rdy_li_w;
+    wire [7:0]                      pool_inf_ofwidth_li_w;
+    wire                            pool_inf_is_use_pool_li_w;
+    wire                            pool_inf_is_max_pool_li_w;
+    wire [4:0]                      pool_inf_pool_size_li_w;
+    wire [9:0]                      pool_inf_square_pool_size_li_w;
+    wire                            pool_inf_is_stride_over_li_w;
+    wire [POOL_INF_PAYLOAD_WIDTH-1:0] pool_inf_payload_li_w;
+    wire [POOL_INF_PAYLOAD_WIDTH-1:0] pool_inf_payload_w;
+    wire                            pool_inf_vld_w;
+    wire [M-1:0]                    pool_inf_rdy_w;
+    wire [7:0]                      pool_inf_ofwidth_w;
+    wire                            pool_inf_is_use_pool_w;
+    wire                            pool_inf_is_max_pool_w;
+    wire [4:0]                      pool_inf_pool_size_w;
+    wire [9:0]                      pool_inf_square_pool_size_w;
+    wire                            pool_inf_is_stride_over_w;
 
     // Raw layer_info -> OFBUF instruction channel
     wire                            ofbuf_inf_vld_li_w;
@@ -357,6 +386,11 @@ module CNN_accel#(
     wire [M-1:0]            comp_ofbuf_vld_w;
     wire [M-1:0]            comp_ofbuf_rdy_w;
     wire [M*DATA_WIDTH-1:0]  comp_ofbuf_data_w;
+    wire [M-1:0]            pool_ofbuf_vld_w;
+    wire [M-1:0]            pool_ofbuf_rdy_w;
+    wire [M*DATA_WIDTH-1:0] pool_ofbuf_data_w;
+    wire [M-1:0]            comp_done_compute_w;
+    wire [M-1:0]            comp_done_compute_layer_w;
     wire [M-1:0]            ofbuf_comp_vld_w;
     wire [M-1:0]            ofbuf_comp_rdy_w;
     wire [M*DATA_WIDTH-1:0] ofbuf_comp_data_w;
@@ -449,6 +483,10 @@ module CNN_accel#(
         .table_cnn_qmin_i(cnn_table_qmin_i),
         .table_cnn_qmax_i(cnn_table_qmax_i),
         .table_cnn_is_leaky_ReLU_i(cnn_table_is_leaky_ReLU_i),
+        .table_cnn_is_use_pool_i(cnn_table_is_use_pool_i),
+        .table_cnn_is_max_pool_i(cnn_table_is_max_pool_i),
+        .table_cnn_pool_size_i(cnn_table_pool_size_i),
+        .table_cnn_is_stride_over_i(cnn_table_is_stride_over_i),
 
         .table_inf_vld_o(table_inf_vld_w),
         .table_inf_rdy_i(table_inf_rdy_w && accel_busy), //change .table_inf_rdy_i(table_inf_rdy_w),
@@ -474,7 +512,11 @@ module CNN_accel#(
         .table_inf_zpy_o(table_inf_zpy_w),
         .table_inf_qmin_o(table_inf_qmin_w),
         .table_inf_qmax_o(table_inf_qmax_w),
-        .table_inf_is_leaky_ReLU_o(table_inf_is_leaky_ReLU_w)
+        .table_inf_is_leaky_ReLU_o(table_inf_is_leaky_ReLU_w),
+        .table_inf_is_use_pool_o(table_inf_is_use_pool_w),
+        .table_inf_is_max_pool_o(table_inf_is_max_pool_w),
+        .table_inf_pool_size_o(table_inf_pool_size_w),
+        .table_inf_is_stride_over_o(table_inf_is_stride_over_w)
     );
 
     // =========================================================
@@ -511,6 +553,10 @@ module CNN_accel#(
         .inf_table_qmin_i(table_inf_qmin_w),
         .inf_table_qmax_i(table_inf_qmax_w),
         .inf_table_is_leaky_ReLU_i(table_inf_is_leaky_ReLU_w),
+        .inf_table_is_use_pool_i(table_inf_is_use_pool_w),
+        .inf_table_is_max_pool_i(table_inf_is_max_pool_w),
+        .inf_table_pool_size_i(table_inf_pool_size_w),
+        .inf_table_is_stride_over_i(table_inf_is_stride_over_w),
 
         .inf_ifbuf_rdy_i(ifbuf_inf_rdy_li_w),
         .inf_ifbuf_vld_o(ifbuf_inf_vld_li_w),
@@ -566,6 +612,15 @@ module CNN_accel#(
         .inf_comp_qmin_o(comp_inf_qmin_li_w),
         .inf_comp_qmax_o(comp_inf_qmax_li_w),
         .inf_comp_is_leaky_ReLU_o(comp_inf_is_leaky_ReLU_li_w),
+
+        .inf_pool_rdy_i(pool_inf_rdy_li_w),
+        .inf_pool_vld_o(pool_inf_vld_li_w),
+        .inf_pool_ofwidth_o(pool_inf_ofwidth_li_w),
+        .inf_pool_is_use_pool_o(pool_inf_is_use_pool_li_w),
+        .inf_pool_is_max_pool_o(pool_inf_is_max_pool_li_w),
+        .inf_pool_pool_size_o(pool_inf_pool_size_li_w),
+        .inf_pool_square_pool_size_o(pool_inf_square_pool_size_li_w),
+        .inf_pool_is_stride_over_o(pool_inf_is_stride_over_li_w),
 
         .inf_ofbuf_rdy_i(ofbuf_inf_rdy_li_w),
         .inf_ofbuf_vld_o(ofbuf_inf_vld_li_w),
@@ -760,6 +815,40 @@ module CNN_accel#(
         comp_inf_qmax_i,
         comp_inf_is_leaky_ReLU_i
     } = comp_inf_payload_w;
+
+    assign pool_inf_payload_li_w = {
+        pool_inf_ofwidth_li_w,
+        pool_inf_is_use_pool_li_w,
+        pool_inf_is_max_pool_li_w,
+        pool_inf_pool_size_li_w,
+        pool_inf_square_pool_size_li_w,
+        pool_inf_is_stride_over_li_w
+    };
+
+    skid_buffer #(
+        .SBUF_TYPE(0),
+        .DATA_WIDTH(POOL_INF_PAYLOAD_WIDTH)
+    ) u_skid_layer_info_pool (
+        .clk(clk),
+        .rst_n(rst_n),
+
+        .bwd_data_i(pool_inf_payload_li_w),
+        .bwd_valid_i(pool_inf_vld_li_w),
+        .fwd_ready_i(&pool_inf_rdy_w),
+
+        .fwd_data_o(pool_inf_payload_w),
+        .bwd_ready_o(pool_inf_rdy_li_w),
+        .fwd_valid_o(pool_inf_vld_w)
+    );
+
+    assign {
+        pool_inf_ofwidth_w,
+        pool_inf_is_use_pool_w,
+        pool_inf_is_max_pool_w,
+        pool_inf_pool_size_w,
+        pool_inf_square_pool_size_w,
+        pool_inf_is_stride_over_w
+    } = pool_inf_payload_w;
 
     assign ofbuf_inf_payload_li_w = {
         ofbuf_inf_ofbaddr_l0_li_w,
@@ -1016,12 +1105,41 @@ module CNN_accel#(
         .comp_ofbuf_rdy_i(comp_ofbuf_rdy_w),
         .comp_ofbuf_vld_o(comp_ofbuf_vld_w),
         .comp_ofbuf_data_o(comp_ofbuf_data_w),
-        .comp_pa_done_compute_o(cnn_comp_pa_done_compute_o)
+        .comp_pa_done_compute_o(cnn_comp_pa_done_compute_o),
+        .comp_pa_done_compute_vec_o(comp_done_compute_w),
+        .comp_pa_done_compute_layer_vec_o(comp_done_compute_layer_w)
     );
 
     genvar gi;
     generate
         for (gi = 0; gi < M; gi = gi + 1) begin : gen_ofbuf
+            max_avg_pooling #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .POOL_DEPTH(OFBUF_DEPTH)
+            ) u_max_avg_pooling (
+                .clk(clk),
+                .rst_n(rst_n),
+
+                .pool_inf_vld_i(pool_inf_vld_w),
+                .pool_inf_ofwidth_i(pool_inf_ofwidth_w),
+                .pool_inf_is_use_pool_i(pool_inf_is_use_pool_w),
+                .pool_inf_is_max_pool_i(pool_inf_is_max_pool_w),
+                .pool_inf_pool_size_i(pool_inf_pool_size_w),
+                .pool_inf_square_pool_size_i(pool_inf_square_pool_size_w),
+                .pool_inf_is_stride_over_i(pool_inf_is_stride_over_w),
+                .pool_inf_rdy_o(pool_inf_rdy_w[gi]),
+
+                .pool_scale_vld_i(comp_ofbuf_vld_w[gi]),
+                .pool_scale_rdy_o(comp_ofbuf_rdy_w[gi]),
+                .pool_scale_data_i(comp_ofbuf_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
+                .pool_scale_done_compute_layer_i(comp_done_compute_layer_w[gi]),
+                .pool_scale_done_compute_i(comp_done_compute_w[gi]),
+
+                .pool_ofbuf_vld_o(pool_ofbuf_vld_w[gi]),
+                .pool_ofbuf_rdy_i(pool_ofbuf_rdy_w[gi]),
+                .pool_ofbuf_data_o(pool_ofbuf_data_w[gi*DATA_WIDTH +: DATA_WIDTH])
+            );
+
             skid_buffer #(
                 .SBUF_TYPE(0),
                 .DATA_WIDTH(DATA_WIDTH)
@@ -1029,12 +1147,12 @@ module CNN_accel#(
                 .clk(clk),
                 .rst_n(rst_n),
 
-                .bwd_data_i (comp_ofbuf_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
-                .bwd_valid_i(comp_ofbuf_vld_w[gi]),
+                .bwd_data_i (pool_ofbuf_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
+                .bwd_valid_i(pool_ofbuf_vld_w[gi]),
                 .fwd_ready_i(ofbuf_comp_rdy_w[gi]),
 
                 .fwd_data_o (ofbuf_comp_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
-                .bwd_ready_o(comp_ofbuf_rdy_w[gi]),
+                .bwd_ready_o(pool_ofbuf_rdy_w[gi]),
                 .fwd_valid_o(ofbuf_comp_vld_w[gi])
             );
         end

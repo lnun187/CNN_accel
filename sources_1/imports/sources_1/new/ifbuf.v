@@ -38,7 +38,7 @@ module ifbuf #(
     input       [6:0]               ifbuf_inf_ifblock_i,
     input       [3:0]               ifbuf_inf_oftiles_i,
     input       [3:0]               ifbuf_inf_oftiles_tail_i,
-    input       [6:0]               ifbuf_inf_iftiles_i,
+    input       [7:0]               ifbuf_inf_iftiles_i,
     input       [8:0]               ifbuf_inf_wp_i,
     input       [1:0]               ifbuf_inf_padding_i,
     input       signed [DATA_WIDTH-1:0]    ifbuf_inf_ifc_zp_i,
@@ -71,7 +71,7 @@ module ifbuf #(
     // ==========================================
     reg [3:0]               ifbuf_inf_oftiles_reg;
     reg [3:0]               ifbuf_inf_oftiles_tail_reg;
-    reg [6:0]               ifbuf_inf_iftiles_reg;
+    reg [7:0]               ifbuf_inf_iftiles_reg;
     reg [8:0]               ifbuf_inf_wp_reg;
     reg [1:0]               ifbuf_inf_padding_reg;
     reg signed [DATA_WIDTH-1:0]    ifbuf_inf_ifc_zp_reg;
@@ -118,7 +118,7 @@ module ifbuf #(
     wire        count_w_read_en;
     reg [2:0]   count_oftiles_read;
     wire        count_oftiles_read_en;
-    reg [6:0]   count_depth_read;
+    reg [7:0]   count_depth_read;
     wire        count_depth_read_en;
     reg [8:0]   count_height_read;
     wire        count_height_read_en;
@@ -246,7 +246,7 @@ module ifbuf #(
     
     assign clr              = count_depth_read_en;
     assign ifbuf_comp_vld_o = vld_o;
-    assign swap_en          = done_prepare && (!vld_o || clr);
+    assign swap_en          = done_prepare && (!vld_o && !(|count_w_read) || clr);
     assign ifbuf_dma_rdy_o  = !done_prepare;
     reg [10:0] channel_wr_cnt;
     always @(posedge clk) begin
@@ -339,7 +339,7 @@ module ifbuf #(
     assign count_height_read_en     = count_depth_read_en && (count_depth_read == ifbuf_inf_iftiles_reg - 1);
     assign ifblock_count_r_en       = count_height_read_en && (count_height_read == ifbuf_inf_width_reg - 1);
     always @(posedge clk) begin
-        if(swap_en) begin
+        if(!rst_n) begin
             count_w_read <= 9'b0;
         end else if(count_w_read_en) begin
             count_w_read <= (count_w_read == ifbuf_inf_wp_reg) ? 9'b0 : count_w_read + 1;
@@ -448,4 +448,3 @@ module ping_pong_ifbuf #(
         .end_data()
     );
 endmodule
-

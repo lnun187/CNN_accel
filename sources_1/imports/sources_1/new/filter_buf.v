@@ -41,7 +41,7 @@ module filter_buf #(
     input       [4:0]   fltbuf_inf_ofparr_tail_i,
     input       [3:0]   fltbuf_inf_oftiles_i,
     input       [3:0]   fltbuf_inf_oftiles_tail_i,
-    input       [6:0]   fltbuf_inf_iftiles_i,
+    input       [7:0]   fltbuf_inf_iftiles_i,
     input       [7:0]   fltbuf_inf_height_i,
     output reg          fltbuf_inf_rdy_o,
     input       [DATA_WIDTH-1:0] zp,
@@ -75,10 +75,10 @@ module filter_buf #(
     reg [4:0]   ofparr_tail_reg;
     reg [3:0]   oftiles_reg;
     reg [3:0]   oftiles_tail_reg;
-    reg [6:0]   iftiles_reg;
+    reg [7:0]   iftiles_reg;
     reg [3:0]   filter_rd_cnt;
     reg [6:0]   fltsize_rd_cnt;
-    reg [6:0]   iftiles_rd_cnt;
+    reg [7:0]   iftiles_rd_cnt;
     reg [3:0]   oftiles_rd_cnt;
     reg [6:0]   ifblock_rd_cnt;
     reg [7:0]   height_rd_cnt;
@@ -94,7 +94,7 @@ module filter_buf #(
     reg [6:0]   fltsize_wr_cnt;
     reg [3:0]   channel_wr_cnt;
     reg [4:0]   filter_wr_cnt;
-    reg [6:0]   iftiles_wr_cnt;
+    reg [7:0]   iftiles_wr_cnt;
     reg [3:0]   oftiles_wr_cnt;
     reg [6:0]   ifblock_wr_cnt;
     wire        wr_val;
@@ -106,7 +106,7 @@ module filter_buf #(
     wire        channel_wr_cnt_en;
     wire        filter_wr_cnt_en;
     wire        pa_wr_cnt_en;
-    reg [6:0]   iftiles_cfg_cnt;
+    reg [7:0]   iftiles_cfg_cnt;
     reg         en_cfg;
     reg         vldcfg;
     wire        iftiles_cfg_cnt_en;
@@ -125,7 +125,7 @@ module filter_buf #(
     wire        last_ifblock;
     wire        last_oftile;
     wire        oftiles_rd_cnt_en;
-    reg [255:0] pass_valid;
+    reg [511:0] pass_valid;
     reg [8:0]   pass_idx;
     reg [8:0]   pass_total;   
     reg         t_last;
@@ -306,7 +306,7 @@ module filter_buf #(
     wire       pa0_rd_vld_after;
     wire       pa1_rd_vld_after;
     wire [3:0] filter_rd_cnt_after;
-    wire [6:0] iftiles_rd_cnt_after;
+    wire [7:0] iftiles_rd_cnt_after;
     wire [3:0] oftiles_rd_cnt_after;
     wire [6:0] ifblock_rd_cnt_after;
     wire       last_ifblock_rd_after;
@@ -324,7 +324,7 @@ module filter_buf #(
     end
     assign iftiles_rd_cnt_after = iftiles_rd_cnt_en ? ((last_iftile_rd)     ? 7'd0 : (iftiles_rd_cnt + 1'b1))   : iftiles_rd_cnt;
     assign oftiles_rd_cnt_after = oftiles_rd_cnt_en ? ((last_oftile_rd)     ? 4'd0 : (oftiles_rd_cnt + 1'b1))   : oftiles_rd_cnt;
-    assign ifblock_rd_cnt_after = ifblock_rd_cnt_en ? ((last_ifblock_rd)    ? 6'd0 : (ifblock_rd_cnt + 1'b1))   : ifblock_rd_cnt;
+    assign ifblock_rd_cnt_after = ifblock_rd_cnt_en ? ((last_ifblock_rd)    ? 7'd0 : (ifblock_rd_cnt + 1'b1))   : ifblock_rd_cnt;
     assign filter_rd_cnt_after  = filter_rd_cnt_en  ? ((last_filter_rd)     ? 4'd0 : (filter_rd_cnt + 1'b1))    : filter_rd_cnt;
 
     assign last_ifblock_rd_after    = (ifblock_rd_cnt_after == ifblock_reg - 1);
@@ -469,12 +469,12 @@ module filter_buf #(
         t_last <= fltbuf_dma_tlast_i && fltbuf_dma_vld_i;
     end
     always @(posedge clk) begin
-        if(inf_rdy_dly) pass_valid <= 256'b0;
+        if(inf_rdy_dly) pass_valid <= 512'b0;
         else begin
-            if(end_layer) pass_valid <= 256'b0;
+            if(end_layer) pass_valid <= 512'b0;
             else if (fltbuf_dma_tlast_i && fltbuf_dma_vld_i && fltsize_reg != 1 || t_last && fltsize_reg == 1) begin
                 pass_valid[0] <= 1;
-                for(j = 1; j < 256; j = j + 1) pass_valid[j] <= pass_valid[j - 1];
+                for(j = 1; j < 512; j = j + 1) pass_valid[j] <= pass_valid[j - 1];
             end
         end
     end

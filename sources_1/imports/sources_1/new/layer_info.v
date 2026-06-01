@@ -35,7 +35,7 @@ module layer_info #(
     input           [2:0]               inf_table_stride_i,
     input           [1:0]               inf_table_padding_i,
     input           [2:0]               inf_table_ifparr_i,
-    input           [1:0]               inf_table_oftile_i,
+    input           [2:0]               inf_table_oftile_i,
     input           [4:0]               inf_table_ofparr_i,
     input           [23:0]              inf_table_ifbaddr_i,
     input           [23:0]              inf_table_fltbaddr_i,
@@ -51,6 +51,10 @@ module layer_info #(
     input  signed   [7:0]               inf_table_qmin_i,
     input  signed   [7:0]               inf_table_qmax_i,
     input                               inf_table_is_leaky_ReLU_i,
+    input                               inf_table_is_use_pool_i,
+    input                               inf_table_is_max_pool_i,
+    input           [4:0]               inf_table_pool_size_i,
+    input                               inf_table_is_stride_over_i,
 
     //ifbuf info
     input                               inf_ifbuf_rdy_i,
@@ -63,7 +67,7 @@ module layer_info #(
     output          [6:0]               inf_ifbuf_ifblock_o,
     output          [3:0]               inf_ifbuf_oftiles_o,
     output          [3:0]               inf_ifbuf_oftiles_tail_o,
-    output          [6:0]               inf_ifbuf_iftiles_o,
+    output          [7:0]               inf_ifbuf_iftiles_o,
     output          [8:0]               inf_ifbuf_wp_o,
     output          [1:0]               inf_ifbuf_padding_o,
     output          [DATA_WIDTH-1:0]    inf_ifbuf_ifc_zp_o,
@@ -80,7 +84,7 @@ module layer_info #(
     output          [4:0]               inf_fltbuf_ofparr_tail_o,
     output          [3:0]               inf_fltbuf_oftiles_o,
     output          [3:0]               inf_fltbuf_oftiles_tail_o,
-    output          [6:0]               inf_fltbuf_iftiles_o,
+    output          [7:0]               inf_fltbuf_iftiles_o,
     
     //bias buf info
     input                               inf_bias_rdy_i,
@@ -111,6 +115,16 @@ module layer_info #(
     output signed   [7:0]               inf_comp_qmax_o,
     output                              inf_comp_is_leaky_ReLU_o,
 
+    //pool info
+    input                               inf_pool_rdy_i,
+    output                              inf_pool_vld_o,
+    output          [7:0]               inf_pool_ofwidth_o,
+    output                              inf_pool_is_use_pool_o,
+    output                              inf_pool_is_max_pool_o,
+    output          [4:0]               inf_pool_pool_size_o,
+    output          [9:0]               inf_pool_square_pool_size_o,
+    output                              inf_pool_is_stride_over_o,
+
     //ofbuf info - coming soon
     input                               inf_ofbuf_rdy_i,
     output                              inf_ofbuf_vld_o,
@@ -134,12 +148,13 @@ module layer_info #(
     reg                                 flt_vld;
     reg                                 bias_vld;
     reg                                 comp_vld;
+    reg                                 pool_vld;
     reg                                 of_vld;
     wire                                rst_cnt;
     posedge_detection d(
         .clk(clk),
         .rst_n(rst_n),
-        .signal_i(!(if_vld || flt_vld || bias_vld || comp_vld || of_vld)),//CHANGE .signal_i(!(if_vld || flt_vld || bias_vld || comp_vld || of_vld)),
+        .signal_i(!(if_vld || flt_vld || bias_vld || comp_vld || pool_vld || of_vld)),
         .signal_o(rst_cnt)
     );
 
@@ -208,6 +223,17 @@ module layer_info #(
                 comp_vld <= 1'b1;
             end else if(inf_comp_rdy_i) begin
                 comp_vld <= 1'b0;
+            end
+        end
+    end
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            pool_vld <= 1'b0;
+        end else begin
+            if(count_cycle == 3'b110) begin
+                pool_vld <= 1'b1;
+            end else if(inf_pool_rdy_i) begin
+                pool_vld <= 1'b0;
             end
         end
     end
@@ -372,7 +398,7 @@ module layer_info #(
     wire                [6:0]               ifblock_d;
     wire                [3:0]               oftile_d;
     wire                [3:0]               oftile_tail_d;
-    wire                [6:0]               iftiles_d;
+    wire                [7:0]               iftiles_d;
     wire                [8:0]               wp_d;
     wire                [1:0]               padding_d;
     wire                [DATA_WIDTH-1:0]    ifc_zp_d;
@@ -398,6 +424,11 @@ module layer_info #(
     wire    signed      [7:0]               qmin_d;
     wire    signed      [7:0]               qmax_d;
     wire                                    is_leaky_ReLU_d;
+    wire                                    is_use_pool_d;
+    wire                                    is_max_pool_d;
+    wire                [4:0]               pool_size_d;
+    wire                [9:0]               square_pool_size_d;
+    wire                                    is_stride_over_d;
 
     
     wire                [3:0]               ifparr_ext;
@@ -421,6 +452,12 @@ module layer_info #(
     wire                [10:0]              oftile_tail_rem;
     wire                [11:0]              wp_calc;
     wire                [11:0]              ofwidth_calc;
+    wire                [7:0]               ofwidth_aftpool_d;
+    wire                [15:0]              ofsize_aftpool_d;
+    wire                [11:0]              pool_stride_d;
+    wire                [11:0]              pool_num_d;
+    wire                [11:0]              pool_den_d;
+    wire                [11:0]              ofwidth_aftpool_calc;
     wire                [10:0]              bias_tail_rem;
     wire                [10:0]              bias_tail_real;
     wire                [5:0]               bias_h0_lanes;
@@ -457,19 +494,30 @@ module layer_info #(
 
     assign ofbaddr_l0_d = inf_table_ofbaddr_i;
 
-    // ofsize_d1 = ofwidth_d
-    assign ofwidth_ext_d = {8'd0, ofwidth_d};
+    assign pool_stride_d = inf_table_is_stride_over_i ? {7'd0, inf_table_pool_size_i} :
+                           ((inf_table_pool_size_i > 5'd1) ? ({7'd0, inf_table_pool_size_i} - 12'd1) : 12'd1);
+    assign pool_num_d = inf_table_is_stride_over_i ? {4'd0, ofwidth_d} :
+                        ((ofwidth_d == 8'd0) ? 12'd0 : ({4'd0, ofwidth_d} - 12'd1));
+    assign pool_den_d = (pool_stride_d == 12'd0) ? 12'd1 : pool_stride_d;
+    assign ofwidth_aftpool_calc = inf_table_is_use_pool_i ?
+                                  ((pool_num_d + pool_den_d - 12'd1) / pool_den_d) :
+                                  {4'd0, ofwidth_d};
+    assign ofwidth_aftpool_d = ofwidth_aftpool_calc[7:0];
+
+    // ofsize_d1 = ofwidth_aftpool_d
+    assign ofwidth_ext_d = {8'd0, ofwidth_aftpool_d};
     assign ofsize_d1     = ofwidth_ext_d;
 
-    // ofsize_d2 = ofwidth_d + ofwidth_d[0]
-    // Do not write {8'd0, (ofwidth_d[0] + ofwidth_d)}
+    // ofsize_d2 = ofwidth_aftpool_d + ofwidth_aftpool_d[0]
+    // Do not write {8'd0, (ofwidth_aftpool_d[0] + ofwidth_aftpool_d)}
     // because the inner add can be evaluated as only 8 bits.
-    assign ofwidth_lsb_ext_d   = {15'd0, ofwidth_d[0]};
+    assign ofwidth_lsb_ext_d   = {15'd0, ofwidth_aftpool_d[0]};
     assign ofwidth_plus_lsb_d  = {1'b0, ofwidth_ext_d} + {1'b0, ofwidth_lsb_ext_d};
     assign ofsize_d2           = ofwidth_plus_lsb_d[15:0];
 
     // ofsize_d = ofsize_d1 * ofsize_d2
-    assign ofsize_d = ofsize_d1 * ofsize_d2;
+    assign ofsize_aftpool_d = ofsize_d1 * ofsize_d2;
+    assign ofsize_d = ofsize_aftpool_d;
 
     // ifblock_d is 7 bits.
     // Extend before subtracting to avoid ambiguous arithmetic width.
@@ -502,7 +550,7 @@ module layer_info #(
     
     assign ifparr_ext       = {1'b0, inf_table_ifparr_i};
     assign ofparr_ext       = inf_table_ofparr_i;
-    assign oftile_ext       = {2'b00, inf_table_oftile_i};
+    assign oftile_ext       = {1'b0, inf_table_oftile_i};
     assign ifparr_div       = (ifparr_ext == 4'd0) ? 4'd1 : ifparr_ext;
     assign ofparr_div       = (ofparr_ext == 5'd0) ? 5'd1 : ofparr_ext;
     assign oftile_div       = (oftile_ext == 4'd0) ? 4'd1 : oftile_ext;
@@ -540,7 +588,7 @@ module layer_info #(
     assign ifblock_d                 = ifblock_calc[6:0];
     assign oftile_d                  = oftile_ext;
     assign oftile_tail_d             = (oftile_tail_rem == 11'd0) ? oftile_ext : oftile_tail_rem[3:0];
-    assign iftiles_d                 = iftiles_calc[6:0];
+    assign iftiles_d                 = iftiles_calc[7:0];
     assign wp_d                      = wp_calc[8:0];
     assign padding_d                 = inf_table_padding_i;
     assign ifc_zp_d                  = inf_table_ifc_zp_i;
@@ -566,6 +614,11 @@ module layer_info #(
     assign qmin_d                    = inf_table_qmin_i;
     assign qmax_d                    = inf_table_qmax_i;
     assign is_leaky_ReLU_d           = inf_table_is_leaky_ReLU_i;
+    assign is_use_pool_d             = inf_table_is_use_pool_i;
+    assign is_max_pool_d             = inf_table_is_max_pool_i;
+    assign pool_size_d               = inf_table_pool_size_i;
+    assign square_pool_size_d        = inf_table_pool_size_i * inf_table_pool_size_i;
+    assign is_stride_over_d          = inf_table_is_stride_over_i;
 
     reg                 [23:0]              ifbaddr_q;
     reg                 [7:0]               ifwidth_q;
@@ -576,7 +629,7 @@ module layer_info #(
     reg                 [6:0]               ifblock_q;
     reg                 [3:0]               oftile_q;
     reg                 [3:0]               oftile_tail_q;
-    reg                 [6:0]               iftiles_q;
+    reg                 [7:0]               iftiles_q;
     reg                 [8:0]               wp_q;
     reg                 [1:0]               padding_q;
     reg                 [DATA_WIDTH-1:0]    ifc_zp_q;
@@ -587,6 +640,7 @@ module layer_info #(
     reg                 [4:0]               ofparr_tail_q;
     reg                 [23:0]              bias_baddr_q;
     reg                 [7:0]               ofwidth_q;
+    reg                 [7:0]               ofwidth_aftpool_q;
     reg                 [10:0]              ofchannel_q;
     reg                 [4:0]               burstlen_q;
     reg                 [4:0]               burstlen_tail_q;
@@ -602,6 +656,11 @@ module layer_info #(
     reg    signed       [7:0]               qmin_q;
     reg    signed       [7:0]               qmax_q;
     reg                                     is_leaky_ReLU_q;
+    reg                                     is_use_pool_q;
+    reg                                     is_max_pool_q;
+    reg                 [4:0]               pool_size_q;
+    reg                 [9:0]               square_pool_size_q;
+    reg                                     is_stride_over_q;
 
     reg                 [23:0]              ofbaddr_l0_q;    
     reg                 [23:0]              ofbaddr_l1_q;       
@@ -630,6 +689,7 @@ module layer_info #(
             ofparr_tail_q             <= ofparr_tail_d;
             bias_baddr_q              <= bias_baddr_d;
             ofwidth_q                 <= ofwidth_d;
+            ofwidth_aftpool_q         <= ofwidth_aftpool_d;
             ofchannel_q               <= ofchannel_d;
             burstlen_q                <= burstlen_d;
             burstlen_tail_q           <= burstlen_tail_d;
@@ -645,6 +705,11 @@ module layer_info #(
             qmin_q                    <= qmin_d;
             qmax_q                    <= qmax_d;
             is_leaky_ReLU_q           <= is_leaky_ReLU_d;
+            is_use_pool_q             <= is_use_pool_d;
+            is_max_pool_q             <= is_max_pool_d;
+            pool_size_q               <= pool_size_d;
+            square_pool_size_q        <= square_pool_size_d;
+            is_stride_over_q          <= is_stride_over_d;
             ofbaddr_l0_q              <= ofbaddr_l0_d;
             ofbaddr_l1_q              <= ofbaddr_l1_d;
             ofsize_q                  <= ofsize_d;    
@@ -706,8 +771,16 @@ module layer_info #(
     assign inf_comp_qmax_o                  = qmax_q;
     assign inf_comp_is_leaky_ReLU_o         = is_leaky_ReLU_q;
 
+    assign inf_pool_vld_o                   = pool_vld;
+    assign inf_pool_ofwidth_o               = ofwidth_q;
+    assign inf_pool_is_use_pool_o           = is_use_pool_q;
+    assign inf_pool_is_max_pool_o           = is_max_pool_q;
+    assign inf_pool_pool_size_o             = pool_size_q;
+    assign inf_pool_square_pool_size_o      = square_pool_size_q;
+    assign inf_pool_is_stride_over_o        = is_stride_over_q;
+
     assign inf_ofbuf_vld_o                  = of_vld;
-    assign inf_ofbuf_ofwidth_o              = ofwidth_q;
+    assign inf_ofbuf_ofwidth_o              = ofwidth_aftpool_q;
     assign inf_ofbuf_ofbaddr_l0_o           = ofbaddr_l0_q;
     assign inf_ofbuf_ofbaddr_l1_o           = ofbaddr_l1_q;
     assign inf_ofbuf_ofsize_o               = ofsize_q;
@@ -721,8 +794,9 @@ module layer_info #(
     assign _unused_sink = &{
         hf_square[7],
         ifblock_calc[10:7],
-        iftiles_calc[10:7],
+        iftiles_calc[10:6],
         ofwidth_calc[11:8],
+        ofwidth_aftpool_calc[11:8],
         wp_calc[11:9],
         ofbaddr_l1_sum_d[36:24],
         ofwidth_plus_lsb_d[16]

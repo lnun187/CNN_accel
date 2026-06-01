@@ -36,12 +36,15 @@ module comp_pe#(
     output  reg                     pe_cwc_end_layer_real_o,
     output                          pe_cwc_swap_en_o
 );
-    localparam STAGES = $clog2(2*K) + 1; //current design has 6 STAGES (+ 1 STAGE at data_out)
+    localparam SUM_STAGES = $clog2(K) + 1; // multiply stage + adder tree stages
+    localparam STAGES     = SUM_STAGES + 2; // stage 0 + clamp stage + SUM_STAGES (+ 1 STAGE at data_out)
 
-    reg signed [ACC_WIDTH-1:0]      sum_pipe [0:STAGES-2][0:K-1];
+    reg signed [ACC_WIDTH-1:0]      sum_pipe [0:SUM_STAGES-1][0:K-1];
     reg signed [ACC_WIDTH-1:0]      data;
     reg signed [WIDTH:0]            ifc_sub [K-1:0];
     reg signed [WIDTH:0]            fltc_sub [K-1:0];
+    reg signed [WIDTH-1:0]          ifc_sub_clamp [K-1:0];
+    reg signed [WIDTH-1:0]          fltc_sub_clamp [K-1:0];
     reg                             end_row;
     reg         [STAGES - 1 : 0]    end_depth;
     reg         [STAGES - 1 : 0]    end_layer;
@@ -64,6 +67,20 @@ module comp_pe#(
         input [WIDTH-1:0] x;
         begin
             sx1 = $signed({x[WIDTH-1], x});
+        end
+    endfunction
+
+    // Saturate WIDTH+1-bit subtraction result back to signed WIDTH-bit.
+    function automatic signed [WIDTH-1:0] clamp_sub_to_width;
+        input signed [WIDTH:0] x;
+        begin
+            if (x > $signed({2'b00, {WIDTH-1{1'b1}}})) begin
+                clamp_sub_to_width = $signed({1'b0, {WIDTH-1{1'b1}}});
+            end else if (x < $signed({2'b11, {WIDTH-1{1'b0}}})) begin
+                clamp_sub_to_width = $signed({1'b1, {WIDTH-1{1'b0}}});
+            end else begin
+                clamp_sub_to_width = x[WIDTH-1:0];
+            end
         end
     endfunction
 
@@ -156,7 +173,7 @@ module comp_pe#(
         end
     end
 
-    //--------------------------------------------STAGE 0 & STAGE 1-----------------------------------------------
+    //--------------------------------------------STAGE 0-----------------------------------------------
     integer idx;
     always @(posedge clk) begin
         if (en_compute) begin
@@ -168,19 +185,36 @@ module comp_pe#(
         end
     end
 
-    integer sum;
+    //--------------------------------------------STAGE 1-----------------------------------------------
+    integer clamp_idx;
     always @(posedge clk) begin
         if (en_compute) begin
-            for (sum = 0; sum < K; sum = sum + 1) begin
-                sum_pipe[0][sum] <= $signed(ifc_sub[sum]) * $signed(fltc_sub[sum]);
+            
+            for (clamp_idx = 0; clamp_idx < K; clamp_idx = clamp_idx + 1) begin
+                ifc_sub_clamp[clamp_idx]  <=    (|ifc_sub[clamp_idx][WIDTH:WIDTH-1] && !(&ifc_sub[clamp_idx][WIDTH:WIDTH-1])) ?
+                                                (ifc_sub[clamp_idx][WIDTH] ? 8'h80 : 8'h7F) :
+                                                ifc_sub[clamp_idx][WIDTH-1:0];
+                fltc_sub_clamp[clamp_idx] <=    (|fltc_sub[clamp_idx][WIDTH:WIDTH-1] && !(&fltc_sub[clamp_idx][WIDTH:WIDTH-1])) ?
+                                                (fltc_sub[clamp_idx][WIDTH] ? 8'h80 : 8'h7F) :
+                                                fltc_sub[clamp_idx][WIDTH-1:0];
             end
         end
     end
 
-    //--------------------------------------------STAGE 2 -> 4-----------------------------------------------
+    //--------------------------------------------STAGE 2-----------------------------------------------
+    integer sum;
+    always @(posedge clk) begin
+        if (en_compute) begin
+            for (sum = 0; sum < K; sum = sum + 1) begin
+                sum_pipe[0][sum] <= $signed(ifc_sub_clamp[sum]) * $signed(fltc_sub_clamp[sum]);
+            end
+        end
+    end
+
+    //--------------------------------------------STAGE 3 -> 5-----------------------------------------------
     genvar s, i;
     generate
-        for (s = 1; s < STAGES - 1; s = s + 1) begin : adder_tree_stage
+        for (s = 1; s < SUM_STAGES; s = s + 1) begin : adder_tree_stage
             localparam STEP = 1 << (s - 1);
             for (i = 0; i < K; i = i + 1) begin : adder_tree_node
                 always @(posedge clk) begin
@@ -200,10 +234,10 @@ module comp_pe#(
         end
     endgenerate
 
-    //--------------------------------------------STAGE 5-----------------------------------------------
+    //--------------------------------------------STAGE 6-----------------------------------------------
     always @(posedge clk) begin
         if(en_compute) begin
-            data <= $signed(add_data) + $signed(sum_pipe[STAGES-2][0]);
+            data <= $signed(add_data) + $signed(sum_pipe[SUM_STAGES-1][0]);
         end
     end
 
@@ -212,7 +246,7 @@ module comp_pe#(
             add_data <= ((count_wr == pe_inf_hf_i - 1) ||
                         ((count_wr == 0) && data_vld[STAGES-2] && !data_vld[STAGES-1]))
                         ? $signed(pp_data[STAGES-4])
-                        : ($signed(add_data) + $signed(sum_pipe[STAGES-2][0]));
+                        : ($signed(add_data) + $signed(sum_pipe[SUM_STAGES-1][0]));
         end
     end
 endmodule

@@ -59,6 +59,7 @@ module comp_pu #(
     input                           pu_scale_rdy_i,
     output                          pu_scale_vld_o,
     output          [ACC_WIDTH-1:0] pu_scale_data_o,
+    output                          pu_pa_done_compute_row_o,
     output                          pu_pa_done_compute_o,
     output                          pu_pa_done_compute_layer_o
     );
@@ -128,6 +129,7 @@ module comp_pu #(
     wire                                cwc_scale_rdy_i;
     wire                                cwc_scale_vld_o;
     wire    [ACC_WIDTH-1:0]             cwc_scale_data_o;
+    wire                                cwc_pu_done_compute_row_o;
     wire                                cwc_pu_done_compute_o;
     wire                                cwc_pu_done_compute_layer_o;
 
@@ -150,6 +152,7 @@ module comp_pu #(
     assign pu_ifc_rdy_o             = pe_ifc_fltc_rdy_o[0];
     assign pu_scale_vld_o           = cwc_scale_vld_o;
     assign pu_scale_data_o          = cwc_scale_data_o;
+    assign pu_pa_done_compute_row_o = cwc_pu_done_compute_row_o;
     assign pu_pa_done_compute_o     = cwc_pu_done_compute_o;
     assign pu_pa_done_compute_layer_o = cwc_pu_done_compute_layer_o;
     assign pu_swap_fltc_o           = swap_fltc_o[0];
@@ -174,7 +177,7 @@ module comp_pu #(
         for(j = 0; j < K; j = j + 1) begin: gen_fltc
             filter_cache #(
             .WIDTH(WIDTH),
-            .DEPTH(DEPTH),
+            .DEPTH(11),
             .PE_PER_PU(PE_PER_PU)
         ) flt_cache_uut (
             .clk                        (clk),
@@ -336,6 +339,7 @@ module comp_pu #(
         .cwc_scale_rdy_i            (cwc_scale_rdy_i),
         .cwc_scale_vld_o            (cwc_scale_vld_o),
         .cwc_scale_data_o           (cwc_scale_data_o),
+        .cwc_pu_done_compute_row_o  (cwc_pu_done_compute_row_o),
         .cwc_pu_done_compute_o      (cwc_pu_done_compute_o),
         .cwc_pu_done_compute_layer_o(cwc_pu_done_compute_layer_o)
     );

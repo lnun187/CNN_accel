@@ -205,7 +205,7 @@ module ofbuf#(
         end else begin 
             if(ofbuf_inf_vld_i) begin
                 inf_rdy_q <= 1'b0;
-            end else if(!(vld_cfg_q || vld_dma_q) && !inf_rdy_dly) begin
+            end else if(!(vld_cfg_q || vld_cfg_dma_q || vld_dma_q) && !inf_rdy_dly) begin
                 inf_rdy_q <= 1;
             end
         end
@@ -222,7 +222,7 @@ module ofbuf#(
         if(ofbuf_inf_rdy_o) begin
             end_row_d_q <= 0;
         end else if((rdy_fifo || !vld_dma_q) && vld_dma_d) begin
-            end_row_d_q <= (count_row_q + 1 == ofwidth_reg - 1);
+            end_row_d_q <= (count_row_q + 1 == ofwidth_reg - 1) || ofwidth_reg == 1;
         end
     end
 
@@ -244,7 +244,7 @@ module ofbuf#(
             tlast_q     <= 0;
         end else if(ofbuf_dma_rdy_i) begin
             tlast_q     <= tlast_d;
-            end_row_q   <= end_row_d_q;
+            end_row_q   <= (end_row_d_q || (ofwidth_reg == 1 && (rdy_fifo || !vld_dma_q) && vld_dma_d)) && rdy_fifo && (fifo_vld_l1 && id_cfg_q || fifo_vld_l0 && !id_cfg_q);
         end
     end
     always @(posedge clk) begin
@@ -361,6 +361,4 @@ module ofbuf#(
         end
     end
 endmodule
-
-
 
