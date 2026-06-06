@@ -206,7 +206,7 @@ module comp_pe#(
     always @(posedge clk) begin
         if (en_compute) begin
             for (sum = 0; sum < K; sum = sum + 1) begin
-                sum_pipe[0][sum] <= $signed(ifc_sub_clamp[sum]) * $signed(fltc_sub_clamp[sum]);
+                sum_pipe[0][sum] <= ifc_sub_clamp[sum] * fltc_sub_clamp[sum];
             end
         end
     end

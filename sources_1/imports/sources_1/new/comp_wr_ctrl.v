@@ -77,7 +77,7 @@ module comp_wr_ctrl#(
     posedge_detection b(
         .clk(clk),
         .rst_n(rst_n),
-        .signal_i(!(|cwc_pp_vld_i)),
+        .signal_i(!(cwc_scale_vld_o)),
         .signal_o(cwc_pu_done_compute_row_o)
     );
     assign cwc_pu_done_compute_layer_o = end_layer_real && !(|cwc_pp_vld_i);

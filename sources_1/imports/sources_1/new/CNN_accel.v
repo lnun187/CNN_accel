@@ -27,6 +27,7 @@ module CNN_accel#(
     parameter FLTBUF_DEPTH  = 4700,
     parameter COMP_DEPTH    = 12,
     parameter FIFO_DEPTH    = 12,
+    parameter POOL_DEPTH    = 896,
     parameter OFBUF_DEPTH   = 896,
     parameter K             = 4,
     parameter M             = 2,
@@ -386,6 +387,9 @@ module CNN_accel#(
     wire [M-1:0]            comp_ofbuf_vld_w;
     wire [M-1:0]            comp_ofbuf_rdy_w;
     wire [M*DATA_WIDTH-1:0]  comp_ofbuf_data_w;
+    wire [M-1:0]            pool_scale_vld_w;
+    wire [M-1:0]            pool_scale_rdy_w;
+    wire [M*DATA_WIDTH-1:0] pool_scale_data_w;
     wire [M-1:0]            pool_ofbuf_vld_w;
     wire [M-1:0]            pool_ofbuf_rdy_w;
     wire [M*DATA_WIDTH-1:0] pool_ofbuf_data_w;
@@ -1113,9 +1117,25 @@ module CNN_accel#(
     genvar gi;
     generate
         for (gi = 0; gi < M; gi = gi + 1) begin : gen_ofbuf
+            skid_buffer #(
+                .SBUF_TYPE(0),
+                .DATA_WIDTH(DATA_WIDTH)
+            ) u_skid_comp_pool (
+                .clk(clk),
+                .rst_n(rst_n),
+
+                .bwd_data_i (comp_ofbuf_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
+                .bwd_valid_i(comp_ofbuf_vld_w[gi]),
+                .fwd_ready_i(pool_scale_rdy_w[gi]),
+
+                .fwd_data_o (pool_scale_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
+                .bwd_ready_o(comp_ofbuf_rdy_w[gi]),
+                .fwd_valid_o(pool_scale_vld_w[gi])
+            );
+
             max_avg_pooling #(
                 .DATA_WIDTH(DATA_WIDTH),
-                .POOL_DEPTH(OFBUF_DEPTH)
+                .POOL_DEPTH(POOL_DEPTH)
             ) u_max_avg_pooling (
                 .clk(clk),
                 .rst_n(rst_n),
@@ -1129,9 +1149,9 @@ module CNN_accel#(
                 .pool_inf_is_stride_over_i(pool_inf_is_stride_over_w),
                 .pool_inf_rdy_o(pool_inf_rdy_w[gi]),
 
-                .pool_scale_vld_i(comp_ofbuf_vld_w[gi]),
-                .pool_scale_rdy_o(comp_ofbuf_rdy_w[gi]),
-                .pool_scale_data_i(comp_ofbuf_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
+                .pool_scale_vld_i(pool_scale_vld_w[gi]),
+                .pool_scale_rdy_o(pool_scale_rdy_w[gi]),
+                .pool_scale_data_i(pool_scale_data_w[gi*DATA_WIDTH +: DATA_WIDTH]),
                 .pool_scale_done_compute_layer_i(comp_done_compute_layer_w[gi]),
                 .pool_scale_done_compute_i(comp_done_compute_w[gi]),
 

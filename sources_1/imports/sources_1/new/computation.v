@@ -166,7 +166,19 @@ module computation #(
     // Done signals that leave computation are aligned with scaled data.
     assign comp_pa_done_compute_o = scale_done_compute_layer_m[0];
     assign comp_pa_done_compute_vec_o = scale_done_compute_m;
-    assign comp_pa_done_compute_layer_vec_o = scale_done_compute_layer_m;
+    posedge_detection e(
+        .clk(clk),
+        .rst_n(rst_n),
+        .signal_i(scale_done_compute_layer_m[1]),
+        .signal_o(comp_pa_done_compute_layer_vec_o[1])
+    );
+    posedge_detection f(
+        .clk(clk),
+        .rst_n(rst_n),
+        .signal_i(scale_done_compute_layer_m[0]),
+        .signal_o(comp_pa_done_compute_layer_vec_o[0])
+    );
+    // assign comp_pa_done_compute_layer_vec_o = ;
     wire comp_ifbuf_rdy_w;
     assign comp_ifbuf_rdy_o = comp_ifbuf_rdy_w && comp_rdy;
     // ==========================================
@@ -294,7 +306,7 @@ module computation #(
                 .scale_comp_data_i(comp_scale_data_w[(i+1)*ACC_WIDTH-1 : i*ACC_WIDTH]),
                 .scale_comp_vld_i(comp_scale_vld_w[i]),
                 .scale_comp_done_compute_i(pu_pa_done_compute_row_m[i]),
-                .scale_comp_done_compute_layer_i(pu_pa_done_compute_m[i]),
+                .scale_comp_done_compute_layer_i(pu_pa_done_compute_layer_m[i]),
                 .scale_comp_rdy_o(scale_comp_rdy_w[i]),
 
                 .scale_ofbuf_rdy_i(comp_ofbuf_rdy_i[i]),

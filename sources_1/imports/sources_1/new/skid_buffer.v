@@ -134,8 +134,8 @@ else if (SBUF_TYPE == 1) begin : OPT_BWD_TIMING
     reg                     in_ready_dly_q;
 
     assign bwd_ready_o = in_ready_q;
-    assign fwd_data_o  = fifo_empty ? in_data_q : fifo_data_o;
-    assign fwd_valid_o = in_hs | (~fifo_empty);
+    assign fwd_data_o  = fifo_data_o;
+    assign fwd_valid_o = (~fifo_empty);
 
     assign in_ready_next = ~(fifo_counter == 3'd2) & ~fifo_almost_full & ~fifo_full;
 

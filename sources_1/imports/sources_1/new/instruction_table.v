@@ -67,7 +67,7 @@ module instruction_table #(
     output          [4:0]               table_inf_pool_size_o,
     output                              table_inf_is_stride_over_o
 );
-    localparam TABLE_PAYLOAD_WIDTH = 254 + (2*DATA_WIDTH);
+    localparam TABLE_PAYLOAD_WIDTH = 255 + (2*DATA_WIDTH);
 
     wire [TABLE_PAYLOAD_WIDTH-1:0] table_cnn_data_in;
     wire [TABLE_PAYLOAD_WIDTH-1:0] table_cnn_data_out;

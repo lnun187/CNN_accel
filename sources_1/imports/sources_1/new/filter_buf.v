@@ -127,6 +127,7 @@ module filter_buf #(
     wire        oftiles_rd_cnt_en;
     reg [511:0] pass_valid;
     reg [8:0]   pass_idx;
+    (* max_fanout = 16, equivalent_register_removal = "no" *) reg [8:0] pass_idx_vld;
     reg [8:0]   pass_total;   
     reg         t_last;
     reg         pa1_rd_vld;
@@ -135,6 +136,7 @@ module filter_buf #(
     wire        ifblock_rd_cnt_en;
     reg [4:0]   actual_rd_filter1;
     reg         done_pass;
+    reg         last_pass_reg;
     reg [3:0]   actual_wr_channel;
     reg [4:0]   actual_wr_filter;
     wire        last_iftile_wr;
@@ -301,7 +303,7 @@ module filter_buf #(
     assign height_rd_cnt_en     = iftiles_rd_cnt_en && last_iftile_rd;
     assign last_height_rd       = height_rd_cnt == height_reg - 1;
     assign end_layer_nxt        = last_height_rd && height_rd_cnt_en;
-    wire [8:0] pass_idx_after;
+    wire [8:0] pass_idx_vld_after;
     wire       pass_valid_after_sel;
     wire       pa0_rd_vld_after;
     wire       pa1_rd_vld_after;
@@ -314,6 +316,9 @@ module filter_buf #(
     wire [4:0] actual_rd_filter_after;
     wire [4:0] actual_rd_filter0_after;
     wire [4:0] actual_rd_filter1_after;
+    wire       clear_rd_nxt;
+    wire [8:0] pass_idx_nxt;
+    wire [8:0] pass_idx_vld_nxt;
 
     always @(*) begin
         actual_rd_filter    = (last_ifblock_rd && last_oftile_rd) ? ofparr_tail_reg : ofparr_reg;
@@ -335,15 +340,18 @@ module filter_buf #(
     assign actual_rd_filter0_after  = (actual_rd_filter_after + actual_rd_filter_after[0]) >> 1;
     assign actual_rd_filter1_after  = actual_rd_filter_after >> 1;
 
-    assign pass_idx_after           = done_pass ? (((pass_idx == pass_total - 1) && !en_cfg) ? 9'd0 : (pass_idx + 1'b1)) : pass_idx;
+    assign pass_idx_nxt             = last_pass_reg ? 9'd0 : (pass_idx + 1'b1);
+    assign pass_idx_vld_nxt         = last_pass_reg ? 9'd0 : (pass_idx_vld + 1'b1);
+    assign pass_idx_vld_after       = done_pass ? pass_idx_vld_nxt : pass_idx_vld;
     assign pass_valid_after_sel     = end_layer ? 1'b0 :
                                     ((fltbuf_dma_tlast_i && fltbuf_dma_vld_i && fltsize_reg != 1 || t_last && fltsize_reg == 1) ?
-                                    ((pass_idx_after == 0) ? 1'b1 : pass_valid[pass_idx_after - 1'b1]) :
-                                    pass_valid[pass_idx_after]);
+                                    ((pass_idx_vld_after == 0) ? 1'b1 : pass_valid[pass_idx_vld_after - 1'b1]) :
+                                    pass_valid[pass_idx_vld_after]);
     assign pa0_rd_vld_after         = done_pass ? 1'b1 :
                                     ((filter_rd_cnt_en && last_filter_rd) ? 1'b0 : pa0_rd_vld);
     assign pa1_rd_vld_after         = done_pass ? 1'b1 :
                                     ((filter_rd_cnt_en && (filter_rd_cnt == actual_rd_filter1 - 1)) ? 1'b0 : pa1_rd_vld);
+    assign clear_rd_nxt             = last_pass_reg && filter_rd_cnt_en && last_filter_rd;
 
     always @(posedge clk) begin
         if(inf_rdy_dly) last_filter_rd <= 1'b0;
@@ -409,6 +417,15 @@ module filter_buf #(
     end
     assign fltbuf_comp_donepass_o = done_pass;
     always @(posedge clk) begin
+        if(!rst_n || inf_rdy_dly || end_layer) begin
+            last_pass_reg <= 1'b0;
+        end else if(fltbuf_comp_donepass_o) begin
+            last_pass_reg <= (pass_idx_nxt == pass_total - 1) && !en_cfg;
+        end else begin
+            last_pass_reg <= (pass_idx == pass_total - 1) && !en_cfg;
+        end
+    end
+    always @(posedge clk) begin
         if(inf_rdy_dly) pa0_rd_vld <= 1;
         else begin
             if(fltbuf_comp_donepass_o) pa0_rd_vld <= 1;
@@ -425,7 +442,13 @@ module filter_buf #(
     always @(posedge clk) begin
         if(inf_rdy_dly) pass_idx <= 0;
         else begin
-            if(fltbuf_comp_donepass_o) pass_idx <= ((pass_idx == pass_total - 1) && !en_cfg)? 0 : pass_idx + 1;
+            if(fltbuf_comp_donepass_o) pass_idx <= pass_idx_nxt;
+        end
+    end
+    always @(posedge clk) begin
+        if(inf_rdy_dly) pass_idx_vld <= 0;
+        else begin
+            if(fltbuf_comp_donepass_o) pass_idx_vld <= pass_idx_vld_nxt;
         end
     end
     ///////////////////////////////WRITE CONTROL//////////////////////////////////////
@@ -522,7 +545,7 @@ module filter_buf #(
                 .rd_en(cache_rd_en[i/K]),
                 .din(fltbuf_dma_data_i), // Tùy chỉnh nguồn dữ liệu DMA đưa vào từng cache
                 .zp(zp),
-                .clear_rd(((pass_idx == pass_total - 1) && !en_cfg && filter_rd_cnt_en && last_filter_rd)),
+                .clear_rd(clear_rd_nxt),
                 .clear_rd_wr(end_layer),
                 // Gom dout của từng cache vào bus data output tổng
                 .dout(fltbuf_comp_data_o[(i+1)*DATA_WIDTH - 1 : i*DATA_WIDTH]), 

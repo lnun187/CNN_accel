@@ -183,7 +183,7 @@ module cnn_axi_lite #(
     reg [2:0]                   cnn_table_stride_reg;
     reg [1:0]                   cnn_table_padding_reg;
     reg [2:0]                   cnn_table_ifparr_reg;
-    reg [1:0]                   cnn_table_oftile_reg;
+    reg [2:0]                   cnn_table_oftile_reg;
     reg [4:0]                   cnn_table_ofparr_reg;
     reg [23:0]                  cnn_table_ifbaddr_reg;
     reg [23:0]                  cnn_table_fltbaddr_reg;
@@ -253,7 +253,7 @@ module cnn_axi_lite #(
     assign reg_stride_r            = {29'd0, cnn_table_stride_reg};
     assign reg_padding_r           = {30'd0, cnn_table_padding_reg};
     assign reg_ifparr_r            = {29'd0, cnn_table_ifparr_reg};
-    assign reg_oftile_r            = {30'd0, cnn_table_oftile_reg};
+    assign reg_oftile_r            = {29'd0, cnn_table_oftile_reg};
     assign reg_ofparr_r            = {27'd0, cnn_table_ofparr_reg};
     assign reg_ifbaddr_r           = {8'd0, cnn_table_ifbaddr_reg};
     assign reg_fltbaddr_r          = {8'd0, cnn_table_fltbaddr_reg};
@@ -347,7 +347,7 @@ module cnn_axi_lite #(
             cnn_table_stride_reg          <= 3'd0;
             cnn_table_padding_reg         <= 2'd0;
             cnn_table_ifparr_reg          <= 3'd0;
-            cnn_table_oftile_reg          <= 2'd0;
+            cnn_table_oftile_reg          <= 3'd0;
             cnn_table_ofparr_reg          <= 5'd0;
             cnn_table_ifbaddr_reg         <= 24'd0;
             cnn_table_fltbaddr_reg        <= 24'd0;
@@ -395,7 +395,7 @@ module cnn_axi_lite #(
                     ADDR_STRIDE:          cnn_table_stride_reg          <= wr_data_strobed[2:0];
                     ADDR_PADDING:         cnn_table_padding_reg         <= wr_data_strobed[1:0];
                     ADDR_IFPARR:          cnn_table_ifparr_reg          <= wr_data_strobed[2:0];
-                    ADDR_OFTILE:          cnn_table_oftile_reg          <= wr_data_strobed[1:0];
+                    ADDR_OFTILE:          cnn_table_oftile_reg          <= wr_data_strobed[2:0];
                     ADDR_OFPARR:          cnn_table_ofparr_reg          <= wr_data_strobed[4:0];
                     ADDR_IFBADDR:         cnn_table_ifbaddr_reg         <= wr_data_strobed[23:0];
                     ADDR_FLTBADDR:        cnn_table_fltbaddr_reg        <= wr_data_strobed[23:0];

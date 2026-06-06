@@ -27,11 +27,11 @@ module CNN_accel_tb;
   localparam int K          = 4;
   localparam int M          = 2;
 
-  localparam int MAX_MEM = 65536;
-  localparam int MAX_W   = 32;
-  localparam int MAX_H   = 32;
-  localparam int MAX_C   = 64;
-  localparam int MAX_F   = 64;
+  localparam int MAX_MEM = 1151040;
+  localparam int MAX_W   = 224;
+  localparam int MAX_H   = 224;
+  localparam int MAX_C   = 500;
+  localparam int MAX_F   = 256;
   localparam int MAX_KSZ = 16;
   localparam int MAX_OUT = 65536;
   localparam int MAX_LAYERS_TB = 128;
@@ -410,7 +410,7 @@ module CNN_accel_tb;
         $fatal(1, "%s: ifparr=%0d exceeds cnn_table_ifparr_i[2:0]", tc_name, ifparr);
       end
       if (oftile > 7) begin
-        $fatal(1, "%s: oftile=%0d exceeds cnn_table_oftile_i[1:0]", tc_name, oftile);
+        $fatal(1, "%s: oftile=%0d exceeds cnn_table_oftile_i[2:0]", tc_name, oftile);
       end
       if (ofparr > 31) begin
         $fatal(1, "%s: ofparr=%0d exceeds cnn_table_ofparr_i[4:0]", tc_name, ofparr);
@@ -1177,11 +1177,11 @@ module CNN_accel_tb;
                   if ((ih >= 0) && (ih < current_h) &&
                       (iw >= 0) && (iw < current_w)) begin
                     if_val_adj =
-                      $signed({1'b0, if_t[ci_idx][ih][iw]})
+                      $signed({if_t[ci_idx][ih][iw][WIDTH-1], if_t[ci_idx][ih][iw]})
                       - $signed((WIDTH+1)'(current_ifc_zp));
 
                     flt_val_adj =
-                      $signed({1'b0, flt_t[co_idx][ci_idx][h_idx][w_idx]})
+                      $signed({flt_t[co_idx][ci_idx][h_idx][w_idx][WIDTH-1], flt_t[co_idx][ci_idx][h_idx][w_idx]})
                       - $signed((WIDTH+1)'(current_fltc_zp));
 
                     mac_term = if_val_adj * flt_val_adj;
@@ -1495,6 +1495,7 @@ module CNN_accel_tb;
           act_pkt_count       = 0;
           act_out_count       = 0;
         end else begin
+          
           // DATA channel: rdy_dma means the beat will be stored.  When the DMA
           // model is waiting for/accepting a config, incoming beats are buffered.
           accepted_data = cnn_ofbuf_dma_vld_o && cnn_ofbuf_dma_rdy_i;
@@ -2472,56 +2473,71 @@ module CNN_accel_tb;
 
     // 1) Ifmap kích thước chẵn, burst filter chẵn
     //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=2 (<= 6/3), oftile = 1, padding = 2, stride = 1
-    run_case("TC0_even_ifmap_even_burst", 5, 5, 4, 4, 5, 5, 1, 0, 4, 1, 4, 0, 0);
-  // $finish;
-    // Pooling interface/scoreboard coverage.
-    // run_case_pool parameters:
-    // tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,
-    // if_zp, fl_zp, is_use_pool, is_max_pool, pool_size, pool_stride.
-    // pool_stride rule: stride_over=1 when pool_size==pool_stride,
-    // stride_over=0 when pool_size==pool_stride+1.
-    // TC_POOL_NONE_EXPLICIT:
-    // w=6, h=6, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
-    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
-    // is_use_pool=0, is_max_pool=0, pool_size=1, pool_stride=1.
-    // conv_ofwidth=6, pool_ofwidth=6.
-    // run_case_pool("TC_POOL_NONE_EXPLICIT", 6, 6, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
-    //               0, 0, 1, 1);
+    // run_case("TC0_even_ifmap_even_burst", 28, 28, 1, 32, 3, 3, 1, 0, 1, 8, 2, 0, 0);
+    // run_case("TC0_even_ifmap_even_burst", 5, 5, 32, 16, 5, 5, 1, 0, 4, 4, 4, 0, 0);
+    // run_case("TC0_even_ifmap_even_burst", 2, 2, 256, 10, 2, 2, 1, 0, 4, 1, 5, 0, 0);
+  // // $finish;
+  //   // Pooling interface/scoreboard coverage.
+  //   // run_case_pool parameters:
+  //   // tc_name, w, h, ci, co, kw, kh, stride, padding, ifparr, ofparr, oftile,
+  //   // if_zp, fl_zp, is_use_pool, is_max_pool, pool_size, pool_stride.
+  //   // pool_stride rule: stride_over=1 when pool_size==pool_stride,
+  //   // stride_over=0 when pool_size==pool_stride+1.
+  //   // TC_POOL_NONE_EXPLICIT:
+  //   // w=6, h=6, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+  //   // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+  //   // is_use_pool=0, is_max_pool=0, pool_size=1, pool_stride=1.
+  //   // conv_ofwidth=6, pool_ofwidth=6.
+    run_case_pool("TC_POOL_NONE_EXPLICIT", 224, 224, 3, 8, 7, 7, 2, 0, 3, 2, 1 , 0, 0,
+                  1, 1, 3, 2);
+    $finish;
+    run_case_pool("TC_POOL_NONE_EXPLICIT", 12, 12, 32, 32, 3, 3, 1, 0, 4, 8, 2, 0, 0,
+                  1, 1, 2, 2);
+    // $finish;
+    // run_case_pool("TC_POOL_MAX_3x3_STRIDE3", 224, 224, 1, 8, 1, 1, 1, 0, 1, 8, 1, 0, 0,
+    //               1, 1, 2, 2);
     // TC_POOL_MAX_3x3_STRIDE3:
     // w=6, h=6, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
-    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // ifparr=1, ofparr=1, oftile=1, if_zp=0, fl_zp=0,
     // is_use_pool=1, is_max_pool=1, pool_size=3, pool_stride=3.
     // conv_ofwidth=6, pool_ofwidth=2.
-    // run_case_pool("TC_POOL_MAX_3x3_STRIDE3", 6, 6, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
-    //               1, 1, 3, 3);
-    // // TC_POOL_AVG_2x2_TAIL_STRIDE2:
-    // // w=5, h=5, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
-    // // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
-    // // is_use_pool=1, is_max_pool=0, pool_size=2, pool_stride=2.
-    // // conv_ofwidth=5, pool_ofwidth=3.
+    run_case_pool("TC_POOL_MAX_3x3_STRIDE3", 6, 6, 1, 4, 1, 1, 1, 0, 1, 1, 4, 0, 0,
+                  1, 1, 3, 3);
+    // TC_POOL_AVG_2x2_TAIL_STRIDE2:
+    // w=5, h=5, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // is_use_pool=1, is_max_pool=0, pool_size=2, pool_stride=1.
+    // conv_ofwidth=5, pool_ofwidth=3.
+    run_case_pool("TC_POOL_AVG_2x2_STRIDE2", 5, 5, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+                  1, 1, 2, 1);
+    // TC_POOL_AVG_2x2_TAIL_STRIDE2:
+    // w=5, h=5, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // is_use_pool=1, is_max_pool=0, pool_size=2, pool_stride=2.
+    // conv_ofwidth=5, pool_ofwidth=3.
     // run_case_pool("TC_POOL_AVG_2x2_TAIL_STRIDE2", 5, 5, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
     //               1, 0, 2, 2);
-    // // TC_POOL_GLOBAL_MAX:
-    // // w=5, h=5, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
-    // // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
-    // // is_use_pool=1, is_max_pool=1, pool_size=5, pool_stride=5.
-    // // conv_ofwidth=5, pool_ofwidth=1.
-    // run_case_pool("TC_POOL_GLOBAL_MAX", 5, 5, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
-    //               1, 1, 5, 5);
-    // // TC_POOL_GLOBAL_AVG:
-    // // w=7, h=7, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
-    // // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
-    // // is_use_pool=1, is_max_pool=0, pool_size=7, pool_stride=7.
-    // // conv_ofwidth=7, pool_ofwidth=1.
+    // TC_POOL_GLOBAL_MAX:
+    // w=5, h=5, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // is_use_pool=1, is_max_pool=1, pool_size=5, pool_stride=5.
+    // conv_ofwidth=5, pool_ofwidth=1.
+    run_case_pool("TC_POOL_GLOBAL_MAX", 5, 5, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+                  1, 1, 5, 5);
+    // TC_POOL_GLOBAL_AVG:
+    // w=7, h=7, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // is_use_pool=1, is_max_pool=0, pool_size=7, pool_stride=7.
+    // conv_ofwidth=7, pool_ofwidth=1.
     // run_case_pool("TC_POOL_GLOBAL_AVG", 7, 7, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
     //               1, 0, 7, 7);
-    // // TC_POOL_MAX_3x3_OVERLAP_TAIL:
-    // // w=8, h=8, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
-    // // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
-    // // is_use_pool=1, is_max_pool=1, pool_size=3, pool_stride=2.
-    // // conv_ofwidth=8, pool_ofwidth=4.
-    // run_case_pool("TC_POOL_MAX_3x3_OVERLAP_TAIL", 8, 8, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
-    //               1, 1, 3, 2);
+    // TC_POOL_MAX_3x3_OVERLAP_TAIL:
+    // w=8, h=8, ci=1, co=4, kw=1, kh=1, stride=1, padding=0,
+    // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
+    // is_use_pool=1, is_max_pool=1, pool_size=3, pool_stride=2.
+    // conv_ofwidth=8, pool_ofwidth=4.
+    run_case_pool("TC_POOL_MAX_3x3_OVERLAP_TAIL", 8, 8, 1, 4, 1, 1, 1, 0, 1, 2, 1, 0, 0,
+                  1, 1, 3, 2);
 
     // 2) Ifmap kich thuoc le -> test align width va padding hang ifmap
     // ifmap 5x5, Ci=8, Co=4, kernel 3x3, padding=1, ifparr=1, ofparr=2, oftile=2

@@ -111,6 +111,7 @@ module ofbuf#(
     wire                        last_cnt_ch_bl_0_w;
     wire                        last_cnt_ch_bl_1_w;
     wire                        change_id_w;
+    wire                        width1_empty_lane_switch;
     wire    [7:0]               cnt_height_d;
     wire                        last_height;
     wire                        last_ifblock;
@@ -128,8 +129,12 @@ module ofbuf#(
     assign cnt_block_d          = last_ifblock ? 0 : cnt_block_q + 1;
     assign last_height          = cnt_height_q == ofwidth_reg - 1;
     assign cnt_height_d         = last_height ? 0 : cnt_height_q + 1;
-    assign change_id_w          = inf_rdy_dly2 || (tlast_d && ofbuf_dma_rdy_i);
-    assign id_cfg_nxt_d         = !(id_cfg_nxt_q || end_block_1_q);
+    // For a 1x1 ofmap, the TLAST pipeline can leave the selected lane empty
+    // while the paired lane still has one value. Switch lanes to avoid OFBUF deadlock.
+    assign width1_empty_lane_switch = (ofwidth_reg == 1) && !vld_dma_q && !vld_dma_d &&
+                                      ((!id_cfg_q && fifo_vld_l1) || (id_cfg_q && fifo_vld_l0));
+    assign change_id_w          = inf_rdy_dly2 || (tlast_d && ofbuf_dma_rdy_i) || width1_empty_lane_switch;
+    assign id_cfg_nxt_d         = !(id_cfg_nxt_q || end_block_1_q && !end_block_0_q);
     assign last_cnt_ch_bl_0_w   = (cnt_ch_bl_0_q == ofc_bl_l0_reg - 1) || ((cnt_ch_bl_0_q == ofc_bl_tail_l0_reg - 1) && last_ifblock_q);
     assign last_cnt_ch_bl_1_w   = (cnt_ch_bl_1_q == ofc_bl_l1_reg - 1) || ((cnt_ch_bl_1_q == ofc_bl_tail_l1_reg - 1) && last_ifblock_q);
     assign change_config        = rdy_cfg_q && (!vld_cfg_dma_q || ofbuf_dma_rdycfg_i) && vld_dma_d;
@@ -242,9 +247,22 @@ module ofbuf#(
         if(ofbuf_inf_rdy_o) begin
             end_row_q   <= 0;
             tlast_q     <= 0;
-        end else if(ofbuf_dma_rdy_i) begin
-            tlast_q     <= tlast_d;
-            end_row_q   <= (end_row_d_q || (ofwidth_reg == 1 && (rdy_fifo || !vld_dma_q) && vld_dma_d)) && rdy_fifo && (fifo_vld_l1 && id_cfg_q || fifo_vld_l0 && !id_cfg_q);
+        end else begin
+            if(ofbuf_dma_rdy_i) begin
+                tlast_q <= tlast_d;
+            end
+            // Width=1 may preload its only FIFO element before DMA becomes ready.
+            // Remember that pop immediately so the padded beat still emits TLAST.
+            if(ofwidth_reg == 1) begin
+                if(tlast_d && ofbuf_dma_rdy_i) begin
+                    end_row_q <= 0;
+                end else if(rdy_fifo && vld_dma_d) begin
+                    end_row_q <= 1;
+                end
+            end else if(ofbuf_dma_rdy_i) begin
+                end_row_q <= end_row_d_q && rdy_fifo &&
+                             (fifo_vld_l1 && id_cfg_q || fifo_vld_l0 && !id_cfg_q);
+            end
         end
     end
     always @(posedge clk) begin
