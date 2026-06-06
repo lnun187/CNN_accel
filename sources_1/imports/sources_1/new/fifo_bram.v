@@ -13,6 +13,7 @@ module fifo_bram #(
     input   [WIDTH-1:0] din,
     output  [WIDTH-1:0] dout,
     output              full,
+    output              almost_full,
     output              vld_o,
     output              end_data
 );
@@ -37,7 +38,7 @@ module fifo_bram #(
         .empty_o(empty),
         .full_o(full),
         .almost_empty_o(end_data),
-        .almost_full_o(),
+        .almost_full_o(almost_full),
         .counter(),
         .rst_n(rst_n)
        );

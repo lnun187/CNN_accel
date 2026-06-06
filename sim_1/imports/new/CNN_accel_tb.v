@@ -2473,9 +2473,9 @@ module CNN_accel_tb;
 
     // 1) Ifmap kích thước chẵn, burst filter chẵn
     //ifmap 10x10, Ci=1, Co=4, kernel 3x3, ifparr=1, ofparr=2 (<= 6/3), oftile = 1, padding = 2, stride = 1
-    // run_case("TC0_even_ifmap_even_burst", 28, 28, 1, 32, 3, 3, 1, 0, 1, 8, 2, 0, 0);
-    // run_case("TC0_even_ifmap_even_burst", 5, 5, 32, 16, 5, 5, 1, 0, 4, 4, 4, 0, 0);
-    // run_case("TC0_even_ifmap_even_burst", 2, 2, 256, 10, 2, 2, 1, 0, 4, 1, 5, 0, 0);
+    run_case("TC0_even_ifmap_even_burst", 28, 28, 1, 32, 3, 3, 1, 0, 1, 8, 2, 0, 0);
+    run_case("TC0_even_ifmap_even_burst", 5, 5, 32, 16, 5, 5, 1, 0, 4, 4, 4, 0, 0);
+    run_case("TC0_even_ifmap_even_burst", 2, 2, 256, 10, 2, 2, 1, 0, 4, 1, 5, 0, 0);
   // // $finish;
   //   // Pooling interface/scoreboard coverage.
   //   // run_case_pool parameters:
@@ -2488,9 +2488,9 @@ module CNN_accel_tb;
   //   // ifparr=1, ofparr=2, oftile=1, if_zp=0, fl_zp=0,
   //   // is_use_pool=0, is_max_pool=0, pool_size=1, pool_stride=1.
   //   // conv_ofwidth=6, pool_ofwidth=6.
-    run_case_pool("TC_POOL_NONE_EXPLICIT", 224, 224, 3, 8, 7, 7, 2, 0, 3, 2, 1 , 0, 0,
-                  1, 1, 3, 2);
-    $finish;
+    run_case_pool("TC_POOL_NONE_EXPLICIT", 24, 24, 3, 8, 7, 7, 2, 0, 3, 2, 1 , 0, 0,
+                  1, 0, 3, 2);
+    // $finish;
     run_case_pool("TC_POOL_NONE_EXPLICIT", 12, 12, 32, 32, 3, 3, 1, 0, 4, 8, 2, 0, 0,
                   1, 1, 2, 2);
     // $finish;
